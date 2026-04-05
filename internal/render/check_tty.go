@@ -1,0 +1,235 @@
+package render
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
+)
+
+const (
+	checkCardRuleWidth   = 64
+	ttyProjectBodySpaces = 4
+)
+
+type TTYCheckRenderer struct {
+	Out *terminal.OutputWriter
+}
+
+func (r TTYCheckRenderer) Render(report result.CheckReport) error {
+	ow := r.Out
+
+	if ow == nil {
+		ow = terminal.NewOutputWriter()
+	}
+
+	if terminal.Quiet {
+		return renderCheckQuiet(ow, report)
+	}
+
+	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
+	ow.Println(terminal.Bold + terminal.Blue + "│" + terminal.Cyan + terminal.Bold + "  " + terminal.Rocket + " PreFlight Checker  " + terminal.Reset)
+	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
+	ow.Println(terminal.Bold + "\nRunning checks..." + terminal.Reset)
+
+	ow.PrintNewLines(1)
+
+	for _, item := range report.Items {
+		card := BuildHealthCard(item)
+		renderHealthCardTTY(ow, card)
+	}
+
+	statusIcon, statusColor, statusText := statusFromReport(report)
+
+	endedAt := report.EndedAt
+
+	if endedAt.IsZero() {
+		endedAt = time.Now()
+	}
+
+	ow.Println(terminal.Bold + terminal.Blue + "\n╭────────────────────────────────────────────────────────────────╮" + terminal.Reset)
+	ow.Println(terminal.Bold + terminal.Blue + "│ " + statusColor + statusIcon + " Status: " + statusText + terminal.Reset)
+	ow.Println(terminal.Bold + terminal.Blue + "│ " + terminal.Dim + terminal.Clock + " Ended: " + endedAt.Format("02-01-2006 15:04:05") + terminal.Reset)
+	ow.Println(terminal.Bold + terminal.Blue + "╰────────────────────────────────────────────────────────────────╯" + terminal.Reset)
+
+	return nil
+}
+
+func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard) {
+	ow.PrintNewLines(1)
+
+	badge := healthBadgeTTY(card.Status)
+	elapsed := ""
+
+	if card.ElapsedMillis > 0 {
+		elapsed = terminal.Dim + fmt.Sprintf(" %dms", card.ElapsedMillis) + terminal.Reset
+	}
+
+	header := fmt.Sprintf("  %s%s%s  %s%s",
+		terminal.Bold, card.ScopeDisplay, terminal.Reset,
+		badge, elapsed,
+	)
+
+	ow.Println(header)
+
+	if card.Summary != "" {
+		ow.Println(terminal.Dim + "  " + card.Summary + terminal.Reset)
+	}
+
+	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+
+	printSection := func(title string) {
+		ow.Println(terminal.Dim + "  " + title + terminal.Reset)
+	}
+
+	if len(card.Toolchain) > 0 {
+		printSection("Toolchain")
+		printToolchainLinesTTY(ow, card.Toolchain)
+	}
+
+	if len(card.Signals) > 0 {
+		printSection("Project")
+		printIndentedLines(ow, card.Signals, terminal.Gray+strings.Repeat(" ", ttyProjectBodySpaces)+terminal.Reset)
+	}
+
+	if len(card.FlatWarnings) > 0 || len(card.FlatErrors) > 0 {
+		printSection("Issues")
+
+		printMessages(ow, card.FlatWarnings, terminal.Yellow, terminal.WarningSign)
+		printMessages(ow, card.FlatErrors, terminal.Red, terminal.CrossMark)
+	}
+
+	hasProdDeps := len(card.DepSuccess) > 0 || len(card.DepWarnings) > 0 || len(card.DepErrors) > 0
+	hasDevDeps := len(card.DepDevSuccess) > 0 || len(card.DepDevWarnings) > 0 || len(card.DepDevErrors) > 0
+
+	if hasProdDeps || hasDevDeps {
+		if hasProdDeps {
+			printSection("Dependencies")
+			printMessagesUniformCapped(ow, card.DepSuccess, terminal.Green, terminal.CheckMark, "dependencies")
+			printMessagesUniformCapped(ow, card.DepWarnings, terminal.Yellow, terminal.WarningSign, "dependency warnings")
+			printMessagesUniformCapped(ow, card.DepErrors, terminal.Red, terminal.CrossMark, "dependency errors")
+		}
+
+		if hasDevDeps {
+			printSection("Dev dependencies")
+			printMessagesUniformCapped(ow, card.DepDevSuccess, terminal.Green, terminal.CheckMark, "dev dependencies")
+			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
+			printMessagesUniformCapped(ow, card.DepDevErrors, terminal.Red, terminal.CrossMark, "dev dependency errors")
+		}
+	}
+
+	if card.PrimaryNextStep != "" {
+		printSection("Next step")
+
+		ow.Println(terminal.Cyan + strings.Repeat(" ", ttyProjectBodySpaces) + "› " + card.PrimaryNextStep + terminal.Reset)
+	}
+}
+
+func printIndentedLines(ow *terminal.OutputWriter, lines []string, prefix string) {
+	for _, line := range lines {
+		ow.Println(prefix + line)
+	}
+}
+
+func healthBadgeTTY(status HealthStatus) string {
+	switch status {
+	case HealthOK:
+		return terminal.Green + terminal.Bold + "OK" + terminal.Reset
+	case HealthWarn:
+		return terminal.Yellow + terminal.Bold + "WARN" + terminal.Reset
+	case HealthFail:
+		return terminal.Red + terminal.Bold + "FAIL" + terminal.Reset
+	case HealthSkip:
+		return terminal.Gray + terminal.Bold + "SKIP" + terminal.Reset
+	default:
+		return terminal.Gray + string(status) + terminal.Reset
+	}
+}
+
+func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) error {
+	for _, item := range report.Items {
+		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+			continue
+		}
+
+		card := BuildHealthCard(item)
+		ow.Println(card.ScopeDisplay + "  " + strings.ToUpper(string(card.Status)))
+
+		if card.Summary != "" {
+			ow.Println(terminal.Dim + "  " + card.Summary + terminal.Reset)
+		}
+
+		if card.PrimaryNextStep != "" {
+			ow.Println(terminal.Cyan + "  › " + card.PrimaryNextStep + terminal.Reset)
+		}
+
+		if len(card.FlatErrors) > 0 {
+			printMessages(ow, card.FlatErrors, terminal.Red, terminal.CrossMark)
+		}
+
+		if len(card.FlatWarnings) > 0 {
+			printMessages(ow, card.FlatWarnings, terminal.Yellow, terminal.WarningSign)
+		}
+
+		if len(card.DepErrors) > 0 {
+			printMessagesUniformCapped(ow, card.DepErrors, terminal.Red, terminal.CrossMark, "dependency errors")
+		}
+
+		if len(card.DepDevErrors) > 0 {
+			printMessagesUniformCapped(ow, card.DepDevErrors, terminal.Red, terminal.CrossMark, "dev dependency errors")
+		}
+
+		if len(card.DepWarnings) > 0 {
+			printMessagesUniformCapped(ow, card.DepWarnings, terminal.Yellow, terminal.WarningSign, "dependency warnings")
+		}
+
+		if len(card.DepDevWarnings) > 0 {
+			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
+		}
+	}
+
+	return nil
+}
+
+func printMessages(ow *terminal.OutputWriter, messages []model.Message, color string, symbol string) {
+	for _, msg := range messages {
+		indent := ttyProjectBodySpaces
+		if msg.Nested {
+			indent = ttyProjectBodySpaces + 2
+		}
+
+		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", indent), symbol, msg.Text)
+	}
+}
+
+func printMessagesUniform(ow *terminal.OutputWriter, messages []model.Message, color string, symbol string) {
+	for _, msg := range messages {
+		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", ttyProjectBodySpaces), symbol, msg.Text)
+	}
+}
+
+func statusFromReport(report result.CheckReport) (icon string, color string, text string) {
+	if report.Canceled {
+		return terminal.WarningSign, terminal.Yellow, "Checks canceled."
+	}
+
+	var totalErrors, totalWarnings int
+
+	for _, item := range report.Items {
+		totalErrors += len(item.Errors)
+		totalWarnings += len(item.Warnings)
+	}
+
+	if totalErrors > 0 {
+		return terminal.CrossMark, terminal.Red, "Check completed, please resolve."
+	}
+
+	if totalWarnings > 0 {
+		return terminal.WarningSign, terminal.Yellow, "Check completed with warnings, please review."
+	}
+
+	return terminal.CheckMark, terminal.Green, "Check completed successfully!"
+}

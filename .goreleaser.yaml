@@ -1,0 +1,38 @@
+version: 2
+
+project_name: preflight
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: preflight
+    binary: preflight
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/JacobJoergensen/preflight/cmd.Version={{.Version}}
+
+archives:
+  - builds:
+      - preflight
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+release:
+  github:
+    owner: JacobJoergensen
+    name: preflight
+  prerelease: auto
+  draft: false

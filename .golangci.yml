@@ -1,0 +1,79 @@
+version: '2'
+
+run:
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - copyloopvar
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - gocheckcompilerdirectives
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - makezero
+    - misspell
+    - mirror
+    - modernize
+    - nakedret
+    - nilnil
+    - nolintlint
+    - noctx
+    - perfsprint
+    - prealloc
+    - predeclared
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+  settings:
+    errchkjson:
+      check-error-free-encoding: true
+    forbidigo:
+      forbid:
+        - pattern: '^fmt\.Print.*$'
+          pkg: '^github\.com/JacobJoergensen/preflight/internal/.*$'
+          msg: 'Do not use fmt.Print* in internal/; use slog for diagnostics and cmd/render/terminal for user-facing output.'
+    misspell:
+      locale: US
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - golines
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/JacobJoergensen/preflight)
+      custom-order: true
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+    golines:
+      max-len: 200
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

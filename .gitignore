@@ -1,0 +1,6 @@
+.DS_Store
+.idea/
+*.exe
+dist/
+go.work
+go.work.sum
