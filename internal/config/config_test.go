@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestScriptTargetValidate(t *testing.T) {
@@ -275,6 +277,56 @@ func TestFileValidate(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestScriptTargetsUnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    int
+		wantErr bool
+	}{
+		{
+			name: "single target as map",
+			yaml: `composer: "lint"`,
+			want: 1,
+		},
+		{
+			name: "multiple targets as sequence",
+			yaml: `
+- composer: "lint"
+- js: "test"
+- go: "vet ./..."`,
+			want: 3,
+		},
+		{
+			name:    "invalid yaml",
+			yaml:    `"just a string"`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var targets ScriptTargets
+			err := yaml.Unmarshal([]byte(tt.yaml), &targets)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(targets) != tt.want {
+				t.Errorf("got %d targets, want %d", len(targets), tt.want)
 			}
 		})
 	}

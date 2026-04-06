@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -24,7 +26,13 @@ type Profile struct {
 }
 
 type RunBlock struct {
-	Scripts map[string]ScriptTarget `yaml:"scripts,omitempty"`
+	Scripts map[string]ScriptTargets `yaml:"scripts,omitempty"`
+}
+
+type Command struct {
+	Scope   *[]string `yaml:"scope,omitempty"`
+	PM      *[]string `yaml:"pm,omitempty"`
+	WithEnv *bool     `yaml:"withEnv,omitempty"`
 }
 
 type ScriptTarget struct {
@@ -35,10 +43,27 @@ type ScriptTarget struct {
 	Python   string `yaml:"python,omitempty"`
 }
 
-type Command struct {
-	Scope   *[]string `yaml:"scope,omitempty"`
-	PM      *[]string `yaml:"pm,omitempty"`
-	WithEnv *bool     `yaml:"withEnv,omitempty"`
+type ScriptTargets []ScriptTarget
+
+func (s *ScriptTargets) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.MappingNode:
+		var single ScriptTarget
+		if err := node.Decode(&single); err != nil {
+			return err
+		}
+		*s = []ScriptTarget{single}
+	case yaml.SequenceNode:
+		var multi []ScriptTarget
+		if err := node.Decode(&multi); err != nil {
+			return err
+		}
+		*s = multi
+	default:
+		return fmt.Errorf("expected map or sequence, got %v", node.Kind)
+	}
+
+	return nil
 }
 
 func (f File) validate() error {
@@ -92,9 +117,19 @@ func (p Profile) validate(profileName string) error {
 }
 
 func (r RunBlock) validate(profileName string) error {
-	for name, target := range r.Scripts {
-		if err := target.Validate(); err != nil {
-			return fmt.Errorf("profiles.%s.run.scripts.%s: %w", profileName, name, err)
+	for name, targets := range r.Scripts {
+		if len(targets) == 0 {
+			return fmt.Errorf("profiles.%s.run.scripts.%s: no targets defined", profileName, name)
+		}
+
+		for i, target := range targets {
+			if err := target.Validate(); err != nil {
+				if len(targets) == 1 {
+					return fmt.Errorf("profiles.%s.run.scripts.%s: %w", profileName, name, err)
+				}
+
+				return fmt.Errorf("profiles.%s.run.scripts.%s[%d]: %w", profileName, name, i, err)
+			}
 		}
 	}
 

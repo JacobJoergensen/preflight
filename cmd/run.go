@@ -61,7 +61,7 @@ preflight run build --profile ci`,
 				terminal.Red, profileName, profileName, terminal.Reset)
 		}
 
-		target, ok := profile.Run.Scripts[alias]
+		targets, ok := profile.Run.Scripts[alias]
 
 		if !ok {
 			keys := make([]string, 0, len(profile.Run.Scripts))
@@ -78,17 +78,19 @@ preflight run build --profile ci`,
 
 		loader := manifest.NewLoader(workDir)
 
-		bin, argv, err := run.ResolveScript(loader, target)
+		scripts, err := run.ResolveScripts(loader, targets)
 
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		if runOpts.dryRun {
-			line := bin + " " + strings.Join(argv, " ")
+			for _, s := range scripts {
+				line := s.Bin + " " + strings.Join(s.Args, " ")
 
-			if _, err := fmt.Fprintln(os.Stdout, line); err != nil {
-				return fmt.Errorf("write stdout: %w", err)
+				if _, err := fmt.Fprintln(os.Stdout, line); err != nil {
+					return fmt.Errorf("write stdout: %w", err)
+				}
 			}
 
 			return nil
@@ -97,8 +99,10 @@ preflight run build --profile ci`,
 		ctx, cancel := context.WithTimeout(cmd.Context(), runOpts.timeout)
 		defer cancel()
 
-		if err := exec.RunStreamingInDir(ctx, workDir, bin, argv, os.Stdout, os.Stderr); err != nil {
-			return err
+		for _, s := range scripts {
+			if err := exec.RunStreamingInDir(ctx, workDir, s.Bin, s.Args, os.Stdout, os.Stderr); err != nil {
+				return err
+			}
 		}
 
 		return nil

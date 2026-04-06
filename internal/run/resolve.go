@@ -8,6 +8,27 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/manifest"
 )
 
+type ResolvedScript struct {
+	Bin  string
+	Args []string
+}
+
+func ResolveScripts(l manifest.Loader, targets config.ScriptTargets) ([]ResolvedScript, error) {
+	resolved := make([]ResolvedScript, 0, len(targets))
+
+	for _, target := range targets {
+		bin, args, err := ResolveScript(l, target)
+
+		if err != nil {
+			return nil, err
+		}
+
+		resolved = append(resolved, ResolvedScript{Bin: bin, Args: args})
+	}
+
+	return resolved, nil
+}
+
 func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, args []string, err error) {
 	if err := target.Validate(); err != nil {
 		return "", nil, err
