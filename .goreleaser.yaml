@@ -7,8 +7,7 @@ before:
     - go mod tidy
 
 builds:
-  - id: preflight
-    binary: preflight
+  - binary: preflight
     env:
       - CGO_ENABLED=0
     flags:
@@ -17,7 +16,7 @@ builds:
       - -s -w -X github.com/JacobJoergensen/preflight/cmd.Version={{.Version}}
 
 archives:
-  - builds:
+  - ids:
       - preflight
     name_template: >-
       {{ .ProjectName }}_
