@@ -49,9 +49,9 @@ preflight hooks install --command "preflight check --with-env"`,
 			return err
 		}
 
-		command := hooksInstallOpts.command
+		cmd := hooksInstallOpts.command
 
-		err = hooks.Install(path, command, hooksInstallOpts.force)
+		err = hooks.Install(path, cmd, hooksInstallOpts.force)
 
 		if err != nil {
 			if errors.Is(err, hooks.ErrHookExists) {

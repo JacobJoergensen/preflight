@@ -254,17 +254,17 @@ func extractSuggestedActions(item result.CheckItem) []string {
 	seen := make(map[string]struct{})
 	var actions []string
 
-	add := func(command string) {
-		if command == "" {
+	add := func(cmd string) {
+		if cmd == "" {
 			return
 		}
 
-		if _, ok := seen[command]; ok {
+		if _, ok := seen[cmd]; ok {
 			return
 		}
 
-		seen[command] = struct{}{}
-		actions = append(actions, command)
+		seen[cmd] = struct{}{}
+		actions = append(actions, cmd)
 	}
 
 	tryExtract := func(msg model.Message) {
@@ -317,18 +317,18 @@ func extractRunCommands(text string) []string {
 
 	for _, marker := range []string{"Run `", "run `"} {
 		for remaining := text; strings.Contains(remaining, marker); {
-			index := strings.Index(remaining, marker)
-			remaining = remaining[index+len(marker):]
+			i := strings.Index(remaining, marker)
+			remaining = remaining[i+len(marker):]
 			end := strings.Index(remaining, "`")
 
 			if end <= 0 {
 				break
 			}
 
-			command := strings.TrimSpace(remaining[:end])
+			cmd := strings.TrimSpace(remaining[:end])
 
-			if command != "" {
-				commands = append(commands, command)
+			if cmd != "" {
+				commands = append(commands, cmd)
 			}
 
 			remaining = remaining[end+1:]

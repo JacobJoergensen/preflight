@@ -208,8 +208,8 @@ func GetPackageType(command string) (string, bool) {
 }
 
 func AnyMatchesPackageType(commands []string, packageType string) bool {
-	for _, command := range commands {
-		if pt, ok := GetPackageType(command); ok && pt == packageType {
+	for _, cmd := range commands {
+		if pt, ok := GetPackageType(cmd); ok && pt == packageType {
 			return true
 		}
 	}
@@ -227,8 +227,8 @@ func IsPackageType(name string) bool {
 }
 
 func ResolvePackageType(name string) string {
-	if pt, ok := GetPackageType(name); ok {
-		return pt
+	if packageType, ok := GetPackageType(name); ok {
+		return packageType
 	}
 
 	return name

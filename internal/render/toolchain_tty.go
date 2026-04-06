@@ -37,12 +37,12 @@ func splitToolchainDisplay(line string) (label, detail string, split bool) {
 		}
 	}
 
-	if index := strings.Index(line, " ("); index > 0 {
+	if i := strings.Index(line, " ("); i > 0 {
 		trimmed := strings.TrimSpace(line)
 
 		if strings.HasSuffix(trimmed, ")") {
-			left := strings.TrimSpace(line[:index])
-			right := strings.TrimSpace(line[index:])
+			left := strings.TrimSpace(line[:i])
+			right := strings.TrimSpace(line[i:])
 
 			if left != "" && right != "" {
 				return left, right, true

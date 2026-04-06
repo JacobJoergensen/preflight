@@ -115,8 +115,8 @@ func (l Loader) detectPythonPackageManager() (PackageManager, bool) {
 	}
 
 	if l.FileExists("pyproject.toml") {
-		if command := l.inferPythonToolFromPyproject(); command != "" {
-			return l.toolPackageManager(command, true)
+		if cmd := l.inferPythonToolFromPyproject(); cmd != "" {
+			return l.toolPackageManager(cmd, true)
 		}
 	}
 

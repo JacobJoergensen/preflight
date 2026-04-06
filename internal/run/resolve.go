@@ -61,11 +61,11 @@ func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, a
 			return "", nil, errors.New("python script value is empty")
 		}
 
-		command := packageManager.Command()
+		cmd := packageManager.Command()
 
-		switch command {
+		switch cmd {
 		case "poetry", "uv", "pipenv", "pdm":
-			return command, append([]string{"run"}, parts...), nil
+			return cmd, append([]string{"run"}, parts...), nil
 		default:
 			return "python", parts, nil
 		}

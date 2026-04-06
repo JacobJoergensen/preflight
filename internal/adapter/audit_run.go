@@ -34,14 +34,14 @@ func runAuditCommand(ctx context.Context, workDir, name string, args []string) (
 	}
 
 	// #nosec G204 - binary name is allowlisted, args are built by PreFlight adapters
-	command := exec.CommandContext(ctx, path, args...)
-	command.Dir = workDir
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Dir = workDir
 
 	var outBuf, errBuf bytes.Buffer
-	command.Stdout = &outBuf
-	command.Stderr = &errBuf
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
 
-	runErr := command.Run()
+	runErr := cmd.Run()
 	stdout = outBuf.String()
 	stderr = errBuf.String()
 	exitCode = 0

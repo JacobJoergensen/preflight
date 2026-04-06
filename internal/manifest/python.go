@@ -113,8 +113,8 @@ func parseRequirementsTxt(content string) []string {
 
 func extractPackageName(line string) string {
 	for _, separator := range []string{"===", "==", "!=", "<=", ">=", "~=", ">", "<"} {
-		if index := strings.Index(line, separator); index > 0 {
-			return strings.TrimSpace(line[:index])
+		if i := strings.Index(line, separator); i > 0 {
+			return strings.TrimSpace(line[:i])
 		}
 	}
 
@@ -307,13 +307,13 @@ func extractRequiresPythonConstraint(s string) string {
 }
 
 func extractTomlSection(s, header string) string {
-	index := strings.Index(s, header)
+	i := strings.Index(s, header)
 
-	if index < 0 {
+	if i < 0 {
 		return ""
 	}
 
-	section := s[index:]
+	section := s[i:]
 
 	if end := strings.Index(section[1:], "\n["); end >= 0 {
 		return section[:end+1]

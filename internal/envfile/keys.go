@@ -53,8 +53,8 @@ func ParseKeys(content []byte) []string {
 }
 
 func isValidEnvKey(key string) bool {
-	for index, char := range key {
-		if index == 0 {
+	for i, char := range key {
+		if i == 0 {
 			if char != '_' && !unicode.IsLetter(char) {
 				return false
 			}

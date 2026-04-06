@@ -21,12 +21,12 @@ func (p PackageModule) Audit(ctx context.Context, deps Dependencies) AuditResult
 		return AuditResult{Skipped: true, SkipReason: "no JavaScript package manager detected"}
 	}
 
-	command := packageManager.Command()
+	cmd := packageManager.Command()
 	workDir := deps.Loader.WorkDir
 	args := []string{"audit", "--json"}
-	cmdLine := command + " " + strings.Join(args, " ")
+	cmdLine := cmd + " " + strings.Join(args, " ")
 
-	stdout, stderr, code, err := runAuditCommand(ctx, workDir, command, args)
+	stdout, stderr, code, err := runAuditCommand(ctx, workDir, cmd, args)
 
 	if err != nil {
 		return AuditResult{

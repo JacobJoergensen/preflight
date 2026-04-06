@@ -20,10 +20,10 @@ const (
 var ErrHookExists = errors.New("pre-commit hook already exists without a PreFlight block (use --force to append)")
 
 func GitRoot(workDir string) (string, error) {
-	command := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
-	command.Dir = workDir
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
+	cmd.Dir = workDir
 
-	output, err := command.Output()
+	output, err := cmd.Output()
 
 	if err != nil {
 		return "", fmt.Errorf("not a git repository (or git not in PATH): %w", err)

@@ -130,27 +130,27 @@ func splitSpaceConstraints(required string) []string {
 
 	operators := "><=^~"
 
-	for index := 0; index < len(required); index++ {
-		if required[index] == ' ' {
-			next := index + 1
+	for i := 0; i < len(required); i++ {
+		if required[i] == ' ' {
+			j := i + 1
 
-			for next < len(required) && required[next] == ' ' {
-				next++
+			for j < len(required) && required[j] == ' ' {
+				j++
 			}
 
-			if next < len(required) && strings.ContainsRune(operators, rune(required[next])) {
+			if j < len(required) && strings.ContainsRune(operators, rune(required[j])) {
 				if current.Len() > 0 {
 					parts = append(parts, current.String())
 					current.Reset()
 				}
 
-				index = next - 1
+				i = j - 1
 
 				continue
 			}
 		}
 
-		current.WriteByte(required[index])
+		current.WriteByte(required[i])
 	}
 
 	if current.Len() > 0 {
@@ -343,8 +343,8 @@ func comparePrerelease(pre1, pre2 string) int {
 	ids2 := strings.Split(pre2, ".")
 	minLen := min(len(ids1), len(ids2))
 
-	for index := range minLen {
-		if result := comparePrereleaseID(ids1[index], ids2[index]); result != 0 {
+	for i := range minLen {
+		if result := comparePrereleaseID(ids1[i], ids2[i]); result != 0 {
 			return result
 		}
 	}
@@ -380,9 +380,9 @@ func compareVersionArrays(v1Parts, v2Parts []int) int {
 	copy(v1Extended, v1Parts)
 	copy(v2Extended, v2Parts)
 
-	for index := range v1Extended {
-		if v1Extended[index] != v2Extended[index] {
-			return cmp.Compare(v1Extended[index], v2Extended[index])
+	for i := range v1Extended {
+		if v1Extended[i] != v2Extended[i] {
+			return cmp.Compare(v1Extended[i], v2Extended[i])
 		}
 	}
 

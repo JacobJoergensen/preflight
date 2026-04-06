@@ -5,8 +5,8 @@ import "strings"
 func trimFirstLine(text string) string {
 	text = strings.TrimSpace(text)
 
-	if index := strings.IndexByte(text, '\n'); index >= 0 {
-		text = text[:index]
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		text = text[:i]
 	}
 
 	return strings.TrimSpace(text)

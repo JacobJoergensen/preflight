@@ -90,16 +90,16 @@ func (l Loader) loadRubyDependencies(gemfileName string) (deps []string, require
 func parseGemfileLockRubyVersion(lock string) string {
 	lines := strings.Split(lock, "\n")
 
-	for index, line := range lines {
+	for i, line := range lines {
 		if strings.TrimSpace(line) != "RUBY VERSION" {
 			continue
 		}
 
-		if index+1 >= len(lines) {
+		if i+1 >= len(lines) {
 			return ""
 		}
 
-		next := strings.TrimSpace(lines[index+1])
+		next := strings.TrimSpace(lines[i+1])
 
 		if !strings.HasPrefix(next, "ruby ") {
 			return ""
@@ -206,8 +206,8 @@ func gemNameFromDependencyLine(line string) string {
 	}
 
 	for _, separator := range []string{" ", "(", ","} {
-		if index := strings.Index(line, separator); index > 0 {
-			return strings.TrimSpace(line[:index])
+		if i := strings.Index(line, separator); i > 0 {
+			return strings.TrimSpace(line[:i])
 		}
 	}
 

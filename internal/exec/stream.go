@@ -27,13 +27,13 @@ func RunStreamingInDir(ctx context.Context, dir, name string, args []string, std
 	}
 
 	// #nosec G204 - command validated against manifest.Tools registry
-	command := goexec.CommandContext(ctx, path, args...)
-	command.Stdout = stdout
-	command.Stderr = stderr
+	cmd := goexec.CommandContext(ctx, path, args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	if dir != "" {
-		command.Dir = dir
+		cmd.Dir = dir
 	}
 
-	return command.Run()
+	return cmd.Run()
 }

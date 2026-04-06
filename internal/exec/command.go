@@ -46,11 +46,11 @@ func Run(ctx context.Context, name string, args ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 
 	// #nosec G204 - command validated against manifest.Tools registry
-	command := exec.CommandContext(ctx, path, args...)
-	command.Stdout = &stdout
-	command.Stderr = &stderr
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	if err := command.Run(); err != nil {
+	if err := cmd.Run(); err != nil {
 		return "", &CommandError{
 			Command: name,
 			Args:    args,

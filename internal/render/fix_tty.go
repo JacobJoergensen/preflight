@@ -94,16 +94,16 @@ func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem, dryRun
 	if dryRun {
 		ow.Println(terminal.Dim + "  Command" + terminal.Reset)
 
-		command := item.WouldRun
+		cmd := item.WouldRun
 
-		if command == "" {
-			command = fullCommand
+		if cmd == "" {
+			cmd = fullCommand
 		}
 
-		if command != "" {
+		if cmd != "" {
 			ow.Printf("%s%s%s %s%s\n",
 				terminal.Cyan, strings.Repeat(" ", ttyProjectBodySpaces), "›",
-				command, terminal.Reset,
+				cmd, terminal.Reset,
 			)
 		} else {
 			ow.Printf("%s%s%s %s%s\n",
