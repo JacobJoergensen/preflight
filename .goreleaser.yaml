@@ -34,7 +34,7 @@ checksum:
   algorithm: sha256
 
 npms:
-  - name: @jacobjoergensen/preflight
+  - name: "@jacobjoergensen/preflight"
     description: "CLI tool that validates project dependencies before you run into problems"
     homepage: https://github.com/JacobJoergensen/preflight
     keywords:
