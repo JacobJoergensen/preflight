@@ -46,7 +46,7 @@ npms:
       - preflight
     license: MIT
     author: JacobJoergensen
-    repository: https://github.com/JacobJoergensen/preflight
+    repository: git+https://github.com/JacobJoergensen/preflight.git
     bugs: https://github.com/JacobJoergensen/preflight/issues
     access: public
 
