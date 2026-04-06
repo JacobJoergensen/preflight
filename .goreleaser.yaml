@@ -2,13 +2,6 @@ version: 2
 
 project_name: preflight
 
-metadata:
-  maintainers:
-    - "JacobJoergensen"
-  license: "MIT"
-  homepage: "https://github.com/JacobJoergensen/preflight"
-  description: "CLI tool that validates project dependencies before you run into problems"
-
 before:
   hooks:
     - go mod tidy
