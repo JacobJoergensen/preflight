@@ -37,6 +37,16 @@ type DependencyLister interface {
 	ListDependencies(ctx context.Context, deps Dependencies) ([]string, error)
 }
 
+type OutdatedPackage struct {
+	Name    string
+	Current string
+	Latest  string
+}
+
+type OutdatedLister interface {
+	ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error)
+}
+
 type Fixer interface {
 	Fix(ctx context.Context, deps Dependencies, selectors []string, options FixOptions) (FixItem, error)
 }

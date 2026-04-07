@@ -10,18 +10,25 @@ import (
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 7
+const CheckJSONSchemaVersion = 8
 
 type JSONCheckRenderer struct {
 	Out io.Writer
 }
 
+type outdatedPackageJSON struct {
+	Name    string `json:"name"`
+	Current string `json:"current"`
+	Latest  string `json:"latest"`
+}
+
 type checkReportJSON struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	StartedAt     time.Time       `json:"startedAt"`
-	EndedAt       time.Time       `json:"endedAt"`
-	Canceled      bool            `json:"canceled"`
-	Items         []checkItemJSON `json:"items"`
+	SchemaVersion int                              `json:"schemaVersion"`
+	StartedAt     time.Time                        `json:"startedAt"`
+	EndedAt       time.Time                        `json:"endedAt"`
+	Canceled      bool                             `json:"canceled"`
+	Items         []checkItemJSON                  `json:"items"`
+	Outdated      map[string][]outdatedPackageJSON `json:"outdated,omitempty"`
 }
 
 type checkItemJSON struct {
@@ -56,6 +63,24 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 		EndedAt:       report.EndedAt,
 		Canceled:      report.Canceled,
 		Items:         items,
+	}
+
+	if len(report.Outdated) > 0 {
+		payload.Outdated = make(map[string][]outdatedPackageJSON)
+
+		for scopeID, pkgs := range report.Outdated {
+			outdatedPkgs := make([]outdatedPackageJSON, len(pkgs))
+
+			for i, pkg := range pkgs {
+				outdatedPkgs[i] = outdatedPackageJSON{
+					Name:    pkg.Name,
+					Current: pkg.Current,
+					Latest:  pkg.Latest,
+				}
+			}
+
+			payload.Outdated[scopeID] = outdatedPkgs
+		}
 	}
 
 	return encodeJSON(r.Out, payload, true)

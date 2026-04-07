@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -100,6 +101,66 @@ func (g GoModule) ListDependencies(ctx context.Context, deps Dependencies) ([]st
 	}
 
 	return slices.Clone(config.Modules), nil
+}
+
+func (g GoModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadGoConfig()
+
+	if !config.HasMod {
+		return nil, nil
+	}
+
+	output, err := deps.Runner.Run(ctx, "go", "list", "-m", "-u", "-json", "all")
+
+	if err != nil && output == "" {
+		return nil, err
+	}
+
+	return parseGoListOutdated(output)
+}
+
+func parseGoListOutdated(output string) ([]OutdatedPackage, error) {
+	if strings.TrimSpace(output) == "" {
+		return nil, nil
+	}
+
+	var packages []OutdatedPackage
+
+	decoder := json.NewDecoder(strings.NewReader(output))
+
+	for decoder.More() {
+		var mod struct {
+			Path    string `json:"Path"`
+			Version string `json:"Version"`
+			Update  *struct {
+				Version string `json:"Version"`
+			} `json:"Update"`
+		}
+
+		if err := decoder.Decode(&mod); err != nil {
+			continue
+		}
+
+		if mod.Update == nil || mod.Version == mod.Update.Version {
+			continue
+		}
+
+		packages = append(packages, OutdatedPackage{
+			Name:    mod.Path,
+			Current: mod.Version,
+			Latest:  mod.Update.Version,
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return packages, nil
 }
 
 func (g GoModule) Fix(ctx context.Context, deps Dependencies, _ []string, options FixOptions) (FixItem, error) {

@@ -20,6 +20,7 @@ type checkOptions struct {
 	withEnv  bool
 	timeout  time.Duration
 	json     bool
+	outdated bool
 }
 
 var checkOpts checkOptions
@@ -73,7 +74,7 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
 		}
 
-		report, err := runner.Check(ctx, scopes, managers, withEnv)
+		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated)
 
 		if err != nil {
 			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -149,6 +150,13 @@ func init() {
 		"json",
 		false,
 		"Output results as JSON",
+	)
+
+	checkCmd.Flags().BoolVar(
+		&checkOpts.outdated,
+		"outdated",
+		false,
+		"Also check for outdated packages",
 	)
 
 	rootCmd.AddCommand(checkCmd)

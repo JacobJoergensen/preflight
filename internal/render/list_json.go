@@ -20,9 +20,36 @@ func (r JSONListRenderer) Render(report result.DependencyReport) error {
 }
 
 func quietListPayload(report result.DependencyReport) any {
-	type quietReport struct {
-		Dependencies map[string][]string `json:"dependencies"`
+	type outdatedPackage struct {
+		Name    string `json:"name"`
+		Current string `json:"current"`
+		Latest  string `json:"latest"`
 	}
 
-	return quietReport{Dependencies: report.Dependencies}
+	type quietReport struct {
+		Dependencies map[string][]string          `json:"dependencies"`
+		Outdated     map[string][]outdatedPackage `json:"outdated,omitempty"`
+	}
+
+	qr := quietReport{Dependencies: report.Dependencies}
+
+	if len(report.Outdated) > 0 {
+		qr.Outdated = make(map[string][]outdatedPackage)
+
+		for id, pkgs := range report.Outdated {
+			outdatedPkgs := make([]outdatedPackage, len(pkgs))
+
+			for i, pkg := range pkgs {
+				outdatedPkgs[i] = outdatedPackage{
+					Name:    pkg.Name,
+					Current: pkg.Current,
+					Latest:  pkg.Latest,
+				}
+			}
+
+			qr.Outdated[id] = outdatedPkgs
+		}
+	}
+
+	return qr
 }

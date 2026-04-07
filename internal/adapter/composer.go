@@ -93,6 +93,64 @@ func (c ComposerModule) ListDependencies(ctx context.Context, deps Dependencies)
 	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
 }
 
+func (c ComposerModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadComposerConfig()
+
+	if !config.HasConfig {
+		return nil, nil
+	}
+
+	output, err := deps.Runner.Run(ctx, "composer", "outdated", "--format=json")
+
+	if err != nil && output == "" {
+		return nil, err
+	}
+
+	return parseComposerOutdated(output)
+}
+
+func parseComposerOutdated(output string) ([]OutdatedPackage, error) {
+	if strings.TrimSpace(output) == "" {
+		return nil, nil
+	}
+
+	var data struct {
+		Installed []struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			Latest  string `json:"latest"`
+		} `json:"installed"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &data); err != nil {
+		return nil, err
+	}
+
+	packages := make([]OutdatedPackage, 0, len(data.Installed))
+
+	for _, pkg := range data.Installed {
+		if pkg.Version == pkg.Latest {
+			continue
+		}
+
+		packages = append(packages, OutdatedPackage{
+			Name:    pkg.Name,
+			Current: pkg.Version,
+			Latest:  pkg.Latest,
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return packages, nil
+}
+
 func (c ComposerModule) Fix(ctx context.Context, deps Dependencies, _ []string, options FixOptions) (FixItem, error) {
 	return fixByPackageType(ctx, deps, c.Name(), manifest.PackageTypeComposer, options)
 }

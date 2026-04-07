@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
@@ -41,7 +42,12 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 				continue
 			}
 
-			renderListScopeCardTTY(ow, listScopeDisplay(id), deps)
+			var outdated []adapter.OutdatedPackage
+			if report.Outdated != nil {
+				outdated = report.Outdated[id]
+			}
+
+			renderListScopeCardTTY(ow, listScopeDisplay(id), deps, outdated)
 		}
 	}
 
@@ -69,13 +75,15 @@ func listScopeDisplay(adapterID string) string {
 	return strings.ToUpper(adapterID[:1]) + adapterID[1:]
 }
 
-func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string) {
+func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string, outdated []adapter.OutdatedPackage) {
 	ow.PrintNewLines(1)
 
 	badge := terminal.Green + terminal.Bold + "OK" + terminal.Reset
 
 	if len(deps) == 0 {
 		badge = terminal.Yellow + terminal.Bold + "EMPTY" + terminal.Reset
+	} else if len(outdated) > 0 {
+		badge = terminal.Yellow + terminal.Bold + fmt.Sprintf("%d OUTDATED", len(outdated)) + terminal.Reset
 	}
 
 	header := fmt.Sprintf("  %s%s%s  %s",
@@ -104,11 +112,25 @@ func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps
 		return
 	}
 
+	outdatedMap := make(map[string]adapter.OutdatedPackage)
+	for _, pkg := range outdated {
+		outdatedMap[pkg.Name] = pkg
+	}
+
 	for _, dep := range deps {
-		_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
-			terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
-			dep, terminal.Reset,
-		)
+		if pkg, isOutdated := outdatedMap[dep]; isOutdated {
+			_, _ = fmt.Fprintf(ow, "%s%s%s %s %s%s%s → %s%s%s\n",
+				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
+				dep,
+				terminal.Dim, pkg.Current, terminal.Reset,
+				terminal.Green, pkg.Latest, terminal.Reset,
+			)
+		} else {
+			_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
+				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
+				dep, terminal.Reset,
+			)
+		}
 	}
 }
 

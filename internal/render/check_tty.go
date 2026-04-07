@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -40,6 +41,10 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 	for _, item := range report.Items {
 		card := BuildHealthCard(item)
 		renderHealthCardTTY(ow, card)
+	}
+
+	if len(report.Outdated) > 0 {
+		renderOutdatedSectionTTY(ow, report.Outdated)
 	}
 
 	statusIcon, statusColor, statusText := statusFromReport(report)
@@ -208,6 +213,30 @@ func printMessages(ow *terminal.OutputWriter, messages []model.Message, color st
 func printMessagesUniform(ow *terminal.OutputWriter, messages []model.Message, color string, symbol string) {
 	for _, msg := range messages {
 		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", ttyProjectBodySpaces), symbol, msg.Text)
+	}
+}
+
+func renderOutdatedSectionTTY(ow *terminal.OutputWriter, outdated map[string][]adapter.OutdatedPackage) {
+	ow.PrintNewLines(1)
+	ow.Println(terminal.Bold + terminal.Yellow + "  Outdated packages" + terminal.Reset)
+	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+
+	for scopeID, packages := range outdated {
+		if len(packages) == 0 {
+			continue
+		}
+
+		scopeDisplay := strings.ToUpper(scopeID[:1]) + scopeID[1:]
+		ow.Println(terminal.Dim + "  " + scopeDisplay + terminal.Reset)
+
+		for _, pkg := range packages {
+			ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
+				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
+				pkg.Name,
+				terminal.Dim, pkg.Current, terminal.Reset,
+				terminal.Green, pkg.Latest, terminal.Reset,
+			)
+		}
 	}
 }
 

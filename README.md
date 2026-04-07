@@ -41,6 +41,7 @@ preflight check --with-env
 | `--pm`, `-p` | Package managers to check (npm, yarn, pnpm, bun, composer, go, pip, bundle) |
 | `--scope` | Scopes to check (js, php, composer, node, go, python, ruby, env) |
 | `--with-env` | Also validate `.env` against `.env.example` |
+| `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
 | `--json` | Output as JSON |
 
@@ -103,6 +104,7 @@ preflight list --pm=composer,go
 |------|-------------|
 | `--pm`, `-p` | Package managers to list |
 | `--scope` | Scopes to list |
+| `--outdated` | Show outdated packages with version info |
 | `--json` | Output as JSON |
 
 ### run
