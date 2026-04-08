@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"os/exec"
 	"strings"
 
@@ -37,12 +38,8 @@ func (p PythonModule) Audit(ctx context.Context, deps Dependencies) AuditResult 
 	}
 
 	output := mergeAuditOutput(stdout, stderr)
-	rank := 0
-
-	if code != 0 {
-		rank = 500
-	}
-
+	counts := parsePipAuditCounts(stdout)
+	rank := severityRankFromCounts(counts)
 	passed := code == 0
 
 	return AuditResult{
@@ -50,6 +47,37 @@ func (p PythonModule) Audit(ctx context.Context, deps Dependencies) AuditResult 
 		ExitCode:     code,
 		OK:           passed,
 		SeverityRank: rank,
+		Counts:       counts,
 		Output:       output,
 	}
+}
+
+func parsePipAuditCounts(jsonText string) map[string]int {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" || !strings.HasPrefix(jsonText, "[") {
+		return nil
+	}
+
+	var packages []struct {
+		Vulns []struct {
+			ID string `json:"id"`
+		} `json:"vulns"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &packages); err != nil {
+		return nil
+	}
+
+	vulnCount := 0
+
+	for _, pkg := range packages {
+		vulnCount += len(pkg.Vulns)
+	}
+
+	if vulnCount == 0 {
+		return nil
+	}
+
+	return map[string]int{"high": vulnCount}
 }
