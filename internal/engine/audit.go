@@ -59,6 +59,10 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 		auditResult := runner.Audit(ctx, deps)
 		itemEndedAt := time.Now()
 
+		if auditResult.Skipped {
+			return result.AuditItem{}, false
+		}
+
 		return result.FromAdapterAudit(
 			runner.Name(),
 			adapter.DisplayName(runner),
@@ -94,7 +98,7 @@ func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) 
 	filtered := make([]result.AuditItem, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		if item.Skipped || item.ErrText != "" {
+		if item.ErrText != "" {
 			filtered = append(filtered, item)
 			continue
 		}
@@ -106,8 +110,6 @@ func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) 
 			ScopeID:       item.ScopeID,
 			ScopeDisplay:  item.ScopeDisplay,
 			Priority:      item.Priority,
-			Skipped:       item.Skipped,
-			SkipReason:    item.SkipReason,
 			CommandLine:   item.CommandLine,
 			ExitCode:      item.ExitCode,
 			OK:            !hasIssues,

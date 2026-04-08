@@ -115,10 +115,6 @@ func exitCodeFromAuditReport(report result.AuditReport) int {
 	}
 
 	for _, item := range report.Items {
-		if item.Skipped {
-			continue
-		}
-
 		if item.ErrText != "" {
 			return 1
 		}

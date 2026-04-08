@@ -17,8 +17,6 @@ type AuditItem struct {
 	ScopeID       string
 	ScopeDisplay  string
 	Priority      int
-	Skipped       bool
-	SkipReason    string
 	CommandLine   string
 	ExitCode      int
 	OK            bool
@@ -36,8 +34,6 @@ func FromAdapterAudit(scopeID, scopeDisplay string, priority int, ar adapter.Aud
 		ScopeID:       scopeID,
 		ScopeDisplay:  scopeDisplay,
 		Priority:      priority,
-		Skipped:       ar.Skipped,
-		SkipReason:    ar.SkipReason,
 		CommandLine:   ar.CommandLine,
 		ExitCode:      ar.ExitCode,
 		OK:            ar.OK,

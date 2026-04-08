@@ -36,8 +36,6 @@ type auditItemJSON struct {
 	ScopeDisplay  string         `json:"scopeDisplay"`
 	ScopeID       string         `json:"scopeId"`
 	SeverityRank  int            `json:"severityRank"`
-	SkipReason    string         `json:"skipReason,omitempty"`
-	Skipped       bool           `json:"skipped"`
 	StartedAt     *time.Time     `json:"startedAt,omitempty"`
 }
 
@@ -76,8 +74,6 @@ func auditItemToJSON(item result.AuditItem) auditItemJSON {
 		ScopeDisplay:  item.ScopeDisplay,
 		ScopeID:       item.ScopeID,
 		SeverityRank:  item.SeverityRank,
-		SkipReason:    item.SkipReason,
-		Skipped:       item.Skipped,
 	}
 
 	if !item.StartedAt.IsZero() {
@@ -95,7 +91,6 @@ func quietAuditPayload(report result.AuditReport) any {
 	type quietItem struct {
 		ScopeID      string `json:"scopeId"`
 		OK           bool   `json:"ok"`
-		Skipped      bool   `json:"skipped"`
 		SeverityRank int    `json:"severityRank"`
 	}
 
@@ -105,7 +100,6 @@ func quietAuditPayload(report result.AuditReport) any {
 		items = append(items, quietItem{
 			ScopeID:      item.ScopeID,
 			OK:           item.OK,
-			Skipped:      item.Skipped,
 			SeverityRank: item.SeverityRank,
 		})
 	}
