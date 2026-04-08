@@ -104,7 +104,7 @@ func (c ComposerModule) ListOutdated(ctx context.Context, deps Dependencies) ([]
 		return nil, nil
 	}
 
-	output, err := deps.Runner.Run(ctx, "composer", "outdated", "--format=json")
+	output, err := deps.Runner.Run(ctx, "composer", "outdated", "--direct", "--format=json")
 
 	if err != nil && output == "" {
 		return nil, err

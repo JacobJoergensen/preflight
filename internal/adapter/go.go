@@ -134,9 +134,10 @@ func parseGoListOutdated(output string) ([]OutdatedPackage, error) {
 
 	for decoder.More() {
 		var mod struct {
-			Path    string `json:"Path"`
-			Version string `json:"Version"`
-			Update  *struct {
+			Path     string `json:"Path"`
+			Version  string `json:"Version"`
+			Indirect bool   `json:"Indirect"`
+			Update   *struct {
 				Version string `json:"Version"`
 			} `json:"Update"`
 		}
@@ -145,7 +146,7 @@ func parseGoListOutdated(output string) ([]OutdatedPackage, error) {
 			continue
 		}
 
-		if mod.Update == nil || mod.Version == mod.Update.Version {
+		if mod.Indirect || mod.Update == nil || mod.Version == mod.Update.Version {
 			continue
 		}
 

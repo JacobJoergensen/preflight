@@ -184,7 +184,10 @@ func (r RubyModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Outd
 		return nil, err
 	}
 
-	return parseBundleOutdated(output), nil
+	packages := parseBundleOutdated(output)
+	direct := toSet(config.Dependencies)
+
+	return filterDirectOutdated(packages, direct), nil
 }
 
 var bundleOutdatedLine = regexp.MustCompile(`^\s*\*\s+([a-zA-Z0-9_.-]+)\s+\(newest\s+([^,]+),\s+installed\s+([^,)]+)`)

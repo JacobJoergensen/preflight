@@ -197,7 +197,15 @@ func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Ou
 		return nil, err
 	}
 
-	return parsePipOutdated(output)
+	packages, err := parsePipOutdated(output)
+
+	if err != nil {
+		return nil, err
+	}
+
+	direct := toSet(config.Dependencies, config.DevDependencies)
+
+	return filterDirectOutdated(packages, direct), nil
 }
 
 func runPipListOutdated(ctx context.Context, runner exec.Runner, pmCommand string) (string, error) {
