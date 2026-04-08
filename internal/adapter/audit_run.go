@@ -71,17 +71,15 @@ func severityRankFromCounts(counts map[string]int) int {
 			continue
 		}
 
-		switch strings.ToLower(strings.TrimSpace(severity)) {
-		case "critical":
+		switch SeverityLevel(severity) {
+		case 4:
 			rank += 1000 * count
-		case "high":
+		case 3:
 			rank += 100 * count
-		case "moderate", "medium":
+		case 2:
 			rank += 10 * count
-		case "low":
+		case 1:
 			rank += count
-		case "info":
-			rank += 0
 		default:
 			rank += 5 * count
 		}

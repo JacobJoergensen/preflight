@@ -51,9 +51,6 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 	status := "PASS"
 
 	switch {
-	case item.Skipped:
-		color = terminal.Yellow
-		status = "SKIP"
 	case item.ErrText != "":
 		color = terminal.Red
 		status = "ERROR"
@@ -70,10 +67,6 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 
 	ow.Println(header)
 
-	if item.Skipped && item.SkipReason != "" {
-		ow.Println(terminal.Dim + "    " + item.SkipReason + terminal.Reset)
-	}
-
 	if item.ErrText != "" {
 		ow.Println(terminal.Red + "    " + item.ErrText + terminal.Reset)
 	}
@@ -82,7 +75,7 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 		ow.Println(terminal.Dim + "    counts: " + formatCounts(item.Counts) + terminal.Reset)
 	}
 
-	if item.Output != "" && !item.Skipped {
+	if item.Output != "" {
 		body := truncateRunes(strings.TrimSpace(item.Output), auditOutputMaxRunes)
 
 		for line := range strings.SplitSeq(body, "\n") {
@@ -122,28 +115,10 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 		return terminal.WarningSign, terminal.Yellow, "No audits ran (no matching scopes or tools)"
 	}
 
-	allSkipped := true
-
-	for _, item := range report.Items {
-		if !item.Skipped {
-			allSkipped = false
-
-			break
-		}
-	}
-
-	if allSkipped {
-		return terminal.WarningSign, terminal.Yellow, "All audits skipped (missing manifests or optional tools)"
-	}
-
 	hasErr := false
 	hasIssues := false
 
 	for _, item := range report.Items {
-		if item.Skipped {
-			continue
-		}
-
 		if item.ErrText != "" {
 			hasErr = true
 		}

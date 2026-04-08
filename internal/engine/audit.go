@@ -10,7 +10,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 )
 
-func (r Runner) Audit(ctx context.Context, scopes []string, selectors []string) (result.AuditReport, error) {
+func (r Runner) Audit(ctx context.Context, scopes []string, selectors []string, minSeverity string) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
 
 	if err != nil {
@@ -30,8 +30,13 @@ func (r Runner) Audit(ctx context.Context, scopes []string, selectors []string) 
 	}
 
 	runners := filterAuditRunners(adapters)
+	report := runAudits(ctx, runners, deps)
 
-	return runAudits(ctx, runners, deps), nil
+	if minSeverity != "" {
+		report = filterAuditReportBySeverity(report, minSeverity)
+	}
+
+	return report, nil
 }
 
 func filterAuditRunners(adapters []adapter.Adapter) []adapter.AuditRunner {
@@ -53,6 +58,10 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 		itemStartedAt := time.Now()
 		auditResult := runner.Audit(ctx, deps)
 		itemEndedAt := time.Now()
+
+		if auditResult.Skipped {
+			return result.AuditItem{}, false
+		}
 
 		return result.FromAdapterAudit(
 			runner.Name(),
@@ -82,4 +91,86 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 		Canceled:  ctx.Err() != nil,
 		Items:     items,
 	}
+}
+
+func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
+	threshold := adapter.SeverityLevel(minSeverity)
+	filtered := make([]result.AuditItem, 0, len(report.Items))
+
+	for _, item := range report.Items {
+		if item.ErrText != "" {
+			filtered = append(filtered, item)
+			continue
+		}
+
+		filteredCounts := filterCountsBySeverity(item.Counts, threshold)
+		hasIssues := len(filteredCounts) > 0
+
+		filtered = append(filtered, result.AuditItem{
+			ScopeID:       item.ScopeID,
+			ScopeDisplay:  item.ScopeDisplay,
+			Priority:      item.Priority,
+			CommandLine:   item.CommandLine,
+			ExitCode:      item.ExitCode,
+			OK:            !hasIssues,
+			SeverityRank:  recalculateSeverityRank(filteredCounts),
+			Counts:        filteredCounts,
+			Output:        item.Output,
+			ErrText:       item.ErrText,
+			StartedAt:     item.StartedAt,
+			EndedAt:       item.EndedAt,
+			ElapsedMillis: item.ElapsedMillis,
+		})
+	}
+
+	report.Items = filtered
+
+	return report
+}
+
+func filterCountsBySeverity(counts map[string]int, threshold int) map[string]int {
+	if len(counts) == 0 {
+		return counts
+	}
+
+	filtered := make(map[string]int)
+
+	for name, count := range counts {
+		if count <= 0 {
+			continue
+		}
+
+		if adapter.SeverityLevel(name) >= threshold {
+			filtered[name] = count
+		}
+	}
+
+	return filtered
+}
+
+func recalculateSeverityRank(counts map[string]int) int {
+	if len(counts) == 0 {
+		return 0
+	}
+
+	rank := 0
+
+	for name, count := range counts {
+		if count <= 0 {
+			continue
+		}
+
+		switch adapter.SeverityLevel(name) {
+		case 4:
+			rank += 1000 * count
+		case 3:
+			rank += 100 * count
+		case 2:
+			rank += 10 * count
+		case 1:
+			rank += count
+		}
+	}
+
+	return rank
 }

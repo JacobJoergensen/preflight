@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"strings"
 )
 
 type AuditRunner interface {
@@ -19,4 +20,22 @@ type AuditResult struct {
 	Counts       map[string]int // Output combines stdout/stderr for display (may be truncated by renderers).
 	Output       string         // Err is set when the audit tool could not be started (missing binary, etc.).
 	Err          error
+}
+
+// SeverityLevel maps a severity name to an ordered level (0 = unknown, 4 = critical).
+func SeverityLevel(s string) int {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "critical":
+		return 4
+	case "high":
+		return 3
+	case "moderate", "medium":
+		return 2
+	case "low":
+		return 1
+	case "info":
+		return 0
+	default:
+		return 0
+	}
 }

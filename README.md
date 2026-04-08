@@ -182,6 +182,8 @@ profiles:
       withEnv: true
     fix:
       pm: [npm, composer]
+    audit:
+      minSeverity: high  # ignore info, low, moderate
     run:
       scripts:
         test:
@@ -192,6 +194,8 @@ profiles:
   ci:
     check:
       scope: [js, composer, go]
+    audit:
+      minSeverity: critical  # only fail on critical
 ```
 
 ### Profile Resolution

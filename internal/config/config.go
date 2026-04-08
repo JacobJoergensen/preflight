@@ -19,10 +19,17 @@ type File struct {
 }
 
 type Profile struct {
-	Check *Command  `yaml:"check,omitempty"`
-	Fix   *Command  `yaml:"fix,omitempty"`
-	List  *Command  `yaml:"list,omitempty"`
-	Run   *RunBlock `yaml:"run,omitempty"`
+	Check *Command      `yaml:"check,omitempty"`
+	Fix   *Command      `yaml:"fix,omitempty"`
+	List  *Command      `yaml:"list,omitempty"`
+	Audit *AuditCommand `yaml:"audit,omitempty"`
+	Run   *RunBlock     `yaml:"run,omitempty"`
+}
+
+type AuditCommand struct {
+	Scope       *[]string `yaml:"scope,omitempty"`
+	PM          *[]string `yaml:"pm,omitempty"`
+	MinSeverity *string   `yaml:"minSeverity,omitempty"`
 }
 
 type RunBlock struct {
@@ -107,6 +114,12 @@ func (p Profile) validate(profileName string) error {
 		}
 	}
 
+	if p.Audit != nil {
+		if err := p.Audit.validate(); err != nil {
+			return fmt.Errorf("profiles.%s.audit: %w", profileName, err)
+		}
+	}
+
 	if p.Run != nil {
 		if err := p.Run.validate(profileName); err != nil {
 			return err
@@ -175,6 +188,29 @@ func (c Command) validate(command string) error {
 	}
 
 	return nil
+}
+
+func (a AuditCommand) validate() error {
+	if a.Scope != nil && a.PM != nil {
+		return errors.New("set only one of scope or pm")
+	}
+
+	if a.MinSeverity != nil {
+		if !isValidSeverity(*a.MinSeverity) {
+			return fmt.Errorf("invalid minSeverity %q (use: info, low, moderate, medium, high, critical)", *a.MinSeverity)
+		}
+	}
+
+	return nil
+}
+
+func isValidSeverity(s string) bool {
+	switch s {
+	case "info", "low", "moderate", "medium", "high", "critical":
+		return true
+	default:
+		return false
+	}
 }
 
 func ResolveProfileName(cliProfile, envProfile, fileProfile string) string {
