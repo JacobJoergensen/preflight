@@ -15,10 +15,11 @@ import (
 )
 
 type auditOptions struct {
-	managers []string
-	scopes   []string
-	json     bool
-	timeout  time.Duration
+	managers    []string
+	scopes      []string
+	json        bool
+	timeout     time.Duration
+	minSeverity string
 }
 
 var auditOpts auditOptions
@@ -46,11 +47,43 @@ preflight audit --json`,
 		workDir, _ := os.Getwd()
 		runner := engine.NewRunner(workDir)
 
-		if len(auditOpts.scopes) > 0 && len(auditOpts.managers) > 0 {
+		config, profileName, err := loadPreflightConfig(workDir)
+
+		if err != nil {
+			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
+		}
+
+		profile, err := config.ProfileFor(profileName)
+
+		if err != nil {
+			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
+		}
+
+		scopes := auditOpts.scopes
+		managers := auditOpts.managers
+		minSeverity := auditOpts.minSeverity
+
+		if profile.Audit != nil {
+			a := profile.Audit
+
+			if !cmd.Flags().Changed("scope") && !cmd.Flags().Changed("pm") && a.Scope != nil {
+				scopes = *a.Scope
+			}
+
+			if !cmd.Flags().Changed("scope") && !cmd.Flags().Changed("pm") && a.PM != nil {
+				managers = *a.PM
+			}
+
+			if minSeverity == "" && a.MinSeverity != nil {
+				minSeverity = *a.MinSeverity
+			}
+		}
+
+		if len(scopes) > 0 && len(managers) > 0 {
 			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
 		}
 
-		report, err := runner.Audit(ctx, auditOpts.scopes, auditOpts.managers)
+		report, err := runner.Audit(ctx, scopes, managers, minSeverity)
 
 		if err != nil {
 			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -82,10 +115,6 @@ func exitCodeFromAuditReport(report result.AuditReport) int {
 	}
 
 	for _, item := range report.Items {
-		if item.Skipped {
-			continue
-		}
-
 		if item.ErrText != "" {
 			return 1
 		}
@@ -127,6 +156,13 @@ func init() {
 		"json",
 		false,
 		"Output results as JSON",
+	)
+
+	auditCmd.Flags().StringVar(
+		&auditOpts.minSeverity,
+		"min-severity",
+		"",
+		"Minimum severity to report (info, low, moderate, high, critical)",
 	)
 
 	rootCmd.AddCommand(auditCmd)

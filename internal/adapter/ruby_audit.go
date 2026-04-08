@@ -37,12 +37,8 @@ func (r RubyModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
 	}
 
 	output := mergeAuditOutput(stdout, stderr)
-	rank := 0
-
-	if code != 0 {
-		rank = 500
-	}
-
+	counts := parseBundleAuditCounts(output)
+	rank := severityRankFromCounts(counts)
 	passed := code == 0
 
 	return AuditResult{
@@ -50,6 +46,45 @@ func (r RubyModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
 		ExitCode:     code,
 		OK:           passed,
 		SeverityRank: rank,
+		Counts:       counts,
 		Output:       output,
 	}
+}
+
+func parseBundleAuditCounts(output string) map[string]int {
+	if output == "" {
+		return nil
+	}
+
+	counts := make(map[string]int)
+
+	for line := range strings.SplitSeq(output, "\n") {
+		line = strings.TrimSpace(line)
+
+		if !strings.HasPrefix(line, "Criticality:") {
+			continue
+		}
+
+		severity := strings.TrimSpace(strings.TrimPrefix(line, "Criticality:"))
+		severity = strings.ToLower(severity)
+
+		switch severity {
+		case "critical":
+			counts["critical"]++
+		case "high":
+			counts["high"]++
+		case "medium":
+			counts["moderate"]++
+		case "low":
+			counts["low"]++
+		default:
+			counts["high"]++
+		}
+	}
+
+	if len(counts) == 0 {
+		return nil
+	}
+
+	return counts
 }

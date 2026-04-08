@@ -4,8 +4,16 @@ A CLI tool that validates your project dependencies before you run into problems
 
 ## Install
 
+Go Install:
+
 ```sh
 go install github.com/JacobJoergensen/preflight@latest
+```
+
+NPM Install:
+
+```sh
+npm install -g @jacobjoergensen/preflight
 ```
 
 Or download it from [releases](https://github.com/JacobJoergensen/preflight/releases).
@@ -176,6 +184,8 @@ profiles:
       withEnv: true
     fix:
       pm: [npm, composer]
+    audit:
+      minSeverity: high  # ignore info, low, moderate
     run:
       scripts:
         test:
@@ -186,6 +196,8 @@ profiles:
   ci:
     check:
       scope: [js, composer, go]
+    audit:
+      minSeverity: critical  # only fail on critical
 ```
 
 ### Profile Resolution
