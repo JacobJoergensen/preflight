@@ -51,7 +51,7 @@ func Run(ctx context.Context, name string, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", &CommandError{
+		return strings.TrimSpace(stdout.String()), &CommandError{
 			Command: name,
 			Args:    args,
 			Err:     err,

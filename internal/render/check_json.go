@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -23,27 +24,27 @@ type outdatedPackageJSON struct {
 }
 
 type checkReportJSON struct {
-	SchemaVersion int                              `json:"schemaVersion"`
-	StartedAt     time.Time                        `json:"startedAt"`
-	EndedAt       time.Time                        `json:"endedAt"`
-	Canceled      bool                             `json:"canceled"`
-	Items         []checkItemJSON                  `json:"items"`
-	Outdated      map[string][]outdatedPackageJSON `json:"outdated,omitempty"`
+	SchemaVersion int             `json:"schemaVersion"`
+	StartedAt     time.Time       `json:"startedAt"`
+	EndedAt       time.Time       `json:"endedAt"`
+	Canceled      bool            `json:"canceled"`
+	Items         []checkItemJSON `json:"items"`
 }
 
 type checkItemJSON struct {
-	ScopeID        string          `json:"scopeId"`
-	ScopeDisplay   string          `json:"scopeDisplay"`
-	Priority       int             `json:"priority"`
-	Errors         []model.Message `json:"errors,omitempty"`
-	Warnings       []model.Message `json:"warnings,omitempty"`
-	Successes      []model.Message `json:"successes,omitempty"`
-	StartedAt      *time.Time      `json:"startedAt,omitempty"`
-	EndedAt        *time.Time      `json:"endedAt,omitempty"`
-	ElapsedMillis  int64           `json:"elapsedMillis,omitempty"`
-	ProjectSignals []string        `json:"projectSignals,omitempty"`
-	FixPMHint      string          `json:"fixPmHint,omitempty"`
-	Health         HealthCard      `json:"health"`
+	ScopeID        string                `json:"scopeId"`
+	ScopeDisplay   string                `json:"scopeDisplay"`
+	Priority       int                   `json:"priority"`
+	Errors         []model.Message       `json:"errors,omitempty"`
+	Warnings       []model.Message       `json:"warnings,omitempty"`
+	Successes      []model.Message       `json:"successes,omitempty"`
+	StartedAt      *time.Time            `json:"startedAt,omitempty"`
+	EndedAt        *time.Time            `json:"endedAt,omitempty"`
+	ElapsedMillis  int64                 `json:"elapsedMillis,omitempty"`
+	ProjectSignals []string              `json:"projectSignals,omitempty"`
+	FixPMHint      string                `json:"fixPmHint,omitempty"`
+	Health         HealthCard            `json:"health"`
+	Outdated       []outdatedPackageJSON `json:"outdated,omitempty"`
 }
 
 func (r JSONCheckRenderer) Render(report result.CheckReport) error {
@@ -54,7 +55,9 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 	items := make([]checkItemJSON, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		items = append(items, checkItemToJSON(item))
+		jsonItem := checkItemToJSON(item)
+		jsonItem.Outdated = outdatedPackagesToJSON(report.Outdated[item.ScopeID])
+		items = append(items, jsonItem)
 	}
 
 	payload := checkReportJSON{
@@ -63,24 +66,6 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 		EndedAt:       report.EndedAt,
 		Canceled:      report.Canceled,
 		Items:         items,
-	}
-
-	if len(report.Outdated) > 0 {
-		payload.Outdated = make(map[string][]outdatedPackageJSON)
-
-		for scopeID, pkgs := range report.Outdated {
-			outdatedPkgs := make([]outdatedPackageJSON, len(pkgs))
-
-			for i, pkg := range pkgs {
-				outdatedPkgs[i] = outdatedPackageJSON{
-					Name:    pkg.Name,
-					Current: pkg.Current,
-					Latest:  pkg.Latest,
-				}
-			}
-
-			payload.Outdated[scopeID] = outdatedPkgs
-		}
 	}
 
 	return encodeJSON(r.Out, payload, true)
@@ -109,6 +94,24 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 	}
 
 	return jsonItem
+}
+
+func outdatedPackagesToJSON(pkgs []adapter.OutdatedPackage) []outdatedPackageJSON {
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	out := make([]outdatedPackageJSON, len(pkgs))
+
+	for i, pkg := range pkgs {
+		out[i] = outdatedPackageJSON{
+			Name:    pkg.Name,
+			Current: pkg.Current,
+			Latest:  pkg.Latest,
+		}
+	}
+
+	return out
 }
 
 func cloneMessages(src []model.Message) []model.Message {

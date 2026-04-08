@@ -40,11 +40,7 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 
 	for _, item := range report.Items {
 		card := BuildHealthCard(item)
-		renderHealthCardTTY(ow, card)
-	}
-
-	if len(report.Outdated) > 0 {
-		renderOutdatedSectionTTY(ow, report.Outdated)
+		renderHealthCardTTY(ow, card, report.Outdated[item.ScopeID])
 	}
 
 	statusIcon, statusColor, statusText := statusFromReport(report)
@@ -63,7 +59,7 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 	return nil
 }
 
-func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard) {
+func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []adapter.OutdatedPackage) {
 	ow.PrintNewLines(1)
 
 	badge := healthBadgeTTY(card.Status)
@@ -107,20 +103,22 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard) {
 		printMessages(ow, card.FlatErrors, terminal.Red, terminal.CrossMark)
 	}
 
+	outdatedByName := buildOutdatedMap(outdated)
+
 	hasProdDeps := len(card.DepSuccess) > 0 || len(card.DepWarnings) > 0 || len(card.DepErrors) > 0
 	hasDevDeps := len(card.DepDevSuccess) > 0 || len(card.DepDevWarnings) > 0 || len(card.DepDevErrors) > 0
 
 	if hasProdDeps || hasDevDeps {
 		if hasProdDeps {
 			printSection("Dependencies")
-			printMessagesUniformCapped(ow, card.DepSuccess, terminal.Green, terminal.CheckMark, "dependencies")
+			printDepsWithOutdated(ow, card.DepSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepWarnings, terminal.Yellow, terminal.WarningSign, "dependency warnings")
 			printMessagesUniformCapped(ow, card.DepErrors, terminal.Red, terminal.CrossMark, "dependency errors")
 		}
 
 		if hasDevDeps {
 			printSection("Dev dependencies")
-			printMessagesUniformCapped(ow, card.DepDevSuccess, terminal.Green, terminal.CheckMark, "dev dependencies")
+			printDepsWithOutdated(ow, card.DepDevSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
 			printMessagesUniformCapped(ow, card.DepDevErrors, terminal.Red, terminal.CrossMark, "dev dependency errors")
 		}
@@ -216,28 +214,91 @@ func printMessagesUniform(ow *terminal.OutputWriter, messages []model.Message, c
 	}
 }
 
-func renderOutdatedSectionTTY(ow *terminal.OutputWriter, outdated map[string][]adapter.OutdatedPackage) {
-	ow.PrintNewLines(1)
-	ow.Println(terminal.Bold + terminal.Yellow + "  Outdated packages" + terminal.Reset)
-	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+func buildOutdatedMap(packages []adapter.OutdatedPackage) map[string]adapter.OutdatedPackage {
+	if len(packages) == 0 {
+		return nil
+	}
 
-	for scopeID, packages := range outdated {
-		if len(packages) == 0 {
-			continue
-		}
+	m := make(map[string]adapter.OutdatedPackage, len(packages))
 
-		scopeDisplay := strings.ToUpper(scopeID[:1]) + scopeID[1:]
-		ow.Println(terminal.Dim + "  " + scopeDisplay + terminal.Reset)
+	for _, pkg := range packages {
+		m[strings.ToLower(pkg.Name)] = pkg
+	}
 
-		for _, pkg := range packages {
+	return m
+}
+
+func printDepsWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+	if len(deps) == 0 {
+		return
+	}
+
+	if len(deps) <= maxDepRowsPerSection {
+		printDepLinesWithOutdated(ow, deps, outdated)
+		return
+	}
+
+	printDepLinesWithOutdated(ow, deps[:maxDepRowsPerSection], outdated)
+
+	overflow := len(deps) - maxDepRowsPerSection
+	ow.Printf("%s%s … %s%s\n", terminal.Dim, strings.Repeat(" ", ttyProjectBodySpaces), overflowMoreDepsLine(overflow, "dependencies"), terminal.Reset)
+}
+
+func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+	for _, msg := range deps {
+		name := extractDepName(msg.Text)
+		pkg, isOutdated := outdated[strings.ToLower(name)]
+
+		if isOutdated {
 			ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
 				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
 				pkg.Name,
 				terminal.Dim, pkg.Current, terminal.Reset,
 				terminal.Green, pkg.Latest, terminal.Reset,
 			)
+		} else {
+			ow.Printf("%s%s%s %s\n",
+				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark, msg.Text,
+			)
 		}
 	}
+}
+
+func extractDepName(text string) string {
+	text = strings.TrimSpace(text)
+
+	for _, prefix := range []string{"Installed dependency ", "Installed "} {
+		if strings.HasPrefix(text, prefix) {
+			text = strings.TrimPrefix(text, prefix)
+			text = stripANSI(text)
+
+			if i := strings.Index(text, " ("); i > 0 {
+				return text[:i]
+			}
+
+			return text
+		}
+	}
+
+	return text
+}
+
+func stripANSI(s string) string {
+	var b strings.Builder
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\033' {
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+
+			continue
+		}
+
+		b.WriteByte(s[i])
+	}
+
+	return b.String()
 }
 
 func statusFromReport(report result.CheckReport) (icon string, color string, text string) {
