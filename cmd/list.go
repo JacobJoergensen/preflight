@@ -16,6 +16,7 @@ type listOptions struct {
 	managers []string
 	scopes   []string
 	json     bool
+	outdated bool
 }
 
 var listOpts listOptions
@@ -64,7 +65,7 @@ var listCmd = &cobra.Command{
 			return errors.New("cannot use both --scope and --pm")
 		}
 
-		report, err := runner.List(cmd.Context(), scopes, managers)
+		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated)
 
 		if err != nil {
 			return fmt.Errorf("list failed: %w", err)
@@ -107,6 +108,13 @@ func init() {
 		"json",
 		false,
 		"Output results as JSON",
+	)
+
+	listCmd.Flags().BoolVar(
+		&listOpts.outdated,
+		"outdated",
+		false,
+		"Show outdated packages with version info",
 	)
 
 	rootCmd.AddCommand(listCmd)

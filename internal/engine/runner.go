@@ -46,7 +46,7 @@ func (r Runner) deps() adapter.Dependencies {
 	}
 }
 
-func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, withEnv bool) (result.CheckReport, error) {
+func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, withEnv bool, outdated bool) (result.CheckReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeCheck})
 
 	if err != nil {
@@ -68,7 +68,23 @@ func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, 
 
 	adapters = appendEnvIfRequested(adapters, withEnv, scopes, selectors)
 
-	return runChecks(ctx, adapters, deps), nil
+	report := runChecks(ctx, adapters, deps)
+
+	if outdated {
+		report.Outdated = make(map[string][]adapter.OutdatedPackage)
+
+		for _, a := range adapters {
+			if outdatedLister, ok := a.(adapter.OutdatedLister); ok {
+				packages, err := outdatedLister.ListOutdated(ctx, deps)
+
+				if err == nil && len(packages) > 0 {
+					report.Outdated[a.Name()] = packages
+				}
+			}
+		}
+	}
+
+	return report, nil
 }
 
 func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, scopes, selectors []string) []adapter.Adapter {
@@ -296,7 +312,7 @@ func parallelWorkerCount(jobCount int) int {
 	return workers
 }
 
-func (r Runner) List(ctx context.Context, scopes []string, selectors []string) (result.DependencyReport, error) {
+func (r Runner) List(ctx context.Context, scopes []string, selectors []string, outdated bool) (result.DependencyReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeList})
 
 	if err != nil {
@@ -312,6 +328,14 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string) (
 	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
 	startedAt := time.Now()
 	depsByAdapter := make(map[string][]string)
+	elapsedByAdapter := make(map[string]int64)
+	displaysByAdapter := make(map[string]string)
+
+	var outdatedByAdapter map[string][]adapter.OutdatedPackage
+
+	if outdated {
+		outdatedByAdapter = make(map[string][]adapter.OutdatedPackage)
+	}
 
 	for _, a := range adapters {
 		lister, ok := a.(adapter.DependencyLister)
@@ -320,6 +344,8 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string) (
 			continue
 		}
 
+		adapterStartedAt := time.Now()
+
 		list, listErr := lister.ListDependencies(ctx, deps)
 
 		if listErr != nil || len(list) == 0 {
@@ -327,13 +353,29 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string) (
 		}
 
 		depsByAdapter[a.Name()] = list
+		displaysByAdapter[a.Name()] = adapter.DisplayName(a)
+
+		if outdated {
+			if outdatedLister, ok := a.(adapter.OutdatedLister); ok {
+				packages, err := outdatedLister.ListOutdated(ctx, deps)
+
+				if err == nil && len(packages) > 0 {
+					outdatedByAdapter[a.Name()] = packages
+				}
+			}
+		}
+
+		elapsedByAdapter[a.Name()] = time.Since(adapterStartedAt).Milliseconds()
 	}
 
 	return result.DependencyReport{
 		StartedAt:    startedAt,
 		EndedAt:      time.Now(),
 		AdapterIDs:   adapter.Names(adapters),
+		Displays:     displaysByAdapter,
 		Dependencies: depsByAdapter,
+		Outdated:     outdatedByAdapter,
+		Elapsed:      elapsedByAdapter,
 	}, nil
 }
 

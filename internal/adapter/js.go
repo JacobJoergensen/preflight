@@ -153,6 +153,65 @@ func (p PackageModule) ListDependencies(ctx context.Context, deps Dependencies) 
 	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
 }
 
+func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPackageConfig()
+
+	if !config.HasConfig {
+		return nil, nil
+	}
+
+	output, err := deps.Runner.Run(ctx, config.PackageManager.Command(), "outdated", "--json")
+
+	if err != nil && output == "" {
+		return nil, err
+	}
+
+	packages, err := parseNPMOutdated(output)
+
+	if err != nil {
+		return nil, err
+	}
+
+	direct := toSet(config.Dependencies, config.DevDependencies)
+
+	return filterDirectOutdated(packages, direct), nil
+}
+
+func parseNPMOutdated(output string) ([]OutdatedPackage, error) {
+	if strings.TrimSpace(output) == "" {
+		return nil, nil
+	}
+
+	var data map[string]struct {
+		Current string `json:"current"`
+		Latest  string `json:"latest"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &data); err != nil {
+		return nil, err
+	}
+
+	packages := make([]OutdatedPackage, 0, len(data))
+
+	for name, info := range data {
+		packages = append(packages, OutdatedPackage{
+			Name:    name,
+			Current: info.Current,
+			Latest:  info.Latest,
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return packages, nil
+}
+
 func (p PackageModule) Fix(ctx context.Context, deps Dependencies, selectors []string, options FixOptions) (FixItem, error) {
 	return fixWithSelectorCheck(ctx, deps, p.Name(), manifest.PackageTypeJS, selectors, options)
 }

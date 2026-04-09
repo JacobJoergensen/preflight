@@ -19,6 +19,7 @@ var (
 	CheckMark   = "✓"
 	CrossMark   = "✗"
 	WarningSign = "⚠"
+	Lightning   = "⚡"
 	Wrench      = "🛠"
 
 	Rocket = "🚀"

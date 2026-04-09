@@ -167,6 +167,55 @@ func (r RubyModule) ListDependencies(ctx context.Context, deps Dependencies) ([]
 	return slices.Clone(config.Dependencies), nil
 }
 
+func (r RubyModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadRubyConfig()
+
+	if config.PackageManager.Tool.Command == "" {
+		return nil, nil
+	}
+
+	output, err := deps.Runner.Run(ctx, "bundle", "outdated")
+
+	if err != nil && output == "" {
+		return nil, err
+	}
+
+	packages := parseBundleOutdated(output)
+	direct := toSet(config.Dependencies)
+
+	return filterDirectOutdated(packages, direct), nil
+}
+
+var bundleOutdatedLine = regexp.MustCompile(`^\s*\*\s+([a-zA-Z0-9_.-]+)\s+\(newest\s+([^,]+),\s+installed\s+([^,)]+)`)
+
+func parseBundleOutdated(output string) []OutdatedPackage {
+	var packages []OutdatedPackage
+
+	for line := range strings.SplitSeq(output, "\n") {
+		parts := bundleOutdatedLine.FindStringSubmatch(line)
+
+		if len(parts) < 4 {
+			continue
+		}
+
+		packages = append(packages, OutdatedPackage{
+			Name:    strings.TrimSpace(parts[1]),
+			Current: strings.TrimSpace(parts[3]),
+			Latest:  strings.TrimSpace(parts[2]),
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+
+	return packages
+}
+
 func (r RubyModule) Fix(ctx context.Context, deps Dependencies, selectors []string, options FixOptions) (FixItem, error) {
 	return fixWithSelectorCheck(ctx, deps, r.Name(), manifest.PackageTypeRuby, selectors, options)
 }

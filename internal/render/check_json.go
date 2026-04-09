@@ -4,16 +4,23 @@ import (
 	"io"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 7
+const CheckJSONSchemaVersion = 8
 
 type JSONCheckRenderer struct {
 	Out io.Writer
+}
+
+type outdatedPackageJSON struct {
+	Name    string `json:"name"`
+	Current string `json:"current"`
+	Latest  string `json:"latest"`
 }
 
 type checkReportJSON struct {
@@ -25,18 +32,19 @@ type checkReportJSON struct {
 }
 
 type checkItemJSON struct {
-	ScopeID        string          `json:"scopeId"`
-	ScopeDisplay   string          `json:"scopeDisplay"`
-	Priority       int             `json:"priority"`
-	Errors         []model.Message `json:"errors,omitempty"`
-	Warnings       []model.Message `json:"warnings,omitempty"`
-	Successes      []model.Message `json:"successes,omitempty"`
-	StartedAt      *time.Time      `json:"startedAt,omitempty"`
-	EndedAt        *time.Time      `json:"endedAt,omitempty"`
-	ElapsedMillis  int64           `json:"elapsedMillis,omitempty"`
-	ProjectSignals []string        `json:"projectSignals,omitempty"`
-	FixPMHint      string          `json:"fixPmHint,omitempty"`
-	Health         HealthCard      `json:"health"`
+	ScopeID        string                `json:"scopeId"`
+	ScopeDisplay   string                `json:"scopeDisplay"`
+	Priority       int                   `json:"priority"`
+	Errors         []model.Message       `json:"errors,omitempty"`
+	Warnings       []model.Message       `json:"warnings,omitempty"`
+	Successes      []model.Message       `json:"successes,omitempty"`
+	StartedAt      *time.Time            `json:"startedAt,omitempty"`
+	EndedAt        *time.Time            `json:"endedAt,omitempty"`
+	ElapsedMillis  int64                 `json:"elapsedMillis,omitempty"`
+	ProjectSignals []string              `json:"projectSignals,omitempty"`
+	FixPMHint      string                `json:"fixPmHint,omitempty"`
+	Health         HealthCard            `json:"health"`
+	Outdated       []outdatedPackageJSON `json:"outdated,omitempty"`
 }
 
 func (r JSONCheckRenderer) Render(report result.CheckReport) error {
@@ -47,7 +55,9 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 	items := make([]checkItemJSON, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		items = append(items, checkItemToJSON(item))
+		jsonItem := checkItemToJSON(item)
+		jsonItem.Outdated = outdatedPackagesToJSON(report.Outdated[item.ScopeID])
+		items = append(items, jsonItem)
 	}
 
 	payload := checkReportJSON{
@@ -86,6 +96,24 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 	return jsonItem
 }
 
+func outdatedPackagesToJSON(pkgs []adapter.OutdatedPackage) []outdatedPackageJSON {
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	outdated := make([]outdatedPackageJSON, len(pkgs))
+
+	for i, pkg := range pkgs {
+		outdated[i] = outdatedPackageJSON{
+			Name:    pkg.Name,
+			Current: pkg.Current,
+			Latest:  pkg.Latest,
+		}
+	}
+
+	return outdated
+}
+
 func cloneMessages(src []model.Message) []model.Message {
 	if len(src) == 0 {
 		return nil
@@ -96,15 +124,16 @@ func cloneMessages(src []model.Message) []model.Message {
 
 func quietCheckPayload(report result.CheckReport) any {
 	type quietItem struct {
-		ScopeID         string          `json:"scopeId"`
-		ScopeDisplay    string          `json:"scopeDisplay"`
-		Priority        int             `json:"priority"`
-		Status          HealthStatus    `json:"status"`
-		Summary         string          `json:"summary,omitempty"`
-		ProjectSignals  []string        `json:"projectSignals,omitempty"`
-		PrimaryNextStep string          `json:"primaryNextStep,omitempty"`
-		Errors          []model.Message `json:"errors,omitempty"`
-		Warnings        []model.Message `json:"warnings,omitempty"`
+		ScopeID         string                `json:"scopeId"`
+		ScopeDisplay    string                `json:"scopeDisplay"`
+		Priority        int                   `json:"priority"`
+		Status          HealthStatus          `json:"status"`
+		Summary         string                `json:"summary,omitempty"`
+		ProjectSignals  []string              `json:"projectSignals,omitempty"`
+		PrimaryNextStep string                `json:"primaryNextStep,omitempty"`
+		Errors          []model.Message       `json:"errors,omitempty"`
+		Warnings        []model.Message       `json:"warnings,omitempty"`
+		Outdated        []outdatedPackageJSON `json:"outdated,omitempty"`
 	}
 
 	type quietReport struct {
@@ -118,7 +147,9 @@ func quietCheckPayload(report result.CheckReport) any {
 	items := make([]quietItem, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+		outdated := report.Outdated[item.ScopeID]
+
+		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -134,6 +165,7 @@ func quietCheckPayload(report result.CheckReport) any {
 			PrimaryNextStep: card.PrimaryNextStep,
 			Errors:          cloneMessages(item.Errors),
 			Warnings:        cloneMessages(item.Warnings),
+			Outdated:        outdatedPackagesToJSON(outdated),
 		})
 	}
 

@@ -180,6 +180,89 @@ func (p PythonModule) ListDependencies(ctx context.Context, deps Dependencies) (
 	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
 }
 
+func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPythonConfig()
+
+	if config.PackageManager.Tool.Command == "" {
+		return nil, nil
+	}
+
+	output, err := runPipListOutdated(ctx, deps.Runner, config.PackageManager.Command())
+
+	if err != nil {
+		return nil, err
+	}
+
+	packages, err := parsePipOutdated(output)
+
+	if err != nil {
+		return nil, err
+	}
+
+	direct := toSet(config.Dependencies, config.DevDependencies)
+
+	return filterDirectOutdated(packages, direct), nil
+}
+
+func runPipListOutdated(ctx context.Context, runner exec.Runner, pmCommand string) (string, error) {
+	args := []string{"-m", "pip", "list", "--outdated", "--format=json"}
+
+	switch pmCommand {
+	case "poetry":
+		return runner.Run(ctx, "poetry", append([]string{"run", "python"}, args...)...)
+	case "uv":
+		return runner.Run(ctx, "uv", append([]string{"run", "python"}, args...)...)
+	case "pipenv":
+		return runner.Run(ctx, "pipenv", append([]string{"run", "python"}, args...)...)
+	case "pdm":
+		return runner.Run(ctx, "pdm", append([]string{"run", "python"}, args...)...)
+	default:
+		output, err := runner.Run(ctx, "python", args...)
+
+		if err != nil {
+			return runner.Run(ctx, "python3", args...)
+		}
+
+		return output, nil
+	}
+}
+
+func parsePipOutdated(output string) ([]OutdatedPackage, error) {
+	if strings.TrimSpace(output) == "" {
+		return nil, nil
+	}
+
+	var entries []struct {
+		Name          string `json:"name"`
+		Version       string `json:"version"`
+		LatestVersion string `json:"latest_version"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		return nil, err
+	}
+
+	packages := make([]OutdatedPackage, 0, len(entries))
+
+	for _, entry := range entries {
+		packages = append(packages, OutdatedPackage{
+			Name:    entry.Name,
+			Current: entry.Version,
+			Latest:  entry.LatestVersion,
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+
+	return packages, nil
+}
+
 func (p PythonModule) Fix(ctx context.Context, deps Dependencies, selectors []string, options FixOptions) (FixItem, error) {
 	return fixWithSelectorCheck(ctx, deps, p.Name(), manifest.PackageTypePython, selectors, options)
 }

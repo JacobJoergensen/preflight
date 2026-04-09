@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
@@ -21,7 +22,7 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 	}
 
 	if terminal.Quiet {
-		return nil
+		return renderListQuiet(ow, report)
 	}
 
 	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
@@ -41,7 +42,17 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 				continue
 			}
 
-			renderListScopeCardTTY(ow, listScopeDisplay(id), deps)
+			var outdated []adapter.OutdatedPackage
+			if report.Outdated != nil {
+				outdated = report.Outdated[id]
+			}
+
+			elapsedMillis := int64(0)
+			if report.Elapsed != nil {
+				elapsedMillis = report.Elapsed[id]
+			}
+
+			renderListScopeCardTTY(ow, listScopeDisplay(report.Displays, id), deps, outdated, elapsedMillis)
 		}
 	}
 
@@ -61,7 +72,11 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 	return nil
 }
 
-func listScopeDisplay(adapterID string) string {
+func listScopeDisplay(displays map[string]string, adapterID string) string {
+	if name, ok := displays[adapterID]; ok && name != "" {
+		return name
+	}
+
 	if adapterID == "" {
 		return adapterID
 	}
@@ -69,7 +84,28 @@ func listScopeDisplay(adapterID string) string {
 	return strings.ToUpper(adapterID[:1]) + adapterID[1:]
 }
 
-func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string) {
+func renderListQuiet(ow *terminal.OutputWriter, report result.DependencyReport) error {
+	if report.Outdated == nil {
+		return nil
+	}
+
+	for _, id := range report.AdapterIDs {
+		outdated := report.Outdated[id]
+
+		if len(outdated) == 0 {
+			continue
+		}
+
+		header := listScopeDisplay(report.Displays, id) + "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset
+		ow.Println(header)
+
+		printOutdatedLinesQuietTTY(ow, outdated)
+	}
+
+	return nil
+}
+
+func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string, outdated []adapter.OutdatedPackage, elapsedMillis int64) {
 	ow.PrintNewLines(1)
 
 	badge := terminal.Green + terminal.Bold + "OK" + terminal.Reset
@@ -78,9 +114,21 @@ func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps
 		badge = terminal.Yellow + terminal.Bold + "EMPTY" + terminal.Reset
 	}
 
-	header := fmt.Sprintf("  %s%s%s  %s",
+	elapsed := ""
+
+	if elapsedMillis > 0 {
+		elapsed = terminal.Dim + fmt.Sprintf(" %dms", elapsedMillis) + terminal.Reset
+	}
+
+	outdatedIndicator := ""
+
+	if len(outdated) > 0 {
+		outdatedIndicator = "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset
+	}
+
+	header := fmt.Sprintf("  %s%s%s  %s%s%s",
 		terminal.Bold, scopeDisplay, terminal.Reset,
-		badge,
+		badge, elapsed, outdatedIndicator,
 	)
 
 	ow.Println(header)
@@ -104,11 +152,25 @@ func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps
 		return
 	}
 
+	outdatedMap := make(map[string]adapter.OutdatedPackage)
+	for _, pkg := range outdated {
+		outdatedMap[pkg.Name] = pkg
+	}
+
 	for _, dep := range deps {
-		_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
-			terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
-			dep, terminal.Reset,
-		)
+		if pkg, isOutdated := outdatedMap[dep]; isOutdated {
+			_, _ = fmt.Fprintf(ow, "%s%s%s %s %s%s%s → %s%s%s\n",
+				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
+				dep,
+				terminal.Dim, pkg.Current, terminal.Reset,
+				terminal.Green, pkg.Latest, terminal.Reset,
+			)
+		} else {
+			_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
+				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
+				dep, terminal.Reset,
+			)
+		}
 	}
 }
 

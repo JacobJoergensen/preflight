@@ -37,6 +37,40 @@ type DependencyLister interface {
 	ListDependencies(ctx context.Context, deps Dependencies) ([]string, error)
 }
 
+type OutdatedPackage struct {
+	Name    string
+	Current string
+	Latest  string
+}
+
+func filterDirectOutdated(packages []OutdatedPackage, direct map[string]struct{}) []OutdatedPackage {
+	filtered := make([]OutdatedPackage, 0, len(packages))
+
+	for _, pkg := range packages {
+		if _, ok := direct[strings.ToLower(pkg.Name)]; ok {
+			filtered = append(filtered, pkg)
+		}
+	}
+
+	return filtered
+}
+
+func toSet(lists ...[]string) map[string]struct{} {
+	set := make(map[string]struct{})
+
+	for _, list := range lists {
+		for _, item := range list {
+			set[strings.ToLower(item)] = struct{}{}
+		}
+	}
+
+	return set
+}
+
+type OutdatedLister interface {
+	ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error)
+}
+
 type Fixer interface {
 	Fix(ctx context.Context, deps Dependencies, selectors []string, options FixOptions) (FixItem, error)
 }

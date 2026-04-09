@@ -3,6 +3,7 @@ package result
 import (
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -11,6 +12,7 @@ type CheckReport struct {
 	EndedAt   time.Time
 	Canceled  bool
 	Items     []CheckItem
+	Outdated  map[string][]adapter.OutdatedPackage
 }
 
 type CheckItem struct {
