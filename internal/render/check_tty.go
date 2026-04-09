@@ -268,15 +268,14 @@ func extractDepName(text string) string {
 	text = strings.TrimSpace(text)
 
 	for _, prefix := range []string{"Installed dependency ", "Installed "} {
-		if strings.HasPrefix(text, prefix) {
-			text = strings.TrimPrefix(text, prefix)
-			text = stripANSI(text)
+		if dep, ok := strings.CutPrefix(text, prefix); ok {
+			dep = stripANSI(dep)
 
-			if i := strings.Index(text, " ("); i > 0 {
-				return text[:i]
+			if i := strings.Index(dep, " ("); i > 0 {
+				return dep[:i]
 			}
 
-			return text
+			return dep
 		}
 	}
 
