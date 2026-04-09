@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 )
 
 const (
@@ -52,22 +53,26 @@ type ScriptTarget struct {
 
 type ScriptTargets []ScriptTarget
 
-func (s *ScriptTargets) UnmarshalYAML(node *yaml.Node) error {
-	switch node.Kind {
-	case yaml.MappingNode:
+func (s *ScriptTargets) UnmarshalYAML(node ast.Node) error {
+	switch node.Type() {
+	case ast.MappingType:
 		var single ScriptTarget
-		if err := node.Decode(&single); err != nil {
+
+		if err := yaml.NodeToValue(node, &single); err != nil {
 			return err
 		}
+
 		*s = []ScriptTarget{single}
-	case yaml.SequenceNode:
+	case ast.SequenceType:
 		var multi []ScriptTarget
-		if err := node.Decode(&multi); err != nil {
+
+		if err := yaml.NodeToValue(node, &multi); err != nil {
 			return err
 		}
+
 		*s = multi
 	default:
-		return fmt.Errorf("expected map or sequence, got %v", node.Kind)
+		return fmt.Errorf("expected map or sequence, got %s", node.Type())
 	}
 
 	return nil

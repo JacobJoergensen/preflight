@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 
 	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
@@ -36,15 +36,11 @@ func Generate(workDir string, filesystem fs.FS) ([]byte, error) {
 	var buffer bytes.Buffer
 	buffer.WriteString(headerComment)
 
-	encoder := yaml.NewEncoder(&buffer)
-	encoder.SetIndent(2)
+	encoder := yaml.NewEncoder(&buffer, yaml.Indent(2))
+	defer func() { _ = encoder.Close() }()
 
 	if err := encoder.Encode(&config); err != nil {
 		return nil, fmt.Errorf("encode preflight.yml: %w", err)
-	}
-
-	if err := encoder.Close(); err != nil {
-		return nil, err
 	}
 
 	return buffer.Bytes(), nil
