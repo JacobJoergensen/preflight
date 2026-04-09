@@ -328,6 +328,7 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
 	startedAt := time.Now()
 	depsByAdapter := make(map[string][]string)
+	elapsedByAdapter := make(map[string]int64)
 
 	var outdatedByAdapter map[string][]adapter.OutdatedPackage
 
@@ -341,6 +342,8 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 		if !ok {
 			continue
 		}
+
+		adapterStartedAt := time.Now()
 
 		list, listErr := lister.ListDependencies(ctx, deps)
 
@@ -359,6 +362,8 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 				}
 			}
 		}
+
+		elapsedByAdapter[a.Name()] = time.Since(adapterStartedAt).Milliseconds()
 	}
 
 	return result.DependencyReport{
@@ -367,6 +372,7 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 		AdapterIDs:   adapter.Names(adapters),
 		Dependencies: depsByAdapter,
 		Outdated:     outdatedByAdapter,
+		Elapsed:      elapsedByAdapter,
 	}, nil
 }
 

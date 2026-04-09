@@ -69,9 +69,15 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 		elapsed = terminal.Dim + fmt.Sprintf(" %dms", card.ElapsedMillis) + terminal.Reset
 	}
 
-	header := fmt.Sprintf("  %s%s%s  %s%s",
+	outdatedIndicator := ""
+
+	if len(outdated) > 0 {
+		outdatedIndicator = "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset
+	}
+
+	header := fmt.Sprintf("  %s%s%s  %s%s%s",
 		terminal.Bold, card.ScopeDisplay, terminal.Reset,
-		badge, elapsed,
+		badge, elapsed, outdatedIndicator,
 	)
 
 	ow.Println(header)

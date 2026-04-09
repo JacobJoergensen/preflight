@@ -47,7 +47,12 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 				outdated = report.Outdated[id]
 			}
 
-			renderListScopeCardTTY(ow, listScopeDisplay(id), deps, outdated)
+			elapsedMillis := int64(0)
+			if report.Elapsed != nil {
+				elapsedMillis = report.Elapsed[id]
+			}
+
+			renderListScopeCardTTY(ow, listScopeDisplay(id), deps, outdated, elapsedMillis)
 		}
 	}
 
@@ -75,20 +80,30 @@ func listScopeDisplay(adapterID string) string {
 	return strings.ToUpper(adapterID[:1]) + adapterID[1:]
 }
 
-func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string, outdated []adapter.OutdatedPackage) {
+func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps []string, outdated []adapter.OutdatedPackage, elapsedMillis int64) {
 	ow.PrintNewLines(1)
 
 	badge := terminal.Green + terminal.Bold + "OK" + terminal.Reset
 
 	if len(deps) == 0 {
 		badge = terminal.Yellow + terminal.Bold + "EMPTY" + terminal.Reset
-	} else if len(outdated) > 0 {
-		badge = terminal.Yellow + terminal.Bold + fmt.Sprintf("%d OUTDATED", len(outdated)) + terminal.Reset
 	}
 
-	header := fmt.Sprintf("  %s%s%s  %s",
+	elapsed := ""
+
+	if elapsedMillis > 0 {
+		elapsed = terminal.Dim + fmt.Sprintf(" %dms", elapsedMillis) + terminal.Reset
+	}
+
+	outdatedIndicator := ""
+
+	if len(outdated) > 0 {
+		outdatedIndicator = "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset
+	}
+
+	header := fmt.Sprintf("  %s%s%s  %s%s%s",
 		terminal.Bold, scopeDisplay, terminal.Reset,
-		badge,
+		badge, elapsed, outdatedIndicator,
 	)
 
 	ow.Println(header)

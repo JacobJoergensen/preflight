@@ -12,4 +12,5 @@ type DependencyReport struct {
 	AdapterIDs   []string
 	Dependencies map[string][]string
 	Outdated     map[string][]adapter.OutdatedPackage
+	Elapsed      map[string]int64
 }
