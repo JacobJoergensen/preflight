@@ -167,7 +167,11 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 		}
 
 		card := BuildHealthCard(item)
-		header := card.ScopeDisplay + "  " + strings.ToUpper(string(card.Status))
+		header := card.ScopeDisplay
+
+		if card.Status != HealthOK {
+			header += "  " + strings.ToUpper(string(card.Status))
+		}
 
 		if len(outdated) > 0 {
 			header += "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset

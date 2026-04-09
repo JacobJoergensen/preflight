@@ -329,6 +329,7 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 	startedAt := time.Now()
 	depsByAdapter := make(map[string][]string)
 	elapsedByAdapter := make(map[string]int64)
+	displaysByAdapter := make(map[string]string)
 
 	var outdatedByAdapter map[string][]adapter.OutdatedPackage
 
@@ -352,6 +353,7 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 		}
 
 		depsByAdapter[a.Name()] = list
+		displaysByAdapter[a.Name()] = adapter.DisplayName(a)
 
 		if outdated {
 			if outdatedLister, ok := a.(adapter.OutdatedLister); ok {
@@ -370,6 +372,7 @@ func (r Runner) List(ctx context.Context, scopes []string, selectors []string, o
 		StartedAt:    startedAt,
 		EndedAt:      time.Now(),
 		AdapterIDs:   adapter.Names(adapters),
+		Displays:     displaysByAdapter,
 		Dependencies: depsByAdapter,
 		Outdated:     outdatedByAdapter,
 		Elapsed:      elapsedByAdapter,
