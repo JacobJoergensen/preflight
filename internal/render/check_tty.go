@@ -267,7 +267,15 @@ func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, 
 func extractDepName(text string) string {
 	text = strings.TrimSpace(text)
 
-	for _, prefix := range []string{"Installed dependency ", "Installed "} {
+	prefixes := []string{
+		"Installed dependency ",
+		"Installed package ",
+		"Installed module ",
+		"Installed gem ",
+		"Installed ",
+	}
+
+	for _, prefix := range prefixes {
 		if dep, ok := strings.CutPrefix(text, prefix); ok {
 			dep = stripANSI(dep)
 

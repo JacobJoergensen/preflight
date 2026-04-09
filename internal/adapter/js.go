@@ -170,7 +170,15 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 		return nil, err
 	}
 
-	return parseNPMOutdated(output)
+	packages, err := parseNPMOutdated(output)
+
+	if err != nil {
+		return nil, err
+	}
+
+	direct := toSet(config.Dependencies, config.DevDependencies)
+
+	return filterDirectOutdated(packages, direct), nil
 }
 
 func parseNPMOutdated(output string) ([]OutdatedPackage, error) {
