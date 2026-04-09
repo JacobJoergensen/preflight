@@ -160,12 +160,20 @@ func healthBadgeTTY(status HealthStatus) string {
 
 func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) error {
 	for _, item := range report.Items {
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+		outdated := report.Outdated[item.ScopeID]
+
+		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
 			continue
 		}
 
 		card := BuildHealthCard(item)
-		ow.Println(card.ScopeDisplay + "  " + strings.ToUpper(string(card.Status)))
+		header := card.ScopeDisplay + "  " + strings.ToUpper(string(card.Status))
+
+		if len(outdated) > 0 {
+			header += "  " + terminal.Yellow + terminal.Lightning + " " + fmt.Sprintf("%d outdated", len(outdated)) + terminal.Reset
+		}
+
+		ow.Println(header)
 
 		if card.Summary != "" {
 			ow.Println(terminal.Dim + "  " + card.Summary + terminal.Reset)
@@ -198,9 +206,22 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 		if len(card.DepDevWarnings) > 0 {
 			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
 		}
+
+		printOutdatedLinesQuietTTY(ow, outdated)
 	}
 
 	return nil
+}
+
+func printOutdatedLinesQuietTTY(ow *terminal.OutputWriter, outdated []adapter.OutdatedPackage) {
+	for _, pkg := range outdated {
+		ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
+			terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
+			pkg.Name,
+			terminal.Dim, pkg.Current, terminal.Reset,
+			terminal.Green, pkg.Latest, terminal.Reset,
+		)
+	}
 }
 
 func printMessages(ow *terminal.OutputWriter, messages []model.Message, color string, symbol string) {

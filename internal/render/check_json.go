@@ -101,17 +101,17 @@ func outdatedPackagesToJSON(pkgs []adapter.OutdatedPackage) []outdatedPackageJSO
 		return nil
 	}
 
-	out := make([]outdatedPackageJSON, len(pkgs))
+	outdated := make([]outdatedPackageJSON, len(pkgs))
 
 	for i, pkg := range pkgs {
-		out[i] = outdatedPackageJSON{
+		outdated[i] = outdatedPackageJSON{
 			Name:    pkg.Name,
 			Current: pkg.Current,
 			Latest:  pkg.Latest,
 		}
 	}
 
-	return out
+	return outdated
 }
 
 func cloneMessages(src []model.Message) []model.Message {
@@ -124,15 +124,16 @@ func cloneMessages(src []model.Message) []model.Message {
 
 func quietCheckPayload(report result.CheckReport) any {
 	type quietItem struct {
-		ScopeID         string          `json:"scopeId"`
-		ScopeDisplay    string          `json:"scopeDisplay"`
-		Priority        int             `json:"priority"`
-		Status          HealthStatus    `json:"status"`
-		Summary         string          `json:"summary,omitempty"`
-		ProjectSignals  []string        `json:"projectSignals,omitempty"`
-		PrimaryNextStep string          `json:"primaryNextStep,omitempty"`
-		Errors          []model.Message `json:"errors,omitempty"`
-		Warnings        []model.Message `json:"warnings,omitempty"`
+		ScopeID         string                `json:"scopeId"`
+		ScopeDisplay    string                `json:"scopeDisplay"`
+		Priority        int                   `json:"priority"`
+		Status          HealthStatus          `json:"status"`
+		Summary         string                `json:"summary,omitempty"`
+		ProjectSignals  []string              `json:"projectSignals,omitempty"`
+		PrimaryNextStep string                `json:"primaryNextStep,omitempty"`
+		Errors          []model.Message       `json:"errors,omitempty"`
+		Warnings        []model.Message       `json:"warnings,omitempty"`
+		Outdated        []outdatedPackageJSON `json:"outdated,omitempty"`
 	}
 
 	type quietReport struct {
@@ -146,7 +147,9 @@ func quietCheckPayload(report result.CheckReport) any {
 	items := make([]quietItem, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+		outdated := report.Outdated[item.ScopeID]
+
+		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -162,6 +165,7 @@ func quietCheckPayload(report result.CheckReport) any {
 			PrimaryNextStep: card.PrimaryNextStep,
 			Errors:          cloneMessages(item.Errors),
 			Warnings:        cloneMessages(item.Warnings),
+			Outdated:        outdatedPackagesToJSON(outdated),
 		})
 	}
 
