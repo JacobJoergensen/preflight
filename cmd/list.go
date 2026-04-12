@@ -48,26 +48,17 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := listOpts.scopes
-		managers := listOpts.managers
-
-		scopeFromCLI := cmd.Flags().Changed("scope")
-		pmFromCLI := cmd.Flags().Changed("pm")
+		var profileScope, profilePM *[]string
 
 		if profile.List != nil {
-			list := profile.List
-
-			if !scopeFromCLI && !pmFromCLI && list.Scope != nil {
-				scopes = *list.Scope
-			}
-
-			if !scopeFromCLI && !pmFromCLI && list.PM != nil {
-				managers = *list.PM
-			}
+			profileScope = profile.List.Scope
+			profilePM = profile.List.PM
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
+		scopes, managers := resolveScopeAndPM(cmd, listOpts.scopes, listOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated)

@@ -52,31 +52,22 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := checkOpts.scopes
-		managers := checkOpts.managers
+		var profileScope, profilePM *[]string
 		withEnv := checkOpts.withEnv
 
-		scopeFromCLI := cmd.Flags().Changed("scope")
-		pmFromCLI := cmd.Flags().Changed("pm")
-
 		if profile.Check != nil {
-			c := profile.Check
+			profileScope = profile.Check.Scope
+			profilePM = profile.Check.PM
 
-			if !scopeFromCLI && !pmFromCLI && c.Scope != nil {
-				scopes = *c.Scope
-			}
-
-			if !scopeFromCLI && !pmFromCLI && c.PM != nil {
-				managers = *c.PM
-			}
-
-			if !cmd.Flags().Changed("with-env") && c.WithEnv != nil {
-				withEnv = *c.WithEnv
+			if !cmd.Flags().Changed("with-env") && profile.Check.WithEnv != nil {
+				withEnv = *profile.Check.WithEnv
 			}
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
+		scopes, managers := resolveScopeAndPM(cmd, checkOpts.scopes, checkOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated)

@@ -57,26 +57,17 @@ Example: preflight fix --pm=npm,composer`,
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := fixOpts.scopes
-		managers := fixOpts.managers
-
-		scopeFromCLI := cmd.Flags().Changed("scope")
-		pmFromCLI := cmd.Flags().Changed("pm")
+		var profileScope, profilePM *[]string
 
 		if profile.Fix != nil {
-			fix := profile.Fix
-
-			if !scopeFromCLI && !pmFromCLI && fix.Scope != nil {
-				scopes = *fix.Scope
-			}
-
-			if !scopeFromCLI && !pmFromCLI && fix.PM != nil {
-				managers = *fix.PM
-			}
+			profileScope = profile.Fix.Scope
+			profilePM = profile.Fix.PM
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
+		scopes, managers := resolveScopeAndPM(cmd, fixOpts.scopes, fixOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{

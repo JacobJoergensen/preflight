@@ -64,28 +64,22 @@ preflight audit --json`,
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := auditOpts.scopes
-		managers := auditOpts.managers
+		var profileScope, profilePM *[]string
 		minSeverity := auditOpts.minSeverity
 
 		if profile.Audit != nil {
-			a := profile.Audit
+			profileScope = profile.Audit.Scope
+			profilePM = profile.Audit.PM
 
-			if !cmd.Flags().Changed("scope") && !cmd.Flags().Changed("pm") && a.Scope != nil {
-				scopes = *a.Scope
-			}
-
-			if !cmd.Flags().Changed("scope") && !cmd.Flags().Changed("pm") && a.PM != nil {
-				managers = *a.PM
-			}
-
-			if minSeverity == "" && a.MinSeverity != nil {
-				minSeverity = *a.MinSeverity
+			if minSeverity == "" && profile.Audit.MinSeverity != nil {
+				minSeverity = *profile.Audit.MinSeverity
 			}
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
+		scopes, managers := resolveScopeAndPM(cmd, auditOpts.scopes, auditOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.Audit(ctx, scopes, managers, minSeverity)
