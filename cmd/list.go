@@ -28,7 +28,12 @@ var listCmd = &cobra.Command{
 	Example: "preflight list --pm=composer,go",
 	Aliases: []string{"dependencies", "deps"},
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		workDir, _ := os.Getwd()
+		workDir, err := os.Getwd()
+
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
 		runner := engine.NewRunner(workDir)
 
 		config, profileName, err := loadPreflightConfig(workDir)

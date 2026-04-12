@@ -44,7 +44,12 @@ preflight audit --json`,
 		ctx, cancel := context.WithTimeout(cmd.Context(), auditOpts.timeout)
 		defer cancel()
 
-		workDir, _ := os.Getwd()
+		workDir, err := os.Getwd()
+
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
 		runner := engine.NewRunner(workDir)
 
 		config, profileName, err := loadPreflightConfig(workDir)

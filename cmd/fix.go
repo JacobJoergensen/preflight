@@ -37,7 +37,12 @@ Example: preflight fix --pm=npm,composer`,
 		ctx, cancel := context.WithTimeout(cmd.Context(), fixOpts.timeout)
 		defer cancel()
 
-		workDir, _ := os.Getwd()
+		workDir, err := os.Getwd()
+
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
 		runner := engine.NewRunner(workDir)
 
 		config, profName, err := loadPreflightConfig(workDir)
