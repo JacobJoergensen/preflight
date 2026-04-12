@@ -100,6 +100,10 @@ preflight run build --profile ci`,
 		defer cancel()
 
 		for _, s := range scripts {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+
 			if err := exec.RunStreamingInDir(ctx, workDir, s.Bin, s.Args, os.Stdout, os.Stderr); err != nil {
 				return err
 			}
