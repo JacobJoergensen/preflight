@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"time"
 )
@@ -39,11 +38,7 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 		return "", fmt.Errorf("fetching release: %w", err)
 	}
 
-	defer func() {
-		if err := response.Body.Close(); err != nil {
-			slog.Error("error closing response body", "error", err)
-		}
-	}()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API returned status: %s", response.Status)

@@ -144,7 +144,7 @@ func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps
 	ow.Println(terminal.Dim + "  Dependencies" + terminal.Reset)
 
 	if len(deps) == 0 {
-		_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
+		ow.Printf("%s%s%s %s%s\n",
 			terminal.Red, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CrossMark,
 			"No dependencies found.", terminal.Reset,
 		)
@@ -159,14 +159,14 @@ func renderListScopeCardTTY(ow *terminal.OutputWriter, scopeDisplay string, deps
 
 	for _, dep := range deps {
 		if pkg, isOutdated := outdatedMap[dep]; isOutdated {
-			_, _ = fmt.Fprintf(ow, "%s%s%s %s %s%s%s → %s%s%s\n",
+			ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
 				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
 				dep,
 				terminal.Dim, pkg.Current, terminal.Reset,
 				terminal.Green, pkg.Latest, terminal.Reset,
 			)
 		} else {
-			_, _ = fmt.Fprintf(ow, "%s%s%s %s%s\n",
+			ow.Printf("%s%s%s %s%s\n",
 				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
 				dep, terminal.Reset,
 			)

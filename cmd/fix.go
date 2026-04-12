@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type fixOptions struct {
@@ -36,41 +37,37 @@ Example: preflight fix --pm=npm,composer`,
 		ctx, cancel := context.WithTimeout(cmd.Context(), fixOpts.timeout)
 		defer cancel()
 
-		workDir, _ := os.Getwd()
+		workDir, err := os.Getwd()
+
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
 		runner := engine.NewRunner(workDir)
 
 		config, profName, err := loadPreflightConfig(workDir)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profName)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := fixOpts.scopes
-		managers := fixOpts.managers
-
-		scopeFromCLI := cmd.Flags().Changed("scope")
-		pmFromCLI := cmd.Flags().Changed("pm")
+		var profileScope, profilePM *[]string
 
 		if profile.Fix != nil {
-			fix := profile.Fix
-
-			if !scopeFromCLI && !pmFromCLI && fix.Scope != nil {
-				scopes = *fix.Scope
-			}
-
-			if !scopeFromCLI && !pmFromCLI && fix.PM != nil {
-				managers = *fix.PM
-			}
+			profileScope = profile.Fix.Scope
+			profilePM = profile.Fix.PM
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return errors.New("cannot use both --scope and --pm")
+		scopes, managers := resolveScopeAndPM(cmd, fixOpts.scopes, fixOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{
@@ -80,7 +77,7 @@ Example: preflight fix --pm=npm,composer`,
 		})
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		if err := renderFix(report, fixOpts.json); err != nil {

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type listOptions struct {
@@ -28,47 +28,43 @@ var listCmd = &cobra.Command{
 	Example: "preflight list --pm=composer,go",
 	Aliases: []string{"dependencies", "deps"},
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		workDir, _ := os.Getwd()
+		workDir, err := os.Getwd()
+
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+
 		runner := engine.NewRunner(workDir)
 
 		config, profileName, err := loadPreflightConfig(workDir)
 
 		if err != nil {
-			return fmt.Errorf("list failed: %w", err)
+			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profileName)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		scopes := listOpts.scopes
-		managers := listOpts.managers
-
-		scopeFromCLI := cmd.Flags().Changed("scope")
-		pmFromCLI := cmd.Flags().Changed("pm")
+		var profileScope, profilePM *[]string
 
 		if profile.List != nil {
-			list := profile.List
-
-			if !scopeFromCLI && !pmFromCLI && list.Scope != nil {
-				scopes = *list.Scope
-			}
-
-			if !scopeFromCLI && !pmFromCLI && list.PM != nil {
-				managers = *list.PM
-			}
+			profileScope = profile.List.Scope
+			profilePM = profile.List.PM
 		}
 
-		if len(scopes) > 0 && len(managers) > 0 {
-			return errors.New("cannot use both --scope and --pm")
+		scopes, managers := resolveScopeAndPM(cmd, listOpts.scopes, listOpts.managers, profileScope, profilePM)
+
+		if err := validateScopeAndPM(scopes, managers); err != nil {
+			return err
 		}
 
 		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated)
 
 		if err != nil {
-			return fmt.Errorf("list failed: %w", err)
+			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		if err := renderList(report, listOpts.json); err != nil {

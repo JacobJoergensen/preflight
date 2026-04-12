@@ -1,7 +1,11 @@
 package engine
 
 import (
+	"context"
+	"slices"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestIsImplicitFullSelection(t *testing.T) {
@@ -145,5 +149,88 @@ func TestParallelWorkerCount(t *testing.T) {
 				t.Errorf("got %d, want between %d and %d", result, tt.wantMin, tt.wantMax)
 			}
 		})
+	}
+}
+
+func TestRunParallel(t *testing.T) {
+	tests := []struct {
+		name    string
+		jobs    []int
+		include func(int) bool
+		want    []int
+	}{
+		{
+			name:    "processes every job when count exceeds worker pool",
+			jobs:    []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+			include: func(int) bool { return true },
+			want:    []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+		},
+		{
+			name:    "drops results when work reports exclude",
+			jobs:    []int{1, 2, 3, 4, 5, 6},
+			include: func(job int) bool { return job%2 == 0 },
+			want:    []int{2, 4, 6},
+		},
+		{
+			name:    "returns nil for empty input",
+			jobs:    nil,
+			include: func(int) bool { return true },
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var invocations atomic.Int32
+
+			work := func(_ context.Context, job int) (int, bool) {
+				invocations.Add(1)
+				return job, tt.include(job)
+			}
+
+			results := runParallel(context.Background(), tt.jobs, work)
+
+			if len(tt.jobs) == 0 {
+				if results != nil {
+					t.Fatalf("expected nil result, got %v", results)
+				}
+
+				return
+			}
+
+			if int(invocations.Load()) != len(tt.jobs) {
+				t.Errorf("work invoked %d times, expected %d", invocations.Load(), len(tt.jobs))
+			}
+
+			slices.Sort(results)
+
+			if !slices.Equal(results, tt.want) {
+				t.Errorf("got %v, want %v", results, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunParallelReturnsWhenContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	jobs := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	work := func(ctx context.Context, job int) (int, bool) {
+		return job, true
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		runParallel(ctx, jobs, work)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runParallel did not return after context cancellation")
 	}
 }
