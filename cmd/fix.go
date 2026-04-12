@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type fixOptions struct {
@@ -42,13 +43,13 @@ Example: preflight fix --pm=npm,composer`,
 		config, profName, err := loadPreflightConfig(workDir)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profName)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		scopes := fixOpts.scopes
@@ -70,7 +71,7 @@ Example: preflight fix --pm=npm,composer`,
 		}
 
 		if len(scopes) > 0 && len(managers) > 0 {
-			return errors.New("cannot use both --scope and --pm")
+			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
 		}
 
 		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{
@@ -80,7 +81,7 @@ Example: preflight fix --pm=npm,composer`,
 		})
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		if err := renderFix(report, fixOpts.json); err != nil {

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type listOptions struct {
@@ -34,13 +34,13 @@ var listCmd = &cobra.Command{
 		config, profileName, err := loadPreflightConfig(workDir)
 
 		if err != nil {
-			return fmt.Errorf("list failed: %w", err)
+			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profileName)
 
 		if err != nil {
-			return err
+			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		scopes := listOpts.scopes
@@ -62,13 +62,13 @@ var listCmd = &cobra.Command{
 		}
 
 		if len(scopes) > 0 && len(managers) > 0 {
-			return errors.New("cannot use both --scope and --pm")
+			return fmt.Errorf("%scannot use both --scope and --pm%s", terminal.Red, terminal.Reset)
 		}
 
 		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated)
 
 		if err != nil {
-			return fmt.Errorf("list failed: %w", err)
+			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		if err := renderList(report, listOpts.json); err != nil {
