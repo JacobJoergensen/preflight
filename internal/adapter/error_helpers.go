@@ -6,6 +6,8 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/exec"
 )
 
+const execErrorDetailMax = 400
+
 func formatExecFailure(label string, err error) string {
 	if err == nil {
 		return label
@@ -17,8 +19,8 @@ func formatExecFailure(label string, err error) string {
 		detail = cmdErr.Stderr
 	}
 
-	if len(detail) > 400 {
-		detail = detail[:397] + "…"
+	if len(detail) > execErrorDetailMax {
+		detail = detail[:execErrorDetailMax-len("…")] + "…"
 	}
 
 	return label + ": " + detail
