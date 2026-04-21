@@ -3,7 +3,6 @@ package render
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
@@ -31,11 +30,6 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 		return renderCheckQuiet(ow, report)
 	}
 
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│" + terminal.Cyan + terminal.Bold + "  " + terminal.Rocket + " PreFlight Checker  " + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
-	ow.Println(terminal.Bold + "\nRunning checks..." + terminal.Reset)
-
 	ow.PrintNewLines(1)
 
 	for _, item := range report.Items {
@@ -43,18 +37,8 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 		renderHealthCardTTY(ow, card, report.Outdated[item.ScopeID])
 	}
 
-	statusIcon, statusColor, statusText := statusFromReport(report)
-
-	endedAt := report.EndedAt
-
-	if endedAt.IsZero() {
-		endedAt = time.Now()
-	}
-
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭────────────────────────────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + statusColor + statusIcon + " Status: " + statusText + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + terminal.Dim + terminal.Clock + " Ended: " + endedAt.Format("02-01-2006 15:04:05") + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰────────────────────────────────────────────────────────────────╯" + terminal.Reset)
+	icon, color, text := statusFromReport(report)
+	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, []footerMetadataLine{endedFooterLine(report.EndedAt)})
 
 	return nil
 }

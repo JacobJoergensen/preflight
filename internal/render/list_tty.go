@@ -3,7 +3,6 @@ package render
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
@@ -24,11 +23,6 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 	if terminal.Quiet {
 		return renderListQuiet(ow, report)
 	}
-
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│" + terminal.Cyan + terminal.Bold + "  " + terminal.Rocket + " PreFlight List  " + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
-	ow.Println(terminal.Bold + "\nListing dependencies..." + terminal.Reset)
 
 	ow.PrintNewLines(1)
 
@@ -56,18 +50,8 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 		}
 	}
 
-	statusIcon, statusColor, statusText := listStatusFromReport(report)
-
-	endedAt := report.EndedAt
-
-	if endedAt.IsZero() {
-		endedAt = time.Now()
-	}
-
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭────────────────────────────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + statusColor + statusIcon + " Status: " + statusText + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + terminal.Dim + terminal.Clock + " Ended: " + endedAt.Format("02-01-2006 15:04:05") + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰────────────────────────────────────────────────────────────────╯" + terminal.Reset)
+	icon, color, text := listStatusFromReport(report)
+	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, []footerMetadataLine{endedFooterLine(report.EndedAt)})
 
 	return nil
 }

@@ -25,17 +25,14 @@ func (r TTYAuditRenderer) Render(report result.AuditReport) error {
 		return nil
 	}
 
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│" + terminal.Cyan + terminal.Bold + "  Security audit (native tools)  " + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
-	ow.Println("")
+	ow.PrintNewLines(1)
 
 	for _, item := range report.Items {
 		renderAuditCardTTY(ow, item)
 	}
 
-	statusIcon, statusColor, statusText := auditStatusFromReport(report)
-	ow.Println(terminal.Bold + "\n" + statusColor + statusIcon + " " + statusText + terminal.Reset)
+	icon, color, text := auditStatusFromReport(report)
+	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, []footerMetadataLine{endedFooterLine(report.EndedAt)})
 
 	return nil
 }

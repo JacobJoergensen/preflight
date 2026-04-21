@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	fixFooterBoxWidth       = 65
 	fixItemNoCommandLabel   = "already up to date"
 	fixResultsRuleWidth     = 45
 	fixFailureOutputIndent  = 6
@@ -261,76 +260,23 @@ func buildFullCommand(command string, args []string) string {
 }
 
 func renderFixFooter(ow *terminal.OutputWriter, report result.FixReport) {
-	statusIcon, statusColor, statusText := fixStatusFromReport(report)
-
-	endedAt := report.EndedAt
-
-	if endedAt.IsZero() {
-		endedAt = time.Now()
-	}
-
-	blueBar := terminal.Bold + terminal.Blue + "│" + terminal.Reset
-	topBorder := terminal.Bold + terminal.Blue + "╭" + strings.Repeat("─", fixFooterBoxWidth) + "╮" + terminal.Reset
-	botBorder := terminal.Bold + terminal.Blue + "╰" + strings.Repeat("─", fixFooterBoxWidth) + "╯" + terminal.Reset
-
-	ow.PrintNewLines(2)
-	ow.Println(topBorder)
-	ow.Println(blueBar)
-	ow.Printf("%s    %s%s%s  %s\n", blueBar, statusColor, statusIcon, terminal.Reset, statusText)
-	ow.Println(blueBar)
-
-	metadata := fixFooterMetadata(report, endedAt)
-
-	if len(metadata) > 0 {
-		labelWidth := fixFooterLabelWidth(metadata)
-
-		for _, line := range metadata {
-			ow.Printf("%s       %s%s%s   %s\n",
-				blueBar,
-				terminal.Dim, padRight(line.label, labelWidth), terminal.Reset,
-				line.value,
-			)
-		}
-
-		ow.Println(blueBar)
-	}
-
-	ow.Println(botBorder)
+	icon, color, text := fixStatusFromReport(report)
+	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, fixFooterMetadata(report))
 }
 
-type fixFooterLine struct {
-	label string
-	value string
-}
-
-func fixFooterMetadata(report result.FixReport, endedAt time.Time) []fixFooterLine {
-	lines := make([]fixFooterLine, 0, 2)
+func fixFooterMetadata(report result.FixReport) []footerMetadataLine {
+	lines := make([]footerMetadataLine, 0, 2)
 
 	if report.BackupDir != "" {
-		lines = append(lines, fixFooterLine{
-			label: "Backup",
-			value: relativeBackupPath(report.BackupDir),
+		lines = append(lines, footerMetadataLine{
+			Label: "Backup",
+			Value: relativeBackupPath(report.BackupDir),
 		})
 	}
 
-	lines = append(lines, fixFooterLine{
-		label: "Ended",
-		value: endedAt.Format("02-01-2006 15:04:05"),
-	})
+	lines = append(lines, endedFooterLine(report.EndedAt))
 
 	return lines
-}
-
-func fixFooterLabelWidth(lines []fixFooterLine) int {
-	var width int
-
-	for _, line := range lines {
-		if n := len(line.label); n > width {
-			width = n
-		}
-	}
-
-	return width
 }
 
 func relativeBackupPath(backupDir string) string {
