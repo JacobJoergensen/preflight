@@ -16,6 +16,7 @@ type FixReport struct {
 	DryRun       bool
 	SkipBackup   bool
 	BackupDir    string
+	BackupDirs   map[string]string
 	Force        bool
 	FixSelectors []string
 	Plan         []PlannedFix
@@ -23,9 +24,16 @@ type FixReport struct {
 	Skipped      []SkippedFix
 	Diff         bool
 	LockDiffs    []lockdiff.FileDiff
+	Projects     []FixProject
+}
+
+type FixProject struct {
+	RelativePath string
+	Name         string
 }
 
 type PlannedFix struct {
+	Project     string
 	ScopeID     string
 	DisplayName string
 	Command     string
@@ -33,6 +41,7 @@ type PlannedFix struct {
 }
 
 type SkippedFix struct {
+	Project     string
 	ScopeID     string
 	DisplayName string
 	Command     string
@@ -40,6 +49,7 @@ type SkippedFix struct {
 }
 
 type FixItem struct {
+	Project        string
 	ScopeID        string
 	ManagerCommand string
 	ManagerName    string

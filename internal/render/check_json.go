@@ -11,7 +11,7 @@ import (
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 8
+const CheckJSONSchemaVersion = 9
 
 type JSONCheckRenderer struct {
 	Out io.Writer
@@ -24,14 +24,21 @@ type outdatedPackageJSON struct {
 }
 
 type checkReportJSON struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	StartedAt     time.Time       `json:"startedAt"`
-	EndedAt       time.Time       `json:"endedAt"`
-	Canceled      bool            `json:"canceled"`
-	Items         []checkItemJSON `json:"items"`
+	SchemaVersion int                `json:"schemaVersion"`
+	StartedAt     time.Time          `json:"startedAt"`
+	EndedAt       time.Time          `json:"endedAt"`
+	Canceled      bool               `json:"canceled"`
+	Items         []checkItemJSON    `json:"items"`
+	Projects      []checkProjectJSON `json:"projects,omitempty"`
+}
+
+type checkProjectJSON struct {
+	RelativePath string `json:"relativePath"`
+	Name         string `json:"name,omitempty"`
 }
 
 type checkItemJSON struct {
+	Project        string                `json:"project,omitempty"`
 	ScopeID        string                `json:"scopeId"`
 	ScopeDisplay   string                `json:"scopeDisplay"`
 	Priority       int                   `json:"priority"`
@@ -56,7 +63,7 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 
 	for _, item := range report.Items {
 		jsonItem := checkItemToJSON(item)
-		jsonItem.Outdated = outdatedPackagesToJSON(report.Outdated[item.ScopeID])
+		jsonItem.Outdated = outdatedPackagesToJSON(item.Outdated)
 		items = append(items, jsonItem)
 	}
 
@@ -66,13 +73,32 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 		EndedAt:       report.EndedAt,
 		Canceled:      report.Canceled,
 		Items:         items,
+		Projects:      checkProjectsToJSON(report.Projects),
 	}
 
 	return encodeJSON(r.Out, payload, true)
 }
 
+func checkProjectsToJSON(projects []result.CheckProject) []checkProjectJSON {
+	if len(projects) == 0 {
+		return nil
+	}
+
+	jsonProjects := make([]checkProjectJSON, len(projects))
+
+	for i, project := range projects {
+		jsonProjects[i] = checkProjectJSON{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		}
+	}
+
+	return jsonProjects
+}
+
 func checkItemToJSON(item result.CheckItem) checkItemJSON {
 	jsonItem := checkItemJSON{
+		Project:        item.Project,
 		ScopeID:        item.ScopeID,
 		ScopeDisplay:   item.ScopeDisplay,
 		Priority:       item.Priority,
@@ -147,7 +173,7 @@ func quietCheckPayload(report result.CheckReport) any {
 	items := make([]quietItem, 0, len(report.Items))
 
 	for _, item := range report.Items {
-		outdated := report.Outdated[item.ScopeID]
+		outdated := item.Outdated
 
 		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
 			continue

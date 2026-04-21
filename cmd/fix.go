@@ -17,15 +17,17 @@ import (
 )
 
 type fixOptions struct {
-	force      bool
-	timeout    time.Duration
-	managers   []string
-	scopes     []string
-	skipBackup bool
-	dryRun     bool
-	noDiff     bool
-	assumeYes  bool
-	json       bool
+	force        bool
+	timeout      time.Duration
+	managers     []string
+	scopes       []string
+	skipBackup   bool
+	dryRun       bool
+	noDiff       bool
+	assumeYes    bool
+	json         bool
+	noMonorepo   bool
+	projectGlobs []string
 }
 
 var fixOpts fixOptions
@@ -81,7 +83,7 @@ Example: preflight fix --pm=npm,composer`,
 			Force:      fixOpts.force,
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
-		}, !fixOpts.noDiff, approver, progress)
+		}, !fixOpts.noDiff, approver, progress, fixOpts.noMonorepo, fixOpts.projectGlobs)
 
 		if err != nil {
 			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -159,6 +161,8 @@ func init() {
 	fixCmd.Flags().BoolVar(&fixOpts.noDiff, "no-diff", false, "Hide per-package version changes from lock files")
 	fixCmd.Flags().BoolVarP(&fixOpts.assumeYes, "yes", "y", false, "Apply every ecosystem without prompting")
 	fixCmd.Flags().BoolVar(&fixOpts.json, "json", false, "Output results as JSON")
+	fixCmd.Flags().BoolVar(&fixOpts.noMonorepo, "no-monorepo", false, "Disable monorepo traversal, fix only the current directory")
+	fixCmd.Flags().StringSliceVar(&fixOpts.projectGlobs, "project", []string{}, "Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)")
 
 	rootCmd.AddCommand(fixCmd)
 }

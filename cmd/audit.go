@@ -16,11 +16,13 @@ import (
 )
 
 type auditOptions struct {
-	managers    []string
-	scopes      []string
-	json        bool
-	timeout     time.Duration
-	minSeverity string
+	managers     []string
+	scopes       []string
+	json         bool
+	timeout      time.Duration
+	minSeverity  string
+	noMonorepo   bool
+	projectGlobs []string
 }
 
 var auditOpts auditOptions
@@ -83,7 +85,7 @@ preflight audit --json`,
 			return err
 		}
 
-		report, err := runner.Audit(ctx, scopes, managers, minSeverity)
+		report, err := runner.Audit(ctx, scopes, managers, minSeverity, auditOpts.noMonorepo, auditOpts.projectGlobs)
 
 		if err != nil {
 			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -167,6 +169,20 @@ func init() {
 		"min-severity",
 		"",
 		"Minimum severity to report (info, low, moderate, high, critical)",
+	)
+
+	auditCmd.Flags().BoolVar(
+		&auditOpts.noMonorepo,
+		"no-monorepo",
+		false,
+		"Disable monorepo traversal, audit only the current directory",
+	)
+
+	auditCmd.Flags().StringSliceVar(
+		&auditOpts.projectGlobs,
+		"project",
+		[]string{},
+		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
 	)
 
 	rootCmd.AddCommand(auditCmd)

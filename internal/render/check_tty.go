@@ -32,15 +32,58 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 
 	ow.PrintNewLines(1)
 
-	for _, item := range report.Items {
-		card := BuildHealthCard(item)
-		renderHealthCardTTY(ow, card, report.Outdated[item.ScopeID])
-	}
+	renderCheckItemsGroupedByProject(ow, report)
 
 	icon, color, text := statusFromReport(report)
 	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, []footerMetadataLine{endedFooterLine(report.EndedAt)})
 
 	return nil
+}
+
+func renderCheckItemsGroupedByProject(ow *terminal.OutputWriter, report result.CheckReport) {
+	if len(report.Projects) == 0 {
+		for _, item := range report.Items {
+			card := BuildHealthCard(item)
+			renderHealthCardTTY(ow, card, item.Outdated)
+		}
+
+		return
+	}
+
+	itemsByProject := make(map[string][]result.CheckItem, len(report.Projects))
+
+	for _, item := range report.Items {
+		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
+	}
+
+	for i, project := range report.Projects {
+		items := itemsByProject[project.RelativePath]
+
+		if len(items) == 0 {
+			continue
+		}
+
+		if i > 0 {
+			ow.PrintNewLines(1)
+		}
+
+		renderProjectHeader(ow, project)
+
+		for _, item := range items {
+			card := BuildHealthCard(item)
+			renderHealthCardTTY(ow, card, item.Outdated)
+		}
+	}
+}
+
+func renderProjectHeader(ow *terminal.OutputWriter, project result.CheckProject) {
+	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
+
+	if project.Name != "" {
+		line += "  " + terminal.Dim + project.Name + terminal.Reset
+	}
+
+	ow.Println(line)
 }
 
 func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []adapter.OutdatedPackage) {
@@ -144,7 +187,7 @@ func healthBadgeTTY(status HealthStatus) string {
 
 func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) error {
 	for _, item := range report.Items {
-		outdated := report.Outdated[item.ScopeID]
+		outdated := item.Outdated
 
 		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
 			continue
@@ -328,6 +371,10 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 		return terminal.WarningSign, terminal.Yellow, "Checks canceled."
 	}
 
+	if len(report.Projects) > 0 {
+		return monorepoStatusFromReport(report)
+	}
+
 	var totalErrors, totalWarnings int
 
 	for _, item := range report.Items {
@@ -344,4 +391,31 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 	}
 
 	return terminal.CheckMark, terminal.Green, "Check completed successfully!"
+}
+
+func monorepoStatusFromReport(report result.CheckReport) (icon string, color string, text string) {
+	projectsWithErrors := make(map[string]struct{})
+	projectsWithWarnings := make(map[string]struct{})
+
+	for _, item := range report.Items {
+		if len(item.Errors) > 0 {
+			projectsWithErrors[item.Project] = struct{}{}
+		}
+
+		if len(item.Warnings) > 0 {
+			projectsWithWarnings[item.Project] = struct{}{}
+		}
+	}
+
+	totalProjects := len(report.Projects)
+
+	if len(projectsWithErrors) > 0 {
+		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s reported errors", len(projectsWithErrors), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	if len(projectsWithWarnings) > 0 {
+		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported warnings", len(projectsWithWarnings), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	return terminal.CheckMark, terminal.Green, fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))
 }

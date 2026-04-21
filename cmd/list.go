@@ -13,10 +13,12 @@ import (
 )
 
 type listOptions struct {
-	managers []string
-	scopes   []string
-	json     bool
-	outdated bool
+	managers     []string
+	scopes       []string
+	json         bool
+	outdated     bool
+	noMonorepo   bool
+	projectGlobs []string
 }
 
 var listOpts listOptions
@@ -61,7 +63,7 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
-		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated)
+		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated, listOpts.noMonorepo, listOpts.projectGlobs)
 
 		if err != nil {
 			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -111,6 +113,20 @@ func init() {
 		"outdated",
 		false,
 		"Show outdated packages with version info",
+	)
+
+	listCmd.Flags().BoolVar(
+		&listOpts.noMonorepo,
+		"no-monorepo",
+		false,
+		"Disable monorepo traversal, list only the current directory",
+	)
+
+	listCmd.Flags().StringSliceVar(
+		&listOpts.projectGlobs,
+		"project",
+		[]string{},
+		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
 	)
 
 	rootCmd.AddCommand(listCmd)

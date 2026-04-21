@@ -24,13 +24,44 @@ func (r MarkdownAuditRenderer) Render(report result.AuditReport) error {
 	symbol, text := markdownAuditStatus(report)
 	fmt.Fprintf(&doc, "**Status:** %s %s\n\n", symbol, text)
 
-	writeMarkdownAuditTable(&doc, report.Items)
-	writeMarkdownAuditDetails(&doc, report.Items)
+	if len(report.Projects) > 0 {
+		writeMarkdownAuditProjectSections(&doc, report)
+	} else {
+		writeMarkdownAuditTable(&doc, report.Items)
+		writeMarkdownAuditDetails(&doc, report.Items)
+	}
 
 	doc.WriteString("\n---\n\n")
 
 	_, err := r.Out.Write([]byte(doc.String()))
 	return err
+}
+
+func writeMarkdownAuditProjectSections(doc *strings.Builder, report result.AuditReport) {
+	itemsByProject := make(map[string][]result.AuditItem, len(report.Projects))
+
+	for _, item := range report.Items {
+		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
+	}
+
+	for _, project := range report.Projects {
+		items := itemsByProject[project.RelativePath]
+
+		if len(items) == 0 {
+			continue
+		}
+
+		heading := "### " + project.RelativePath
+
+		if project.Name != "" {
+			heading += " · `" + project.Name + "`"
+		}
+
+		doc.WriteString(heading + "\n\n")
+
+		writeMarkdownAuditTable(doc, items)
+		writeMarkdownAuditDetails(doc, items)
+	}
 }
 
 func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
@@ -40,6 +71,10 @@ func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
 
 	if len(report.Items) == 0 {
 		return "⚠", "No audits ran (no matching scopes or tools)"
+	}
+
+	if len(report.Projects) > 0 {
+		return markdownMonorepoAuditStatus(report)
 	}
 
 	var hasErr, hasIssues bool
@@ -62,6 +97,33 @@ func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
 	}
 
 	return "✓", "No blocking audit issues"
+}
+
+func markdownMonorepoAuditStatus(report result.AuditReport) (symbol, text string) {
+	projectsWithErr := make(map[string]struct{})
+	projectsWithIssues := make(map[string]struct{})
+
+	for _, item := range report.Items {
+		if item.ErrText != "" {
+			projectsWithErr[item.Project] = struct{}{}
+		}
+
+		if !item.OK {
+			projectsWithIssues[item.Project] = struct{}{}
+		}
+	}
+
+	totalProjects := len(report.Projects)
+
+	if len(projectsWithErr) > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s failed to audit", len(projectsWithErr), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	if len(projectsWithIssues) > 0 {
+		return "⚠", fmt.Sprintf("%d of %d project%s reported vulnerabilities", len(projectsWithIssues), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	return "✓", fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))
 }
 
 func writeMarkdownAuditTable(doc *strings.Builder, items []result.AuditItem) {

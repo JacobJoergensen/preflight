@@ -24,12 +24,14 @@ type TTYFixProgress struct {
 	nameWidth    int
 	commandWidth int
 
-	writeMu      sync.Mutex
-	headerOnce   sync.Once
-	currentStart time.Time
-	currentName  string
-	stopSignal   chan struct{}
-	spinnerDone  chan struct{}
+	writeMu            sync.Mutex
+	headerOnce         sync.Once
+	currentStart       time.Time
+	currentName        string
+	stopSignal         chan struct{}
+	spinnerDone        chan struct{}
+	lastPrintedProject string
+	haveRenderedFirst  bool
 }
 
 func NewTTYFixProgress(writer io.Writer) *TTYFixProgress {
@@ -54,6 +56,8 @@ func (p *TTYFixProgress) Plan(candidates []engine.FixCandidate) {
 func (p *TTYFixProgress) Start(candidate engine.FixCandidate) {
 	p.headerOnce.Do(p.writeResultsHeader)
 
+	p.writeProjectHeaderIfChanged(candidate.Project)
+
 	p.writeMu.Lock()
 	p.currentStart = time.Now()
 	p.currentName = candidate.DisplayName
@@ -64,6 +68,27 @@ func (p *TTYFixProgress) Start(candidate engine.FixCandidate) {
 	p.paintSpinnerLine(0)
 
 	go p.tick()
+}
+
+func (p *TTYFixProgress) writeProjectHeaderIfChanged(project string) {
+	if project == "" {
+		return
+	}
+
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+
+	if project == p.lastPrintedProject {
+		return
+	}
+
+	if p.haveRenderedFirst {
+		p.out.PrintNewLines(1)
+	}
+
+	p.out.Println("  " + terminal.Bold + terminal.Cyan + project + terminal.Reset)
+	p.lastPrintedProject = project
+	p.haveRenderedFirst = true
 }
 
 func (p *TTYFixProgress) Finish(item result.FixItem) {

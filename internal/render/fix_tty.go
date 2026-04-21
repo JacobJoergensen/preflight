@@ -44,7 +44,7 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 	}
 
 	if !r.SkipItems {
-		renderFixItemLines(ow, report.Items)
+		renderFixItemLines(ow, report)
 	}
 
 	renderFixSkipped(ow, report.Skipped)
@@ -54,18 +54,46 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 	return nil
 }
 
-func renderFixItemLines(ow *terminal.OutputWriter, items []result.FixItem) {
-	if len(items) == 0 {
+func renderFixItemLines(ow *terminal.OutputWriter, report result.FixReport) {
+	if len(report.Items) == 0 {
 		return
 	}
 
 	ow.Println(terminal.Bold + "Results" + terminal.Reset)
 	ow.Println(terminal.Gray + strings.Repeat("─", fixResultsRuleWidth) + terminal.Reset)
 
-	nameWidth, commandWidth := fixItemColumnWidths(items)
+	nameWidth, commandWidth := fixItemColumnWidths(report.Items)
 
-	for _, item := range items {
-		renderFixItemLine(ow, item, nameWidth, commandWidth)
+	if len(report.Projects) == 0 {
+		for _, item := range report.Items {
+			renderFixItemLine(ow, item, nameWidth, commandWidth)
+		}
+
+		return
+	}
+
+	itemsByProject := make(map[string][]result.FixItem, len(report.Projects))
+
+	for _, item := range report.Items {
+		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
+	}
+
+	for i, project := range report.Projects {
+		items := itemsByProject[project.RelativePath]
+
+		if len(items) == 0 {
+			continue
+		}
+
+		if i > 0 {
+			ow.PrintNewLines(1)
+		}
+
+		ow.Println("  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset)
+
+		for _, item := range items {
+			renderFixItemLine(ow, item, nameWidth, commandWidth)
+		}
 	}
 }
 
@@ -205,17 +233,46 @@ func renderFixPlan(ow *terminal.OutputWriter, report result.FixReport) {
 	ow.Println(terminal.Bold + header + terminal.Reset)
 	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
 
+	if len(report.Projects) == 0 {
+		for _, planned := range report.Plan {
+			renderPlannedFixBlock(ow, planned)
+		}
+
+		return
+	}
+
+	planByProject := make(map[string][]result.PlannedFix, len(report.Projects))
+
 	for _, planned := range report.Plan {
+		planByProject[planned.Project] = append(planByProject[planned.Project], planned)
+	}
+
+	for _, project := range report.Projects {
+		entries := planByProject[project.RelativePath]
+
+		if len(entries) == 0 {
+			continue
+		}
+
 		ow.PrintNewLines(1)
-		ow.Printf("  %s%s%s\n", terminal.Bold, planned.DisplayName, terminal.Reset)
+		ow.Println("  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset)
 
-		if planned.Command != "" {
-			ow.Printf("    %s→%s %s\n", terminal.Cyan, terminal.Reset, planned.Command)
+		for _, planned := range entries {
+			renderPlannedFixBlock(ow, planned)
 		}
+	}
+}
 
-		if planned.Summary != "" {
-			ow.Printf("    %s%s%s\n", terminal.Dim, planned.Summary, terminal.Reset)
-		}
+func renderPlannedFixBlock(ow *terminal.OutputWriter, planned result.PlannedFix) {
+	ow.PrintNewLines(1)
+	ow.Printf("  %s%s%s\n", terminal.Bold, planned.DisplayName, terminal.Reset)
+
+	if planned.Command != "" {
+		ow.Printf("    %s→%s %s\n", terminal.Cyan, terminal.Reset, planned.Command)
+	}
+
+	if planned.Summary != "" {
+		ow.Printf("    %s%s%s\n", terminal.Dim, planned.Summary, terminal.Reset)
 	}
 }
 
@@ -228,23 +285,33 @@ func renderFixSkipped(ow *terminal.OutputWriter, skipped []result.SkippedFix) {
 	ow.Println(terminal.Bold + "Skipped" + terminal.Reset)
 
 	for _, entry := range skipped {
-		label := entry.DisplayName
-
-		if label == "" {
-			label = entry.ScopeID
-		}
-
-		detail := entry.Command
-
-		if detail == "" {
-			detail = entry.Reason
-		}
-
-		ow.Printf("%s  · %s%s  %s%s%s\n",
-			terminal.Yellow, label, terminal.Reset,
-			terminal.Dim, detail, terminal.Reset,
-		)
+		renderSkippedFixLine(ow, entry)
 	}
+}
+
+func renderSkippedFixLine(ow *terminal.OutputWriter, entry result.SkippedFix) {
+	label := entry.DisplayName
+
+	if label == "" {
+		label = entry.ScopeID
+	}
+
+	if entry.Project != "" && label != "" {
+		label = entry.Project + " · " + label
+	} else if entry.Project != "" {
+		label = entry.Project
+	}
+
+	detail := entry.Command
+
+	if detail == "" {
+		detail = entry.Reason
+	}
+
+	ow.Printf("%s  · %s%s  %s%s%s\n",
+		terminal.Yellow, label, terminal.Reset,
+		terminal.Dim, detail, terminal.Reset,
+	)
 }
 
 func buildFullCommand(command string, args []string) string {
@@ -271,6 +338,13 @@ func fixFooterMetadata(report result.FixReport) []footerMetadataLine {
 		lines = append(lines, footerMetadataLine{
 			Label: "Backup",
 			Value: relativeBackupPath(report.BackupDir),
+		})
+	}
+
+	if len(report.BackupDirs) > 0 {
+		lines = append(lines, footerMetadataLine{
+			Label: "Backups",
+			Value: fmt.Sprintf("%d project%s · .preflight/backups/<timestamp>", len(report.BackupDirs), pluralSuffix(len(report.BackupDirs))),
 		})
 	}
 
@@ -306,6 +380,10 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 		return terminal.CheckMark, terminal.Cyan, "Dry run completed, no changes made"
 	}
 
+	if len(report.Projects) > 0 {
+		return monorepoFixStatusFromReport(report)
+	}
+
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
 		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped"
 	}
@@ -329,6 +407,32 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 	return terminal.CheckMark, terminal.Green, "All dependencies fixed successfully"
 }
 
+func monorepoFixStatusFromReport(report result.FixReport) (icon string, color string, text string) {
+	if len(report.Items) == 0 && len(report.Skipped) > 0 {
+		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped"
+	}
+
+	if len(report.Items) == 0 {
+		return terminal.WarningSign, terminal.Yellow, "No package managers to fix"
+	}
+
+	projectsWithFailures := make(map[string]struct{})
+
+	for _, item := range report.Items {
+		if !item.Success {
+			projectsWithFailures[item.Project] = struct{}{}
+		}
+	}
+
+	totalProjects := len(report.Projects)
+
+	if len(projectsWithFailures) > 0 {
+		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s reported failures", len(projectsWithFailures), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	return terminal.CheckMark, terminal.Green, fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))
+}
+
 func fixFailPhrase(count int) string {
 	if count == 1 {
 		return "1 failure"
@@ -349,7 +453,13 @@ func renderFixQuiet(ow *terminal.OutputWriter, report result.FixReport) error {
 			continue
 		}
 
-		ow.Println(item.ManagerName + ": " + summary)
+		label := item.ManagerName
+
+		if item.Project != "" {
+			label = item.Project + " · " + label
+		}
+
+		ow.Println(label + ": " + summary)
 	}
 
 	return nil

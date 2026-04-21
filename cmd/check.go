@@ -16,12 +16,14 @@ import (
 )
 
 type checkOptions struct {
-	managers []string
-	scopes   []string
-	withEnv  bool
-	timeout  time.Duration
-	json     bool
-	outdated bool
+	managers     []string
+	scopes       []string
+	withEnv      bool
+	timeout      time.Duration
+	json         bool
+	outdated     bool
+	noMonorepo   bool
+	projectGlobs []string
 }
 
 var checkOpts checkOptions
@@ -71,7 +73,7 @@ var checkCmd = &cobra.Command{
 			return err
 		}
 
-		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated)
+		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated, checkOpts.noMonorepo, checkOpts.projectGlobs)
 
 		if err != nil {
 			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -158,6 +160,20 @@ func init() {
 		"outdated",
 		false,
 		"Also check for outdated packages",
+	)
+
+	checkCmd.Flags().BoolVar(
+		&checkOpts.noMonorepo,
+		"no-monorepo",
+		false,
+		"Disable monorepo traversal, check only the current directory",
+	)
+
+	checkCmd.Flags().StringSliceVar(
+		&checkOpts.projectGlobs,
+		"project",
+		[]string{},
+		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
 	)
 
 	rootCmd.AddCommand(checkCmd)

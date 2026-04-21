@@ -30,8 +30,8 @@ func NewRunner(workDir string) Runner {
 	}
 }
 
-func (r Runner) deps() adapter.Dependencies {
-	loader := manifest.NewLoader(r.WorkDir)
+func (r Runner) depsForDir(workDir string) adapter.Dependencies {
+	loader := manifest.NewLoader(workDir)
 	loader.FS = r.FS
 
 	return adapter.Dependencies{
@@ -72,7 +72,6 @@ func selectionIncludesEnv(scopes, selectors []string) bool {
 	return false
 }
 
-// Skips Composer on implicit selection when composer.json is absent to avoid stray lockfile warnings.
 func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Dependencies, scopes, selectors []string) []adapter.Adapter {
 	if !isImplicitFullSelection(scopes, selectors) {
 		return adapters

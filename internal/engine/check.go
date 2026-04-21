@@ -3,21 +3,99 @@ package engine
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, withEnv bool, outdated bool) (result.CheckReport, error) {
+func (r Runner) Check(
+	ctx context.Context,
+	scopes []string,
+	selectors []string,
+	withEnv bool,
+	outdated bool,
+	disableMonorepo bool,
+	projectGlobs []string,
+) (result.CheckReport, error) {
+	if !disableMonorepo {
+		projects, err := monorepo.DiscoverProjects(r.WorkDir)
+
+		if err != nil {
+			return result.CheckReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
+		}
+
+		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
+
+		if err != nil {
+			return result.CheckReport{}, fmt.Errorf("project filter failed: %w", err)
+		}
+
+		if len(projects) > 0 {
+			return r.checkMonorepo(ctx, projects, scopes, selectors, withEnv, outdated)
+		}
+	}
+
+	return r.checkProject(ctx, r.WorkDir, "", scopes, selectors, withEnv, outdated)
+}
+
+func (r Runner) checkMonorepo(
+	ctx context.Context,
+	projects []monorepo.Project,
+	scopes []string,
+	selectors []string,
+	withEnv bool,
+	outdated bool,
+) (result.CheckReport, error) {
+	startedAt := time.Now()
+
+	var allItems []result.CheckItem
+
+	projectSummaries := make([]result.CheckProject, 0, len(projects))
+
+	for _, project := range projects {
+		projectSummaries = append(projectSummaries, result.CheckProject{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
+
+		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, withEnv, outdated)
+
+		if err != nil {
+			return result.CheckReport{}, err
+		}
+
+		allItems = append(allItems, projectReport.Items...)
+	}
+
+	return result.CheckReport{
+		StartedAt: startedAt,
+		EndedAt:   time.Now(),
+		Canceled:  ctx.Err() != nil,
+		Items:     allItems,
+		Projects:  projectSummaries,
+	}, nil
+}
+
+func (r Runner) checkProject(
+	ctx context.Context,
+	workDir string,
+	projectPath string,
+	scopes []string,
+	selectors []string,
+	withEnv bool,
+	outdated bool,
+) (result.CheckReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeCheck})
 
 	if err != nil {
 		return result.CheckReport{}, err
 	}
 
-	deps := r.deps()
+	deps := r.depsForDir(workDir)
 
 	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
 		return result.CheckReport{}, err
@@ -25,7 +103,6 @@ func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, 
 
 	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
 
-	// Env adapter is opt-in, strip from implicit selection and re-add only if requested
 	if isImplicitFullSelection(scopes, selectors) {
 		adapters = withoutAdapter(adapters, "env")
 	}
@@ -35,16 +112,12 @@ func (r Runner) Check(ctx context.Context, scopes []string, selectors []string, 
 	report := runChecks(ctx, adapters, deps)
 
 	if outdated {
-		report.Outdated = make(map[string][]adapter.OutdatedPackage)
+		attachOutdatedPackages(ctx, adapters, deps, report.Items)
+	}
 
-		for _, a := range adapters {
-			if outdatedLister, ok := a.(adapter.OutdatedLister); ok {
-				packages, err := outdatedLister.ListOutdated(ctx, deps)
-
-				if err == nil && len(packages) > 0 {
-					report.Outdated[a.Name()] = packages
-				}
-			}
+	if projectPath != "" {
+		for i := range report.Items {
+			report.Items[i].Project = projectPath
 		}
 	}
 
@@ -87,5 +160,31 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 		EndedAt:   time.Now(),
 		Canceled:  ctx.Err() != nil,
 		Items:     items,
+	}
+}
+
+func attachOutdatedPackages(ctx context.Context, adapters []adapter.Adapter, deps adapter.Dependencies, items []result.CheckItem) {
+	itemByScopeID := make(map[string]int, len(items))
+
+	for i, item := range items {
+		itemByScopeID[item.ScopeID] = i
+	}
+
+	for _, a := range adapters {
+		outdatedLister, ok := a.(adapter.OutdatedLister)
+
+		if !ok {
+			continue
+		}
+
+		packages, err := outdatedLister.ListOutdated(ctx, deps)
+
+		if err != nil || len(packages) == 0 {
+			continue
+		}
+
+		if idx, ok := itemByScopeID[a.Name()]; ok {
+			items[idx].Outdated = packages
+		}
 	}
 }
