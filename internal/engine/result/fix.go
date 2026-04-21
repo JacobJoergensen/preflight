@@ -5,19 +5,38 @@ import (
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 )
 
 type FixReport struct {
-	StartedAt     time.Time
-	EndedAt       time.Time
-	Canceled      bool
-	DryRun        bool
-	SkipBackup    bool
-	BackupDir     string
-	Force         bool
-	FixSelectors  []string
-	Items         []FixItem
-	InternalError string
+	StartedAt    time.Time
+	EndedAt      time.Time
+	Canceled     bool
+	Aborted      bool
+	DryRun       bool
+	SkipBackup   bool
+	BackupDir    string
+	Force        bool
+	FixSelectors []string
+	Plan         []PlannedFix
+	Items        []FixItem
+	Skipped      []SkippedFix
+	Diff         bool
+	LockDiffs    []lockdiff.FileDiff
+}
+
+type PlannedFix struct {
+	ScopeID     string
+	DisplayName string
+	Command     string
+	Summary     string
+}
+
+type SkippedFix struct {
+	ScopeID     string
+	DisplayName string
+	Command     string
+	Reason      string
 }
 
 type FixItem struct {
@@ -29,6 +48,7 @@ type FixItem struct {
 	WouldRun       string
 	Success        bool
 	Error          string
+	Output         string
 	StartedAt      time.Time
 	EndedAt        time.Time
 }
@@ -43,6 +63,7 @@ func FromAdapterFix(item adapter.FixItem, startedAt, endedAt time.Time) FixItem 
 		WouldRun:       item.WouldRun,
 		Success:        item.Success,
 		Error:          item.Error,
+		Output:         item.Output,
 		StartedAt:      startedAt,
 		EndedAt:        endedAt,
 	}

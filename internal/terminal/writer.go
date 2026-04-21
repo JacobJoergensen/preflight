@@ -3,6 +3,7 @@ package terminal
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -11,8 +12,12 @@ type OutputWriter struct {
 }
 
 func NewOutputWriter() *OutputWriter {
+	return NewOutputWriterFor(os.Stdout)
+}
+
+func NewOutputWriterFor(w io.Writer) *OutputWriter {
 	return &OutputWriter{
-		w: bufio.NewWriter(os.Stdout),
+		w: bufio.NewWriter(w),
 	}
 }
 

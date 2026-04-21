@@ -1,9 +1,10 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os"
+	"io"
 	"slices"
 	"strings"
 
@@ -87,12 +88,18 @@ func fixByPackageType(
 		return item, nil
 	}
 
-	if err := deps.Stream.RunStreaming(ctx, tool.Command, args, os.Stdout, os.Stderr); err != nil {
+	var captured bytes.Buffer
+
+	writer := io.Writer(&captured)
+
+	if err := deps.Stream.RunStreaming(ctx, tool.Command, args, writer, writer); err != nil {
 		item.Success = false
 		item.Error = err.Error()
+		item.Output = captured.String()
 		return item, nil
 	}
 
 	item.Success = true
+	item.Output = captured.String()
 	return item, nil
 }

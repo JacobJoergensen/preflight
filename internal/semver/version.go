@@ -40,7 +40,7 @@ func ParseVersionPin(pin string) string {
 
 	pin = strings.TrimPrefix(pin, "v")
 
-	parts := parseDetailedSemver(pin)
+	parts := ParseVersion(pin)
 
 	if parts == nil || parts.Major < 0 {
 		return pin
@@ -165,13 +165,13 @@ func matchSingleConstraint(installed, required string) bool {
 
 	switch {
 	case strings.HasPrefix(required, ">="):
-		return compareVersions(installed, strings.TrimSpace(required[2:])) >= 0
+		return Compare(installed, strings.TrimSpace(required[2:])) >= 0
 	case strings.HasPrefix(required, "<="):
-		return compareVersions(installed, strings.TrimSpace(required[2:])) <= 0
+		return Compare(installed, strings.TrimSpace(required[2:])) <= 0
 	case strings.HasPrefix(required, ">"):
-		return compareVersions(installed, strings.TrimSpace(required[1:])) > 0
+		return Compare(installed, strings.TrimSpace(required[1:])) > 0
 	case strings.HasPrefix(required, "<"):
-		return compareVersions(installed, strings.TrimSpace(required[1:])) < 0
+		return Compare(installed, strings.TrimSpace(required[1:])) < 0
 	case strings.HasPrefix(required, "^"):
 		return matchCaretRange(installed, strings.TrimSpace(required[1:]))
 	case strings.HasPrefix(required, "~>"):
@@ -183,7 +183,7 @@ func matchSingleConstraint(installed, required string) bool {
 	case strings.HasSuffix(required, ".*") || strings.HasSuffix(required, ".x"):
 		return matchWildcard(installed, required)
 	default:
-		return compareVersions(installed, required) == 0
+		return Compare(installed, required) == 0
 	}
 }
 
@@ -191,8 +191,8 @@ func matchWildcard(installed, pattern string) bool {
 	pattern = strings.TrimSuffix(pattern, ".*")
 	pattern = strings.TrimSuffix(pattern, ".x")
 
-	installedParts := parseDetailedSemver(installed)
-	patternParts := parseDetailedSemver(pattern)
+	installedParts := ParseVersion(installed)
+	patternParts := ParseVersion(pattern)
 
 	if installedParts == nil || patternParts == nil {
 		return strings.HasPrefix(installed, pattern)
@@ -216,15 +216,15 @@ func matchHyphenRange(installed, rangeStr string) bool {
 		return false
 	}
 
-	return compareVersions(installed, strings.TrimSpace(minVersion)) >= 0 &&
-		compareVersions(installed, strings.TrimSpace(maxVersion)) <= 0
+	return Compare(installed, strings.TrimSpace(minVersion)) >= 0 &&
+		Compare(installed, strings.TrimSpace(maxVersion)) <= 0
 }
 
 // matchCaretRange implements the ^ operator from NPM's semver.
 // ^1.2.3 -> >=1.2.3 <2.0.0
 func matchCaretRange(installed, required string) bool {
-	installedParts := parseDetailedSemver(installed)
-	requiredParts := parseDetailedSemver(required)
+	installedParts := ParseVersion(installed)
+	requiredParts := ParseVersion(required)
 
 	if installedParts == nil || requiredParts == nil {
 		return installed == required
@@ -250,7 +250,7 @@ func matchCaretRange(installed, required string) bool {
 	}
 
 	if requiredParts.Major > 0 {
-		return compareVersions(installed, required) >= 0 && installedParts.Major == requiredParts.Major
+		return Compare(installed, required) >= 0 && installedParts.Major == requiredParts.Major
 	}
 
 	// For 0.y.z versions, ^ means the same as ~
@@ -261,8 +261,8 @@ func matchCaretRange(installed, required string) bool {
 // ~1.2.3 -> >=1.2.3 <1.3.0
 // ~1.2 -> >=1.2.0 <1.3.0
 func matchTildeRange(installed, required string) bool {
-	requiredParts := parseDetailedSemver(required)
-	installedParts := parseDetailedSemver(installed)
+	requiredParts := ParseVersion(required)
+	installedParts := ParseVersion(installed)
 
 	if requiredParts == nil || installedParts == nil {
 		return installed == required
@@ -301,9 +301,9 @@ func matchPessimisticRange(installed, required string) bool {
 	return matchTildeRange(installed, required)
 }
 
-func compareVersions(v1, v2 string) int {
-	parts1 := parseDetailedSemver(v1)
-	parts2 := parseDetailedSemver(v2)
+func Compare(v1, v2 string) int {
+	parts1 := ParseVersion(v1)
+	parts2 := ParseVersion(v2)
 
 	if parts1 == nil || parts2 == nil {
 		v1Parts, v2Parts := parseSemver(v1), parseSemver(v2)
@@ -389,7 +389,7 @@ func compareVersionArrays(v1Parts, v2Parts []int) int {
 	return 0
 }
 
-func parseDetailedSemver(version string) *VersionParts {
+func ParseVersion(version string) *VersionParts {
 	matches := semverRegex.FindStringSubmatch(version)
 
 	if len(matches) < 4 {

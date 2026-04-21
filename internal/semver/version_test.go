@@ -241,10 +241,10 @@ func TestParseDetailedSemver(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
-			got := parseDetailedSemver(tt.version)
+			got := ParseVersion(tt.version)
 
 			if got == nil {
-				t.Fatal("parseDetailedSemver returned nil")
+				t.Fatal("ParseVersion returned nil")
 			}
 
 			if got.Major != tt.major {
@@ -281,8 +281,8 @@ func TestParseDetailedSemverInvalid(t *testing.T) {
 
 	for _, version := range invalid {
 		t.Run(version, func(t *testing.T) {
-			if got := parseDetailedSemver(version); got != nil {
-				t.Errorf("parseDetailedSemver(%q) = %+v, want nil", version, got)
+			if got := ParseVersion(version); got != nil {
+				t.Errorf("ParseVersion(%q) = %+v, want nil", version, got)
 			}
 		})
 	}

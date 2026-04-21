@@ -90,6 +90,7 @@ type FixItem struct {
 	WouldRun       string
 	Success        bool
 	Error          string
+	Output         string
 }
 
 var (
