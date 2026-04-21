@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -91,6 +92,10 @@ preflight audit --json`,
 		if err := renderAudit(report, auditOpts.json); err != nil {
 			return err
 		}
+
+		writeGitHubSummary(func(w io.Writer) error {
+			return render.MarkdownAuditRenderer{Out: w}.Render(report)
+		})
 
 		if exitCodeFromAuditReport(report) != 0 {
 			return ErrSilentFailure

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -79,6 +80,10 @@ var checkCmd = &cobra.Command{
 		if err := renderCheck(report, checkOpts.json); err != nil {
 			return err
 		}
+
+		writeGitHubSummary(func(w io.Writer) error {
+			return render.MarkdownCheckRenderer{Out: w}.Render(report)
+		})
 
 		if exitCodeFromReport(report) != 0 {
 			return ErrSilentFailure

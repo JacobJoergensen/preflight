@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -89,6 +90,10 @@ Example: preflight fix --pm=npm,composer`,
 		if err := renderFix(report, fixOpts.json, itemsRenderedLive); err != nil {
 			return err
 		}
+
+		writeGitHubSummary(func(w io.Writer) error {
+			return render.MarkdownFixRenderer{Out: w}.Render(report)
+		})
 
 		if exitCodeFromFixReport(report) != 0 {
 			return ErrSilentFailure
