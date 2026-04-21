@@ -115,7 +115,7 @@ preflight run build --profile ci`,
 
 func init() {
 	runCmd.Flags().BoolVar(&runOpts.dryRun, "dry-run", false, "Print the resolved command without running it")
-	runCmd.Flags().DurationVar(&runOpts.timeout, "timeout", 30*time.Minute, "Timeout for the script process")
+	runCmd.Flags().DurationVarP(&runOpts.timeout, "timeout", "t", 30*time.Minute, "Timeout for the script process")
 
 	rootCmd.AddCommand(runCmd)
 }
