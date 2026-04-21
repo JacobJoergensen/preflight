@@ -9,7 +9,10 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-const maxDiffEntriesPerFile = 20
+const (
+	maxDiffEntriesPerFile     = 20
+	lockDiffSubheaderRuleSize = 25
+)
 
 func renderFixDiffs(ow *terminal.OutputWriter, report result.FixReport) {
 	if !report.Diff || report.DryRun {
@@ -39,11 +42,11 @@ func renderFileDiff(ow *terminal.OutputWriter, diff lockdiff.FileDiff) {
 	added, removed, upgraded, downgraded := diff.Counts()
 
 	ow.PrintNewLines(1)
-	ow.Printf("  %s%s%s %s%s%s\n",
+	ow.Printf("  %s%s%s %s· %s%s\n",
 		terminal.Bold, diff.File, terminal.Reset,
-		terminal.Dim, "("+diff.Ecosystem+")", terminal.Reset,
+		terminal.Dim, diff.Ecosystem, terminal.Reset,
 	)
-	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+	ow.Println("  " + terminal.Gray + strings.Repeat("─", lockDiffSubheaderRuleSize) + terminal.Reset)
 
 	shown := 0
 

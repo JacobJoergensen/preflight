@@ -48,6 +48,7 @@ type FixItem struct {
 	WouldRun       string
 	Success        bool
 	Error          string
+	Output         string
 	StartedAt      time.Time
 	EndedAt        time.Time
 }
@@ -62,6 +63,7 @@ func FromAdapterFix(item adapter.FixItem, startedAt, endedAt time.Time) FixItem 
 		WouldRun:       item.WouldRun,
 		Success:        item.Success,
 		Error:          item.Error,
+		Output:         item.Output,
 		StartedAt:      startedAt,
 		EndedAt:        endedAt,
 	}

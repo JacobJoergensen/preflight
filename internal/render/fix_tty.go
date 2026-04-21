@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -9,8 +10,17 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
+const (
+	fixFooterBoxWidth       = 65
+	fixItemNoCommandLabel   = "already up to date"
+	fixResultsRuleWidth     = 45
+	fixFailureOutputIndent  = 6
+	fixFailureOutputMaxRows = 40
+)
+
 type TTYFixRenderer struct {
-	Out *terminal.OutputWriter
+	Out       *terminal.OutputWriter
+	SkipItems bool
 }
 
 func (r TTYFixRenderer) Render(report result.FixReport) error {
@@ -24,39 +34,18 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 		return renderFixQuiet(ow, report)
 	}
 
-	title := terminal.Wrench + " PreFlight Fix  "
-
-	if report.DryRun {
-		title = terminal.Wrench + " PreFlight Fix (Dry Run)  "
+	if !r.SkipItems {
+		ow.PrintNewLines(1)
 	}
 
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭─────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│" + terminal.Cyan + terminal.Bold + "  " + title + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
-
 	if report.DryRun {
-		ow.PrintNewLines(1)
 		renderFixPlan(ow, report)
 		renderFixFooter(ow, report)
 		return nil
 	}
 
-	ow.Println(terminal.Bold + "\nFixing dependencies..." + terminal.Reset)
-	ow.PrintNewLines(1)
-
-	renderedCount := 0
-
-	for _, item := range report.Items {
-		if shouldSkipFixItem(item) {
-			continue
-		}
-
-		renderFixItemCardTTY(ow, item)
-		renderedCount++
-	}
-
-	if renderedCount == 0 && len(report.Items) > 0 {
-		ow.Println(terminal.Dim + "  " + terminal.CheckMark + " All dependencies already up to date." + terminal.Reset)
+	if !r.SkipItems {
+		renderFixItemLines(ow, report.Items)
 	}
 
 	renderFixSkipped(ow, report.Skipped)
@@ -64,6 +53,147 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 	renderFixFooter(ow, report)
 
 	return nil
+}
+
+func renderFixItemLines(ow *terminal.OutputWriter, items []result.FixItem) {
+	if len(items) == 0 {
+		return
+	}
+
+	ow.Println(terminal.Bold + "Results" + terminal.Reset)
+	ow.Println(terminal.Gray + strings.Repeat("─", fixResultsRuleWidth) + terminal.Reset)
+
+	nameWidth, commandWidth := fixItemColumnWidths(items)
+
+	for _, item := range items {
+		renderFixItemLine(ow, item, nameWidth, commandWidth)
+	}
+}
+
+func renderFixItemLine(ow *terminal.OutputWriter, item result.FixItem, nameWidth, commandWidth int) {
+	icon, iconColor := fixItemIcon(item)
+	command := buildFullCommand(item.ManagerCommand, item.Args)
+
+	if command == "" {
+		command = fixItemNoCommandLabel
+	}
+
+	elapsed := formatFixElapsed(item.EndedAt.Sub(item.StartedAt))
+
+	ow.Printf("  %s%s%s  %s%s%s  %s%s%s  %s%s%s\n",
+		iconColor, icon, terminal.Reset,
+		terminal.Bold, padRight(item.ManagerName, nameWidth), terminal.Reset,
+		terminal.Dim, padRight(command, commandWidth), terminal.Reset,
+		terminal.Dim, elapsed, terminal.Reset,
+	)
+
+	if item.Success {
+		return
+	}
+
+	if strings.TrimSpace(item.Output) != "" {
+		renderFixItemCapturedOutput(ow, item.Output)
+		return
+	}
+
+	if item.Error != "" {
+		ow.Printf("%s%s%s%s\n",
+			terminal.Red, strings.Repeat(" ", ttyProjectBodySpaces),
+			item.Error, terminal.Reset,
+		)
+	}
+}
+
+func renderFixItemCapturedOutput(ow *terminal.OutputWriter, output string) {
+	lines := capturedOutputLines(output)
+
+	if len(lines) == 0 {
+		return
+	}
+
+	ow.PrintNewLines(1)
+
+	indent := strings.Repeat(" ", fixFailureOutputIndent)
+
+	for _, line := range lines {
+		ow.Printf("%s%s%s%s\n", terminal.Red+terminal.Dim, indent, line, terminal.Reset)
+	}
+
+	ow.PrintNewLines(1)
+}
+
+func capturedOutputLines(output string) []string {
+	trimmed := strings.TrimRight(output, "\n")
+
+	if trimmed == "" {
+		return nil
+	}
+
+	lines := strings.Split(trimmed, "\n")
+
+	if len(lines) <= fixFailureOutputMaxRows {
+		return lines
+	}
+
+	skipped := len(lines) - fixFailureOutputMaxRows
+	tail := lines[skipped:]
+	truncated := make([]string, 0, len(tail)+1)
+	truncated = append(truncated, fmt.Sprintf("… %d earlier line%s hidden …", skipped, pluralSuffix(skipped)))
+	truncated = append(truncated, tail...)
+
+	return truncated
+}
+
+func fixItemColumnWidths(items []result.FixItem) (nameWidth, commandWidth int) {
+	for _, item := range items {
+		if n := len(item.ManagerName); n > nameWidth {
+			nameWidth = n
+		}
+
+		command := buildFullCommand(item.ManagerCommand, item.Args)
+
+		if command == "" {
+			command = fixItemNoCommandLabel
+		}
+
+		if n := len(command); n > commandWidth {
+			commandWidth = n
+		}
+	}
+
+	return nameWidth, commandWidth
+}
+
+func fixItemIcon(item result.FixItem) (icon, color string) {
+	if item.Success {
+		return terminal.CheckMark, terminal.Green
+	}
+
+	return terminal.CrossMark, terminal.Red
+}
+
+func formatFixElapsed(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+
+	return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
+}
+
+func padRight(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+
+	return s + strings.Repeat(" ", width-len(s))
 }
 
 func renderFixPlan(ow *terminal.OutputWriter, report result.FixReport) {
@@ -118,53 +248,6 @@ func renderFixSkipped(ow *terminal.OutputWriter, skipped []result.SkippedFix) {
 	}
 }
 
-func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem) {
-	ow.PrintNewLines(1)
-
-	badge := fixBadgeTTY(item)
-	header := fmt.Sprintf("  %s%s%s  %s",
-		terminal.Bold, item.ManagerName, terminal.Reset,
-		badge,
-	)
-
-	ow.Println(header)
-
-	summary := fixItemSummary(item)
-
-	if summary != "" {
-		ow.Println(terminal.Dim + "  " + summary + terminal.Reset)
-	}
-
-	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
-
-	fullCommand := buildFullCommand(item.ManagerCommand, item.Args)
-
-	ow.Println(terminal.Dim + "  Result" + terminal.Reset)
-
-	if item.Success {
-		if fullCommand != "" {
-			ow.Printf("%s%s%s Ran %s%s\n",
-				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
-				fullCommand, terminal.Reset,
-			)
-		} else {
-			ow.Printf("%s%s%s %s%s\n",
-				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark,
-				"Already up to date", terminal.Reset,
-			)
-		}
-
-		return
-	}
-
-	if item.Error != "" {
-		ow.Printf("%s%s%s %s%s\n",
-			terminal.Red, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CrossMark,
-			item.Error, terminal.Reset,
-		)
-	}
-}
-
 func buildFullCommand(command string, args []string) string {
 	if command == "" {
 		return ""
@@ -177,34 +260,6 @@ func buildFullCommand(command string, args []string) string {
 	return command + " " + strings.Join(args, " ")
 }
 
-func shouldSkipFixItem(item result.FixItem) bool {
-	if item.Error != "" {
-		return false
-	}
-
-	if item.ManagerCommand != "" && len(item.Args) > 0 {
-		return false
-	}
-
-	return item.Success
-}
-
-func fixBadgeTTY(item result.FixItem) string {
-	if item.Success {
-		return terminal.Green + terminal.Bold + "OK" + terminal.Reset
-	}
-
-	return terminal.Red + terminal.Bold + "FAIL" + terminal.Reset
-}
-
-func fixItemSummary(item result.FixItem) string {
-	if item.Success {
-		return "Dependencies installed successfully"
-	}
-
-	return "Installation failed"
-}
-
 func renderFixFooter(ow *terminal.OutputWriter, report result.FixReport) {
 	statusIcon, statusColor, statusText := fixStatusFromReport(report)
 
@@ -214,40 +269,103 @@ func renderFixFooter(ow *terminal.OutputWriter, report result.FixReport) {
 		endedAt = time.Now()
 	}
 
-	ow.Println(terminal.Bold + terminal.Blue + "\n╭────────────────────────────────────────────────────────────────╮" + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + statusColor + statusIcon + " Status: " + statusText + terminal.Reset)
+	blueBar := terminal.Bold + terminal.Blue + "│" + terminal.Reset
+	topBorder := terminal.Bold + terminal.Blue + "╭" + strings.Repeat("─", fixFooterBoxWidth) + "╮" + terminal.Reset
+	botBorder := terminal.Bold + terminal.Blue + "╰" + strings.Repeat("─", fixFooterBoxWidth) + "╯" + terminal.Reset
 
-	if report.BackupDir != "" {
-		ow.Println(terminal.Bold + terminal.Blue + "│ " + terminal.Dim + terminal.Box + " Backup: " + report.BackupDir + terminal.Reset)
+	ow.PrintNewLines(2)
+	ow.Println(topBorder)
+	ow.Println(blueBar)
+	ow.Printf("%s    %s%s%s  %s\n", blueBar, statusColor, statusIcon, terminal.Reset, statusText)
+	ow.Println(blueBar)
+
+	metadata := fixFooterMetadata(report, endedAt)
+
+	if len(metadata) > 0 {
+		labelWidth := fixFooterLabelWidth(metadata)
+
+		for _, line := range metadata {
+			ow.Printf("%s       %s%s%s   %s\n",
+				blueBar,
+				terminal.Dim, padRight(line.label, labelWidth), terminal.Reset,
+				line.value,
+			)
+		}
+
+		ow.Println(blueBar)
 	}
 
-	ow.Println(terminal.Bold + terminal.Blue + "│ " + terminal.Dim + terminal.Clock + " Ended: " + endedAt.Format("02-01-2006 15:04:05") + terminal.Reset)
-	ow.Println(terminal.Bold + terminal.Blue + "╰────────────────────────────────────────────────────────────────╯" + terminal.Reset)
+	ow.Println(botBorder)
+}
+
+type fixFooterLine struct {
+	label string
+	value string
+}
+
+func fixFooterMetadata(report result.FixReport, endedAt time.Time) []fixFooterLine {
+	lines := make([]fixFooterLine, 0, 2)
+
+	if report.BackupDir != "" {
+		lines = append(lines, fixFooterLine{
+			label: "Backup",
+			value: relativeBackupPath(report.BackupDir),
+		})
+	}
+
+	lines = append(lines, fixFooterLine{
+		label: "Ended",
+		value: endedAt.Format("02-01-2006 15:04:05"),
+	})
+
+	return lines
+}
+
+func fixFooterLabelWidth(lines []fixFooterLine) int {
+	var width int
+
+	for _, line := range lines {
+		if n := len(line.label); n > width {
+			width = n
+		}
+	}
+
+	return width
+}
+
+func relativeBackupPath(backupDir string) string {
+	idx := strings.Index(backupDir, ".preflight")
+
+	if idx == -1 {
+		return backupDir
+	}
+
+	return filepath.ToSlash(backupDir[idx:])
 }
 
 func fixStatusFromReport(report result.FixReport) (icon string, color string, text string) {
 	if report.Canceled {
-		return terminal.WarningSign, terminal.Yellow, "Fix canceled."
+		return terminal.WarningSign, terminal.Yellow, "Fix canceled"
 	}
 
 	if report.Aborted {
-		return terminal.WarningSign, terminal.Yellow, "Fix aborted — no changes applied."
+		return terminal.WarningSign, terminal.Yellow, "Fix aborted — no changes applied"
 	}
 
 	if report.DryRun {
 		if len(report.Plan) == 0 {
-			return terminal.WarningSign, terminal.Yellow, "No package managers to fix."
+			return terminal.WarningSign, terminal.Yellow, "No package managers to fix"
 		}
 
-		return terminal.CheckMark, terminal.Cyan, "Dry run completed, no changes made."
+		return terminal.CheckMark, terminal.Cyan, "Dry run completed, no changes made"
 	}
 
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
-		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped."
+		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped"
 	}
 
 	if len(report.Items) == 0 {
-		return terminal.WarningSign, terminal.Yellow, "No package managers to fix."
+		return terminal.WarningSign, terminal.Yellow, "No package managers to fix"
 	}
 
 	var failCount int
@@ -259,10 +377,10 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 	}
 
 	if failCount > 0 {
-		return terminal.CrossMark, terminal.Red, fmt.Sprintf("Fix completed with %s.", fixFailPhrase(failCount))
+		return terminal.CrossMark, terminal.Red, "Fix completed with " + fixFailPhrase(failCount)
 	}
 
-	return terminal.CheckMark, terminal.Green, "All dependencies fixed successfully!"
+	return terminal.CheckMark, terminal.Green, "All dependencies fixed successfully"
 }
 
 func fixFailPhrase(count int) string {
@@ -279,10 +397,30 @@ func renderFixQuiet(ow *terminal.OutputWriter, report result.FixReport) error {
 			continue
 		}
 
-		if item.Error != "" {
-			ow.Println(item.ManagerName + ": " + item.Error)
+		summary := quietFailureSummary(item)
+
+		if summary == "" {
+			continue
 		}
+
+		ow.Println(item.ManagerName + ": " + summary)
 	}
 
 	return nil
+}
+
+func quietFailureSummary(item result.FixItem) string {
+	trimmed := strings.TrimSpace(item.Output)
+
+	if trimmed != "" {
+		lines := strings.Split(trimmed, "\n")
+
+		for i := len(lines) - 1; i >= 0; i-- {
+			if line := strings.TrimSpace(lines[i]); line != "" {
+				return line
+			}
+		}
+	}
+
+	return item.Error
 }

@@ -74,18 +74,19 @@ Example: preflight fix --pm=npm,composer`,
 		}
 
 		approver := buildFixApprover(fixOpts)
+		progress, itemsRenderedLive := buildFixProgress(fixOpts)
 
 		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{
 			Force:      fixOpts.force,
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
-		}, !fixOpts.noDiff, approver)
+		}, !fixOpts.noDiff, approver, progress)
 
 		if err != nil {
 			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		if err := renderFix(report, fixOpts.json); err != nil {
+		if err := renderFix(report, fixOpts.json, itemsRenderedLive); err != nil {
 			return err
 		}
 
@@ -109,12 +110,24 @@ func buildFixApprover(opts fixOptions) engine.FixApprover {
 	return render.NewTTYFixApprover(os.Stdin, os.Stdout)
 }
 
-func renderFix(report result.FixReport, jsonOutput bool) error {
+func buildFixProgress(opts fixOptions) (engine.FixProgress, bool) {
+	if opts.dryRun || opts.json || terminal.Quiet {
+		return engine.NoopFixProgress{}, false
+	}
+
+	if !terminal.IsInteractiveTTY(os.Stdout) {
+		return engine.NoopFixProgress{}, false
+	}
+
+	return render.NewTTYFixProgress(os.Stdout), true
+}
+
+func renderFix(report result.FixReport, jsonOutput, skipItems bool) error {
 	if jsonOutput {
 		return render.JSONFixRenderer{Out: os.Stdout}.Render(report)
 	}
 
-	return render.TTYFixRenderer{}.Render(report)
+	return render.TTYFixRenderer{SkipItems: skipItems}.Render(report)
 }
 
 func exitCodeFromFixReport(report result.FixReport) int {

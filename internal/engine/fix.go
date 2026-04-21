@@ -35,13 +35,37 @@ type FixApprover interface {
 
 type AutoFixApprover struct{}
 
+type FixProgress interface {
+	Plan(candidates []FixCandidate)
+	Start(candidate FixCandidate)
+	Finish(item result.FixItem)
+}
+
+type NoopFixProgress struct{}
+
 func (AutoFixApprover) Approve(FixCandidate) (FixDecision, error) {
 	return FixApply, nil
 }
 
-func (r Runner) Fix(ctx context.Context, scopes []string, selectors []string, opts adapter.FixOptions, diff bool, approver FixApprover) (result.FixReport, error) {
+func (NoopFixProgress) Plan([]FixCandidate)   {}
+func (NoopFixProgress) Start(FixCandidate)    {}
+func (NoopFixProgress) Finish(result.FixItem) {}
+
+func (r Runner) Fix(
+	ctx context.Context,
+	scopes []string,
+	selectors []string,
+	opts adapter.FixOptions,
+	diff bool,
+	approver FixApprover,
+	progress FixProgress,
+) (result.FixReport, error) {
 	if approver == nil {
 		approver = AutoFixApprover{}
+	}
+
+	if progress == nil {
+		progress = NoopFixProgress{}
 	}
 
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
@@ -96,7 +120,7 @@ func (r Runner) Fix(ctx context.Context, scopes []string, selectors []string, op
 		backupDir = dir
 	}
 
-	items := runApprovedFixers(ctx, approvedAdapters, deps, selection.FixSelectors, opts)
+	items := runApprovedFixers(ctx, approvedAdapters, candidates, deps, selection.FixSelectors, opts, progress)
 
 	var diffs []lockdiff.FileDiff
 
@@ -140,30 +164,71 @@ func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
 	return planned
 }
 
-func runApprovedFixers(ctx context.Context, adapters []adapter.Adapter, deps adapter.Dependencies, fixSelectors []string, opts adapter.FixOptions) []result.FixItem {
+func runApprovedFixers(
+	ctx context.Context,
+	adapters []adapter.Adapter,
+	candidates []FixCandidate,
+	deps adapter.Dependencies,
+	fixSelectors []string,
+	opts adapter.FixOptions,
+	progress FixProgress,
+) []result.FixItem {
 	items := make([]result.FixItem, 0, len(adapters))
+	candidateByID := candidatesByScopeID(candidates)
+	approvedCandidates := approvedCandidatesForAdapters(adapters, candidateByID)
+
+	progress.Plan(approvedCandidates)
 
 	for _, a := range adapters {
-		item, fixErr := a.(adapter.Fixer).Fix(ctx, deps, fixSelectors, opts)
-		now := time.Now()
+		candidate := candidateByID[a.Name()]
+		progress.Start(candidate)
+
+		startedAt := time.Now()
+		adapterItem, fixErr := a.(adapter.Fixer).Fix(ctx, deps, fixSelectors, opts)
+		endedAt := time.Now()
+
+		var item result.FixItem
 
 		if fixErr != nil {
-			items = append(items, result.FixItem{
+			item = result.FixItem{
 				ScopeID:     a.Name(),
 				ManagerName: adapter.DisplayName(a),
 				Success:     false,
 				Error:       fixErr.Error(),
-				StartedAt:   now,
-				EndedAt:     now,
-			})
-
-			continue
+				StartedAt:   startedAt,
+				EndedAt:     endedAt,
+			}
+		} else {
+			item = result.FromAdapterFix(adapterItem, startedAt, endedAt)
 		}
 
-		items = append(items, result.FromAdapterFix(item, now, now))
+		progress.Finish(item)
+		items = append(items, item)
 	}
 
 	return items
+}
+
+func candidatesByScopeID(candidates []FixCandidate) map[string]FixCandidate {
+	indexed := make(map[string]FixCandidate, len(candidates))
+
+	for _, candidate := range candidates {
+		indexed[candidate.ScopeID] = candidate
+	}
+
+	return indexed
+}
+
+func approvedCandidatesForAdapters(adapters []adapter.Adapter, candidateByID map[string]FixCandidate) []FixCandidate {
+	approved := make([]FixCandidate, 0, len(adapters))
+
+	for _, a := range adapters {
+		if candidate, ok := candidateByID[a.Name()]; ok {
+			approved = append(approved, candidate)
+		}
+	}
+
+	return approved
 }
 
 type fixPlan struct {
