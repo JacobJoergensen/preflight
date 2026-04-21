@@ -60,6 +60,7 @@ func (r Runner) Fix(ctx context.Context, scopes []string, selectors []string, op
 	startedAt := time.Now()
 
 	candidates := buildFixCandidates(adapters, deps)
+	plannedFixes := plannedFixesFromCandidates(candidates)
 	plan, aborted, err := resolveFixPlan(candidates, approver)
 
 	if err != nil {
@@ -75,6 +76,7 @@ func (r Runner) Fix(ctx context.Context, scopes []string, selectors []string, op
 			SkipBackup:   opts.SkipBackup,
 			Force:        opts.Force,
 			FixSelectors: selection.FixSelectors,
+			Plan:         plannedFixes,
 			Skipped:      plan.skipped,
 			Diff:         diff,
 		}, nil
@@ -111,11 +113,31 @@ func (r Runner) Fix(ctx context.Context, scopes []string, selectors []string, op
 		BackupDir:    backupDir,
 		Force:        opts.Force,
 		FixSelectors: selection.FixSelectors,
+		Plan:         plannedFixes,
 		Items:        items,
 		Skipped:      plan.skipped,
 		Diff:         diff,
 		LockDiffs:    diffs,
 	}, nil
+}
+
+func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	planned := make([]result.PlannedFix, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		planned = append(planned, result.PlannedFix{
+			ScopeID:     candidate.ScopeID,
+			DisplayName: candidate.DisplayName,
+			Command:     candidate.Command,
+			Summary:     candidate.Summary,
+		})
+	}
+
+	return planned
 }
 
 func runApprovedFixers(ctx context.Context, adapters []adapter.Adapter, deps adapter.Dependencies, fixSelectors []string, opts adapter.FixOptions) []result.FixItem {

@@ -18,13 +18,20 @@ type FixReport struct {
 	BackupDir    string
 	Force        bool
 	FixSelectors []string
+	Plan         []PlannedFix
 	Items        []FixItem
 	Skipped      []SkippedFix
 	Diff         bool
 	LockDiffs    []lockdiff.FileDiff
 }
 
-// SkippedFix records an adapter the user declined during interactive approval.
+type PlannedFix struct {
+	ScopeID     string
+	DisplayName string
+	Command     string
+	Summary     string
+}
+
 type SkippedFix struct {
 	ScopeID     string
 	DisplayName string

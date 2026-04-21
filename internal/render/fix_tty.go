@@ -35,21 +35,23 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 	ow.Println(terminal.Bold + terminal.Blue + "╰─────────────────────────────────────────╯" + terminal.Reset)
 
 	if report.DryRun {
-		ow.Println(terminal.Bold + "\nSimulating fix (no changes will be made)..." + terminal.Reset)
-	} else {
-		ow.Println(terminal.Bold + "\nFixing dependencies..." + terminal.Reset)
+		ow.PrintNewLines(1)
+		renderFixPlan(ow, report)
+		renderFixFooter(ow, report)
+		return nil
 	}
 
+	ow.Println(terminal.Bold + "\nFixing dependencies..." + terminal.Reset)
 	ow.PrintNewLines(1)
 
 	renderedCount := 0
 
 	for _, item := range report.Items {
-		if shouldSkipFixItem(item, report.DryRun) {
+		if shouldSkipFixItem(item) {
 			continue
 		}
 
-		renderFixItemCardTTY(ow, item, report.DryRun)
+		renderFixItemCardTTY(ow, item)
 		renderedCount++
 	}
 
@@ -62,6 +64,30 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 	renderFixFooter(ow, report)
 
 	return nil
+}
+
+func renderFixPlan(ow *terminal.OutputWriter, report result.FixReport) {
+	if len(report.Plan) == 0 {
+		ow.Println(terminal.Dim + "  " + terminal.WarningSign + " No package managers to fix." + terminal.Reset)
+		return
+	}
+
+	header := fmt.Sprintf("Plan — %d ecosystem%s", len(report.Plan), pluralSuffix(len(report.Plan)))
+	ow.Println(terminal.Bold + header + terminal.Reset)
+	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+
+	for _, planned := range report.Plan {
+		ow.PrintNewLines(1)
+		ow.Printf("  %s%s%s\n", terminal.Bold, planned.DisplayName, terminal.Reset)
+
+		if planned.Command != "" {
+			ow.Printf("    %s→%s %s\n", terminal.Cyan, terminal.Reset, planned.Command)
+		}
+
+		if planned.Summary != "" {
+			ow.Printf("    %s%s%s\n", terminal.Dim, planned.Summary, terminal.Reset)
+		}
+	}
 }
 
 func renderFixSkipped(ow *terminal.OutputWriter, skipped []result.SkippedFix) {
@@ -92,10 +118,10 @@ func renderFixSkipped(ow *terminal.OutputWriter, skipped []result.SkippedFix) {
 	}
 }
 
-func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem, dryRun bool) {
+func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem) {
 	ow.PrintNewLines(1)
 
-	badge := fixBadgeTTY(item, dryRun)
+	badge := fixBadgeTTY(item)
 	header := fmt.Sprintf("  %s%s%s  %s",
 		terminal.Bold, item.ManagerName, terminal.Reset,
 		badge,
@@ -103,7 +129,7 @@ func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem, dryRun
 
 	ow.Println(header)
 
-	summary := fixItemSummary(item, dryRun)
+	summary := fixItemSummary(item)
 
 	if summary != "" {
 		ow.Println(terminal.Dim + "  " + summary + terminal.Reset)
@@ -112,30 +138,6 @@ func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem, dryRun
 	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
 
 	fullCommand := buildFullCommand(item.ManagerCommand, item.Args)
-
-	if dryRun {
-		ow.Println(terminal.Dim + "  Command" + terminal.Reset)
-
-		cmd := item.WouldRun
-
-		if cmd == "" {
-			cmd = fullCommand
-		}
-
-		if cmd != "" {
-			ow.Printf("%s%s%s %s%s\n",
-				terminal.Cyan, strings.Repeat(" ", ttyProjectBodySpaces), "›",
-				cmd, terminal.Reset,
-			)
-		} else {
-			ow.Printf("%s%s%s %s%s\n",
-				terminal.Gray, strings.Repeat(" ", ttyProjectBodySpaces), "–",
-				"No action required", terminal.Reset,
-			)
-		}
-
-		return
-	}
 
 	ow.Println(terminal.Dim + "  Result" + terminal.Reset)
 
@@ -175,7 +177,7 @@ func buildFullCommand(command string, args []string) string {
 	return command + " " + strings.Join(args, " ")
 }
 
-func shouldSkipFixItem(item result.FixItem, dryRun bool) bool {
+func shouldSkipFixItem(item result.FixItem) bool {
 	if item.Error != "" {
 		return false
 	}
@@ -184,18 +186,10 @@ func shouldSkipFixItem(item result.FixItem, dryRun bool) bool {
 		return false
 	}
 
-	if dryRun && item.WouldRun != "" {
-		return false
-	}
-
 	return item.Success
 }
 
-func fixBadgeTTY(item result.FixItem, dryRun bool) string {
-	if dryRun {
-		return terminal.Cyan + terminal.Bold + "DRY" + terminal.Reset
-	}
-
+func fixBadgeTTY(item result.FixItem) string {
 	if item.Success {
 		return terminal.Green + terminal.Bold + "OK" + terminal.Reset
 	}
@@ -203,15 +197,7 @@ func fixBadgeTTY(item result.FixItem, dryRun bool) string {
 	return terminal.Red + terminal.Bold + "FAIL" + terminal.Reset
 }
 
-func fixItemSummary(item result.FixItem, dryRun bool) string {
-	if dryRun {
-		if item.WouldRun != "" {
-			return "Would install dependencies"
-		}
-
-		return "No action needed"
-	}
-
+func fixItemSummary(item result.FixItem) string {
 	if item.Success {
 		return "Dependencies installed successfully"
 	}
@@ -248,16 +234,20 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 		return terminal.WarningSign, terminal.Yellow, "Fix aborted — no changes applied."
 	}
 
+	if report.DryRun {
+		if len(report.Plan) == 0 {
+			return terminal.WarningSign, terminal.Yellow, "No package managers to fix."
+		}
+
+		return terminal.CheckMark, terminal.Cyan, "Dry run completed, no changes made."
+	}
+
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
 		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped."
 	}
 
 	if len(report.Items) == 0 {
 		return terminal.WarningSign, terminal.Yellow, "No package managers to fix."
-	}
-
-	if report.DryRun {
-		return terminal.CheckMark, terminal.Cyan, "Dry run completed, no changes made."
 	}
 
 	var failCount int
