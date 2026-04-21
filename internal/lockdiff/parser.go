@@ -1,5 +1,7 @@
 package lockdiff
 
+import "slices"
+
 type Parser interface {
 	Ecosystem() string
 	Parse(data []byte) (map[string]string, error)
@@ -22,6 +24,8 @@ func RegisteredFilenames() []string {
 	for name := range parsers {
 		names = append(names, name)
 	}
+
+	slices.Sort(names)
 
 	return names
 }

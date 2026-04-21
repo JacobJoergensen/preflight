@@ -122,13 +122,7 @@ func runApprovedFixers(ctx context.Context, adapters []adapter.Adapter, deps ada
 	items := make([]result.FixItem, 0, len(adapters))
 
 	for _, a := range adapters {
-		fixer, ok := a.(adapter.Fixer)
-
-		if !ok {
-			continue
-		}
-
-		item, fixErr := fixer.Fix(ctx, deps, fixSelectors, opts)
+		item, fixErr := a.(adapter.Fixer).Fix(ctx, deps, fixSelectors, opts)
 		now := time.Now()
 
 		if fixErr != nil {
@@ -245,9 +239,6 @@ func candidateSummary(packageManager manifest.PackageManager) string {
 	return "install from " + packageManager.Tool.ConfigFile
 }
 
-// A malformed or missing lock file skips that file rather than failing the
-// fix — the install itself already succeeded, a diff failure must not regress
-// that outcome.
 func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.FileDiff {
 	var diffs []lockdiff.FileDiff
 
