@@ -21,6 +21,7 @@ func (r JSONFixRenderer) Render(report result.FixReport) error {
 
 func quietFixPayload(report result.FixReport) any {
 	type quietItem struct {
+		Project     string `json:"project,omitempty"`
 		ScopeID     string `json:"scopeId"`
 		ManagerName string `json:"managerName"`
 		Error       string `json:"error,omitempty"`
@@ -39,6 +40,7 @@ func quietFixPayload(report result.FixReport) any {
 		}
 
 		items = append(items, quietItem{
+			Project:     item.Project,
 			ScopeID:     item.ScopeID,
 			ManagerName: item.ManagerName,
 			Error:       item.Error,

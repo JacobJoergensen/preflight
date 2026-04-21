@@ -7,11 +7,22 @@ import (
 )
 
 type DependencyReport struct {
-	StartedAt    time.Time
-	EndedAt      time.Time
-	AdapterIDs   []string
-	Displays     map[string]string
-	Dependencies map[string][]string
-	Outdated     map[string][]adapter.OutdatedPackage
-	Elapsed      map[string]int64
+	StartedAt time.Time
+	EndedAt   time.Time
+	Items     []DependencyItem
+	Projects  []DependencyProject
+}
+
+type DependencyProject struct {
+	RelativePath string
+	Name         string
+}
+
+type DependencyItem struct {
+	Project       string
+	AdapterID     string
+	Display       string
+	Dependencies  []string
+	Outdated      []adapter.OutdatedPackage
+	ElapsedMillis int64
 }

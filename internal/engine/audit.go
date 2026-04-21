@@ -3,21 +3,96 @@ package engine
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-func (r Runner) Audit(ctx context.Context, scopes []string, selectors []string, minSeverity string) (result.AuditReport, error) {
+func (r Runner) Audit(
+	ctx context.Context,
+	scopes []string,
+	selectors []string,
+	minSeverity string,
+	disableMonorepo bool,
+	projectGlobs []string,
+) (result.AuditReport, error) {
+	if !disableMonorepo {
+		projects, err := monorepo.DiscoverProjects(r.WorkDir)
+
+		if err != nil {
+			return result.AuditReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
+		}
+
+		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
+
+		if err != nil {
+			return result.AuditReport{}, fmt.Errorf("project filter failed: %w", err)
+		}
+
+		if len(projects) > 0 {
+			return r.auditMonorepo(ctx, projects, scopes, selectors, minSeverity)
+		}
+	}
+
+	return r.auditProject(ctx, r.WorkDir, "", scopes, selectors, minSeverity)
+}
+
+func (r Runner) auditMonorepo(
+	ctx context.Context,
+	projects []monorepo.Project,
+	scopes []string,
+	selectors []string,
+	minSeverity string,
+) (result.AuditReport, error) {
+	startedAt := time.Now()
+
+	var allItems []result.AuditItem
+
+	projectSummaries := make([]result.AuditProject, 0, len(projects))
+
+	for _, project := range projects {
+		projectSummaries = append(projectSummaries, result.AuditProject{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
+
+		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity)
+
+		if err != nil {
+			return result.AuditReport{}, err
+		}
+
+		allItems = append(allItems, projectReport.Items...)
+	}
+
+	return result.AuditReport{
+		StartedAt: startedAt,
+		EndedAt:   time.Now(),
+		Canceled:  ctx.Err() != nil,
+		Items:     allItems,
+		Projects:  projectSummaries,
+	}, nil
+}
+
+func (r Runner) auditProject(
+	ctx context.Context,
+	workDir string,
+	projectPath string,
+	scopes []string,
+	selectors []string,
+	minSeverity string,
+) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
 
 	if err != nil {
 		return result.AuditReport{}, err
 	}
 
-	deps := r.deps()
+	deps := r.depsForDir(workDir)
 
 	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
 		return result.AuditReport{}, err
@@ -34,6 +109,12 @@ func (r Runner) Audit(ctx context.Context, scopes []string, selectors []string, 
 
 	if minSeverity != "" {
 		report = filterAuditReportBySeverity(report, minSeverity)
+	}
+
+	if projectPath != "" {
+		for i := range report.Items {
+			report.Items[i].Project = projectPath
+		}
 	}
 
 	return report, nil
@@ -107,6 +188,7 @@ func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) 
 		hasIssues := len(filteredCounts) > 0
 
 		filtered = append(filtered, result.AuditItem{
+			Project:       item.Project,
 			ScopeID:       item.ScopeID,
 			ScopeDisplay:  item.ScopeDisplay,
 			Priority:      item.Priority,

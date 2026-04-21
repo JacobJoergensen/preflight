@@ -12,16 +12,23 @@ type CheckReport struct {
 	EndedAt   time.Time
 	Canceled  bool
 	Items     []CheckItem
-	Outdated  map[string][]adapter.OutdatedPackage
+	Projects  []CheckProject
+}
+
+type CheckProject struct {
+	RelativePath string
+	Name         string
 }
 
 type CheckItem struct {
+	Project       string
 	ScopeID       string
 	ScopeDisplay  string
 	Priority      int
 	Errors        []model.Message
 	Warnings      []model.Message
 	Successes     []model.Message
+	Outdated      []adapter.OutdatedPackage
 	StartedAt     time.Time
 	EndedAt       time.Time
 	ElapsedMillis int64

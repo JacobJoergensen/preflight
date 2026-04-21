@@ -17,6 +17,7 @@ const (
 	AnswerNo
 	AnswerAll
 	AnswerQuit
+	AnswerApplyProject
 )
 
 const maxPromptAttempts = 3
@@ -31,12 +32,18 @@ func (a Answer) String() string {
 		return "all"
 	case AnswerQuit:
 		return "quit"
+	case AnswerApplyProject:
+		return "project"
 	default:
 		return "unknown"
 	}
 }
 
-func Confirm(in io.Reader, out io.Writer, question, hint string) (Answer, error) {
+type ConfirmOptions struct {
+	ShowApplyProject bool
+}
+
+func Confirm(in io.Reader, out io.Writer, question, hint string, opts ConfirmOptions) (Answer, error) {
 	if in == nil || out == nil {
 		return 0, errors.New("terminal: Confirm requires non-nil reader and writer")
 	}
@@ -44,7 +51,7 @@ func Confirm(in io.Reader, out io.Writer, question, hint string) (Answer, error)
 	reader := bufio.NewReader(in)
 
 	for range maxPromptAttempts {
-		if err := writePrompt(out, question, hint); err != nil {
+		if err := writePrompt(out, question, hint, opts); err != nil {
 			return 0, err
 		}
 
@@ -58,13 +65,13 @@ func Confirm(in io.Reader, out io.Writer, question, hint string) (Answer, error)
 			return 0, fmt.Errorf("read prompt response: %w", err)
 		}
 
-		answer, ok := parseAnswer(line)
+		answer, ok := parseAnswer(line, opts)
 
 		if ok {
 			return answer, nil
 		}
 
-		if _, err := fmt.Fprintln(out, Dim+"  Please answer y, n, a, or q."+Reset); err != nil {
+		if _, err := fmt.Fprintln(out, Dim+"  "+promptInvalidMessage(opts)+Reset); err != nil {
 			return 0, err
 		}
 	}
@@ -86,20 +93,36 @@ func IsInteractiveTTY(f *os.File) bool {
 	return info.Mode()&gofs.ModeCharDevice != 0
 }
 
-func writePrompt(out io.Writer, question, hint string) error {
+func writePrompt(out io.Writer, question, hint string, opts ConfirmOptions) error {
 	line := "  " + Cyan + "?" + Reset + " " + Bold + question + Reset
 
 	if hint != "" {
 		line += " " + Dim + hint + Reset
 	}
 
-	line += " " + Dim + "[Y/n/a/q]" + Reset + " "
+	line += " " + Dim + promptChoicesLabel(opts) + Reset + " "
 
 	_, err := fmt.Fprint(out, line)
 	return err
 }
 
-func parseAnswer(input string) (Answer, bool) {
+func promptChoicesLabel(opts ConfirmOptions) string {
+	if opts.ShowApplyProject {
+		return "[Y/n/a/p/q]"
+	}
+
+	return "[Y/n/a/q]"
+}
+
+func promptInvalidMessage(opts ConfirmOptions) string {
+	if opts.ShowApplyProject {
+		return "Please answer y, n, a, p, or q."
+	}
+
+	return "Please answer y, n, a, or q."
+}
+
+func parseAnswer(input string, opts ConfirmOptions) (Answer, bool) {
 	trimmed := strings.ToLower(strings.TrimSpace(input))
 
 	switch trimmed {
@@ -111,6 +134,12 @@ func parseAnswer(input string) (Answer, bool) {
 		return AnswerAll, true
 	case "q", "quit", "abort":
 		return AnswerQuit, true
+	case "p", "project":
+		if opts.ShowApplyProject {
+			return AnswerApplyProject, true
+		}
+
+		return 0, false
 	default:
 		return 0, false
 	}

@@ -27,14 +27,56 @@ func (r TTYAuditRenderer) Render(report result.AuditReport) error {
 
 	ow.PrintNewLines(1)
 
-	for _, item := range report.Items {
-		renderAuditCardTTY(ow, item)
-	}
+	renderAuditItemsGroupedByProject(ow, report)
 
 	icon, color, text := auditStatusFromReport(report)
 	renderStatusFooter(ow, footerStatus{Icon: icon, Color: color, Text: text}, []footerMetadataLine{endedFooterLine(report.EndedAt)})
 
 	return nil
+}
+
+func renderAuditItemsGroupedByProject(ow *terminal.OutputWriter, report result.AuditReport) {
+	if len(report.Projects) == 0 {
+		for _, item := range report.Items {
+			renderAuditCardTTY(ow, item)
+		}
+
+		return
+	}
+
+	itemsByProject := make(map[string][]result.AuditItem, len(report.Projects))
+
+	for _, item := range report.Items {
+		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
+	}
+
+	for i, project := range report.Projects {
+		items := itemsByProject[project.RelativePath]
+
+		if len(items) == 0 {
+			continue
+		}
+
+		if i > 0 {
+			ow.PrintNewLines(1)
+		}
+
+		renderAuditProjectHeader(ow, project)
+
+		for _, item := range items {
+			renderAuditCardTTY(ow, item)
+		}
+	}
+}
+
+func renderAuditProjectHeader(ow *terminal.OutputWriter, project result.AuditProject) {
+	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
+
+	if project.Name != "" {
+		line += "  " + terminal.Dim + project.Name + terminal.Reset
+	}
+
+	ow.Println(line)
 }
 
 func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
@@ -112,6 +154,10 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 		return terminal.WarningSign, terminal.Yellow, "No audits ran (no matching scopes or tools)"
 	}
 
+	if len(report.Projects) > 0 {
+		return monorepoAuditStatusFromReport(report)
+	}
+
 	hasErr := false
 	hasIssues := false
 
@@ -133,4 +179,31 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 	default:
 		return terminal.CheckMark, terminal.Green, "No blocking audit issues"
 	}
+}
+
+func monorepoAuditStatusFromReport(report result.AuditReport) (icon, color, text string) {
+	projectsWithErr := make(map[string]struct{})
+	projectsWithIssues := make(map[string]struct{})
+
+	for _, item := range report.Items {
+		if item.ErrText != "" {
+			projectsWithErr[item.Project] = struct{}{}
+		}
+
+		if !item.OK {
+			projectsWithIssues[item.Project] = struct{}{}
+		}
+	}
+
+	totalProjects := len(report.Projects)
+
+	if len(projectsWithErr) > 0 {
+		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s failed to audit", len(projectsWithErr), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	if len(projectsWithIssues) > 0 {
+		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported vulnerabilities", len(projectsWithIssues), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	return terminal.CheckMark, terminal.Green, fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))
 }

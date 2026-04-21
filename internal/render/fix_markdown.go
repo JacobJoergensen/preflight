@@ -26,9 +26,9 @@ func (r MarkdownFixRenderer) Render(report result.FixReport) error {
 	fmt.Fprintf(&doc, "**Status:** %s %s\n\n", symbol, text)
 
 	if report.DryRun {
-		writeMarkdownFixPlan(&doc, report.Plan)
+		writeMarkdownFixPlanGrouped(&doc, report)
 	} else {
-		writeMarkdownFixResults(&doc, report.Items)
+		writeMarkdownFixResultsGrouped(&doc, report)
 	}
 
 	if len(report.Skipped) > 0 {
@@ -57,9 +57,17 @@ func markdownFixStatus(report result.FixReport) (symbol, text string) {
 		return "⚠", "No package managers to fix"
 	case report.DryRun:
 		return "✓", "Dry run completed, no changes made"
-	case len(report.Items) == 0 && len(report.Skipped) > 0:
+	}
+
+	if len(report.Projects) > 0 {
+		return markdownMonorepoFixStatus(report)
+	}
+
+	if len(report.Items) == 0 && len(report.Skipped) > 0 {
 		return "⚠", "Nothing applied — all ecosystems skipped"
-	case len(report.Items) == 0:
+	}
+
+	if len(report.Items) == 0 {
 		return "⚠", "No package managers to fix"
 	}
 
@@ -78,12 +86,64 @@ func markdownFixStatus(report result.FixReport) (symbol, text string) {
 	return "✓", "All dependencies fixed successfully"
 }
 
-func writeMarkdownFixPlan(doc *strings.Builder, plan []result.PlannedFix) {
-	if len(plan) == 0 {
+func markdownMonorepoFixStatus(report result.FixReport) (symbol, text string) {
+	if len(report.Items) == 0 && len(report.Skipped) > 0 {
+		return "⚠", "Nothing applied — all ecosystems skipped"
+	}
+
+	if len(report.Items) == 0 {
+		return "⚠", "No package managers to fix"
+	}
+
+	projectsWithFailures := make(map[string]struct{})
+
+	for _, item := range report.Items {
+		if !item.Success {
+			projectsWithFailures[item.Project] = struct{}{}
+		}
+	}
+
+	totalProjects := len(report.Projects)
+
+	if len(projectsWithFailures) > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s reported failures", len(projectsWithFailures), totalProjects, pluralSuffix(totalProjects))
+	}
+
+	return "✓", fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))
+}
+
+func writeMarkdownFixPlanGrouped(doc *strings.Builder, report result.FixReport) {
+	if len(report.Plan) == 0 {
+		return
+	}
+
+	if len(report.Projects) == 0 {
+		doc.WriteString("### Plan\n\n")
+		writeMarkdownFixPlanTable(doc, report.Plan)
 		return
 	}
 
 	doc.WriteString("### Plan\n\n")
+
+	planByProject := make(map[string][]result.PlannedFix, len(report.Projects))
+
+	for _, planned := range report.Plan {
+		planByProject[planned.Project] = append(planByProject[planned.Project], planned)
+	}
+
+	for _, project := range report.Projects {
+		entries := planByProject[project.RelativePath]
+
+		if len(entries) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(doc, "#### %s\n\n", escapeMarkdownCell(project.RelativePath))
+		writeMarkdownFixPlanTable(doc, entries)
+	}
+}
+
+func writeMarkdownFixPlanTable(doc *strings.Builder, plan []result.PlannedFix) {
 	doc.WriteString("| Ecosystem | Command | Summary |\n")
 	doc.WriteString("|-----------|---------|---------|\n")
 
@@ -110,12 +170,38 @@ func writeMarkdownFixPlan(doc *strings.Builder, plan []result.PlannedFix) {
 	doc.WriteString("\n")
 }
 
-func writeMarkdownFixResults(doc *strings.Builder, items []result.FixItem) {
-	if len(items) == 0 {
+func writeMarkdownFixResultsGrouped(doc *strings.Builder, report result.FixReport) {
+	if len(report.Items) == 0 {
+		return
+	}
+
+	if len(report.Projects) == 0 {
+		doc.WriteString("### Results\n\n")
+		writeMarkdownFixResultsTable(doc, report.Items)
 		return
 	}
 
 	doc.WriteString("### Results\n\n")
+
+	itemsByProject := make(map[string][]result.FixItem, len(report.Projects))
+
+	for _, item := range report.Items {
+		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
+	}
+
+	for _, project := range report.Projects {
+		items := itemsByProject[project.RelativePath]
+
+		if len(items) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(doc, "#### %s\n\n", escapeMarkdownCell(project.RelativePath))
+		writeMarkdownFixResultsTable(doc, items)
+	}
+}
+
+func writeMarkdownFixResultsTable(doc *strings.Builder, items []result.FixItem) {
 	doc.WriteString("| Ecosystem | Status | Command | Elapsed |\n")
 	doc.WriteString("|-----------|--------|---------|---------|\n")
 
@@ -159,6 +245,12 @@ func writeMarkdownFixSkipped(doc *strings.Builder, skipped []result.SkippedFix) 
 
 		if label == "" {
 			label = entry.ScopeID
+		}
+
+		if entry.Project != "" && label != "" {
+			label = entry.Project + " · " + label
+		} else if entry.Project != "" {
+			label = entry.Project
 		}
 
 		fmt.Fprintf(doc, "- **%s** — %s\n",
@@ -213,7 +305,13 @@ func writeMarkdownFixFailureDetails(doc *strings.Builder, items []result.FixItem
 			continue
 		}
 
-		fmt.Fprintf(doc, "<details><summary>%s output</summary>\n\n", escapeMarkdownCell(item.ManagerName))
+		summary := item.ManagerName
+
+		if item.Project != "" {
+			summary = item.Project + " · " + summary
+		}
+
+		fmt.Fprintf(doc, "<details><summary>%s output</summary>\n\n", escapeMarkdownCell(summary))
 		doc.WriteString("```\n")
 		doc.WriteString(details)
 		doc.WriteString("\n```\n\n</details>\n\n")

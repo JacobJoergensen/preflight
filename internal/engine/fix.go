@@ -12,9 +12,11 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
 type FixCandidate struct {
+	Project     string
 	ScopeID     string
 	DisplayName string
 	Command     string
@@ -59,6 +61,8 @@ func (r Runner) Fix(
 	diff bool,
 	approver FixApprover,
 	progress FixProgress,
+	disableMonorepo bool,
+	projectGlobs []string,
 ) (result.FixReport, error) {
 	if approver == nil {
 		approver = AutoFixApprover{}
@@ -68,13 +72,226 @@ func (r Runner) Fix(
 		progress = NoopFixProgress{}
 	}
 
+	if !disableMonorepo {
+		projects, err := monorepo.DiscoverProjects(r.WorkDir)
+
+		if err != nil {
+			return result.FixReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
+		}
+
+		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
+
+		if err != nil {
+			return result.FixReport{}, fmt.Errorf("project filter failed: %w", err)
+		}
+
+		if len(projects) > 0 {
+			return r.fixMonorepo(ctx, projects, scopes, selectors, opts, diff, approver, progress)
+		}
+	}
+
+	return r.fixSingleProject(ctx, r.WorkDir, "", scopes, selectors, opts, diff, approver, progress)
+}
+
+type projectFixPrep struct {
+	project           monorepo.Project
+	deps              adapter.Dependencies
+	adapters          []adapter.Adapter
+	selection         Selection
+	candidates        []FixCandidate
+	prepError         error
+	skippedOnPrepFail result.SkippedFix
+}
+
+func (r Runner) fixMonorepo(
+	ctx context.Context,
+	projects []monorepo.Project,
+	scopes []string,
+	selectors []string,
+	opts adapter.FixOptions,
+	diff bool,
+	approver FixApprover,
+	progress FixProgress,
+) (result.FixReport, error) {
+	startedAt := time.Now()
+
+	projectSummaries := make([]result.FixProject, 0, len(projects))
+
+	for _, project := range projects {
+		projectSummaries = append(projectSummaries, result.FixProject{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
+	}
+
+	preps, fatalErr := r.prepareMonorepoProjects(projects, scopes, selectors)
+
+	if fatalErr != nil {
+		return result.FixReport{}, fatalErr
+	}
+
+	var allCandidates []FixCandidate
+
+	for _, prep := range preps {
+		allCandidates = append(allCandidates, prep.candidates...)
+	}
+
+	plannedFixes := plannedFixesFromCandidates(allCandidates)
+	plan, aborted, err := resolveFixPlan(allCandidates, approver)
+
+	if err != nil {
+		return result.FixReport{}, fmt.Errorf("approval failed: %w", err)
+	}
+
+	skipped := collectPrepSkips(preps)
+	skipped = append(skipped, plan.skipped...)
+
+	if aborted {
+		return result.FixReport{
+			StartedAt:    startedAt,
+			EndedAt:      time.Now(),
+			Aborted:      true,
+			DryRun:       opts.DryRun,
+			SkipBackup:   opts.SkipBackup,
+			Force:        opts.Force,
+			FixSelectors: firstNonEmptyFixSelectors(preps),
+			Plan:         plannedFixes,
+			Skipped:      skipped,
+			Diff:         diff,
+			Projects:     projectSummaries,
+		}, nil
+	}
+
+	approvedSet := approvedIDSet(plan.approvedIDs)
+
+	var allItems []result.FixItem
+	var allDiffs []lockdiff.FileDiff
+
+	backupDirs := make(map[string]string)
+
+	progress.Plan(filterApprovedCandidates(allCandidates, approvedSet))
+
+	for _, prep := range preps {
+		if prep.prepError != nil {
+			continue
+		}
+
+		projectApprovedAdapters := filterAdaptersByProjectApprovals(prep.adapters, prep.candidates, approvedSet)
+
+		if len(projectApprovedAdapters) == 0 {
+			continue
+		}
+
+		backupDir, backupErr := tryBackupLockFiles(prep.deps, projectApprovedAdapters, prep.selection.FixSelectors, opts)
+
+		if backupErr != nil {
+			allItems = append(allItems, backupFailureItem(prep.project.RelativePath, backupErr))
+			continue
+		}
+
+		if backupDir != "" {
+			backupDirs[prep.project.RelativePath] = backupDir
+		}
+
+		items := runApprovedFixers(ctx, projectApprovedAdapters, prep.candidates, prep.deps, prep.selection.FixSelectors, opts, progress)
+
+		for i := range items {
+			items[i].Project = prep.project.RelativePath
+		}
+
+		allItems = append(allItems, items...)
+
+		if diff && !opts.DryRun && backupDir != "" {
+			projectDiffs := computeLockDiffs(prep.deps, backupDir)
+
+			for i := range projectDiffs {
+				projectDiffs[i].File = filepath.ToSlash(filepath.Join(prep.project.RelativePath, projectDiffs[i].File))
+			}
+
+			allDiffs = append(allDiffs, projectDiffs...)
+		}
+	}
+
+	return result.FixReport{
+		StartedAt:    startedAt,
+		EndedAt:      time.Now(),
+		Canceled:     ctx.Err() != nil,
+		DryRun:       opts.DryRun,
+		SkipBackup:   opts.SkipBackup,
+		BackupDirs:   backupDirs,
+		Force:        opts.Force,
+		FixSelectors: firstNonEmptyFixSelectors(preps),
+		Plan:         plannedFixes,
+		Items:        allItems,
+		Skipped:      skipped,
+		Diff:         diff,
+		LockDiffs:    allDiffs,
+		Projects:     projectSummaries,
+	}, nil
+}
+
+func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, selectors []string) ([]projectFixPrep, error) {
+	preps := make([]projectFixPrep, 0, len(projects))
+
+	for _, project := range projects {
+		prep := projectFixPrep{project: project}
+
+		selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
+
+		if err != nil {
+			return nil, err
+		}
+
+		prep.selection = selection
+
+		deps := r.depsForDir(project.AbsolutePath)
+		prep.deps = deps
+
+		if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+			prep.prepError = err
+			prep.skippedOnPrepFail = result.SkippedFix{
+				Project: project.RelativePath,
+				Reason:  err.Error(),
+			}
+			preps = append(preps, prep)
+			continue
+		}
+
+		adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+		prep.adapters = adapters
+
+		candidates := buildFixCandidates(adapters, deps)
+
+		for i := range candidates {
+			candidates[i].Project = project.RelativePath
+		}
+
+		prep.candidates = candidates
+
+		preps = append(preps, prep)
+	}
+
+	return preps, nil
+}
+
+func (r Runner) fixSingleProject(
+	ctx context.Context,
+	workDir string,
+	projectPath string,
+	scopes []string,
+	selectors []string,
+	opts adapter.FixOptions,
+	diff bool,
+	approver FixApprover,
+	progress FixProgress,
+) (result.FixReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
 
 	if err != nil {
 		return result.FixReport{}, err
 	}
 
-	deps := r.deps()
+	deps := r.depsForDir(workDir)
 
 	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
 		return result.FixReport{}, err
@@ -84,6 +301,11 @@ func (r Runner) Fix(
 	startedAt := time.Now()
 
 	candidates := buildFixCandidates(adapters, deps)
+
+	for i := range candidates {
+		candidates[i].Project = projectPath
+	}
+
 	plannedFixes := plannedFixesFromCandidates(candidates)
 	plan, aborted, err := resolveFixPlan(candidates, approver)
 
@@ -120,6 +342,8 @@ func (r Runner) Fix(
 		backupDir = dir
 	}
 
+	progress.Plan(filterApprovedCandidates(candidates, approvedIDSet(plan.approvedIDs)))
+
 	items := runApprovedFixers(ctx, approvedAdapters, candidates, deps, selection.FixSelectors, opts, progress)
 
 	var diffs []lockdiff.FileDiff
@@ -145,6 +369,96 @@ func (r Runner) Fix(
 	}, nil
 }
 
+func collectPrepSkips(preps []projectFixPrep) []result.SkippedFix {
+	var skipped []result.SkippedFix
+
+	for _, prep := range preps {
+		if prep.prepError != nil {
+			skipped = append(skipped, prep.skippedOnPrepFail)
+		}
+	}
+
+	return skipped
+}
+
+func firstNonEmptyFixSelectors(preps []projectFixPrep) []string {
+	for _, prep := range preps {
+		if len(prep.selection.FixSelectors) > 0 {
+			return prep.selection.FixSelectors
+		}
+	}
+
+	return nil
+}
+
+func tryBackupLockFiles(deps adapter.Dependencies, adapters []adapter.Adapter, selectors []string, opts adapter.FixOptions) (string, error) {
+	if opts.DryRun || opts.SkipBackup || len(adapters) == 0 {
+		return "", nil
+	}
+
+	return backupSelectedLockFiles(deps, adapter.Names(adapters), selectors)
+}
+
+func backupFailureItem(projectPath string, err error) result.FixItem {
+	now := time.Now()
+
+	return result.FixItem{
+		Project:     projectPath,
+		ScopeID:     "",
+		ManagerName: "Backup",
+		Success:     false,
+		Error:       fmt.Sprintf("lock file backup failed: %v", err),
+		StartedAt:   now,
+		EndedAt:     now,
+	}
+}
+
+func approvedIDSet(approvedIDs []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(approvedIDs))
+
+	for _, id := range approvedIDs {
+		set[id] = struct{}{}
+	}
+
+	return set
+}
+
+func filterApprovedCandidates(candidates []FixCandidate, approved map[string]struct{}) []FixCandidate {
+	filtered := make([]FixCandidate, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		if _, ok := approved[candidateApprovalKey(candidate)]; ok {
+			filtered = append(filtered, candidate)
+		}
+	}
+
+	return filtered
+}
+
+func filterAdaptersByProjectApprovals(adapters []adapter.Adapter, candidates []FixCandidate, approved map[string]struct{}) []adapter.Adapter {
+	projectScopeApproved := make(map[string]struct{}, len(candidates))
+
+	for _, candidate := range candidates {
+		if _, ok := approved[candidateApprovalKey(candidate)]; ok {
+			projectScopeApproved[candidate.ScopeID] = struct{}{}
+		}
+	}
+
+	filtered := make([]adapter.Adapter, 0, len(projectScopeApproved))
+
+	for _, a := range adapters {
+		if _, ok := projectScopeApproved[a.Name()]; ok {
+			filtered = append(filtered, a)
+		}
+	}
+
+	return filtered
+}
+
+func candidateApprovalKey(candidate FixCandidate) string {
+	return candidate.Project + "\x00" + candidate.ScopeID
+}
+
 func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
 	if len(candidates) == 0 {
 		return nil
@@ -154,6 +468,7 @@ func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
 
 	for _, candidate := range candidates {
 		planned = append(planned, result.PlannedFix{
+			Project:     candidate.Project,
 			ScopeID:     candidate.ScopeID,
 			DisplayName: candidate.DisplayName,
 			Command:     candidate.Command,
@@ -175,9 +490,6 @@ func runApprovedFixers(
 ) []result.FixItem {
 	items := make([]result.FixItem, 0, len(adapters))
 	candidateByID := candidatesByScopeID(candidates)
-	approvedCandidates := approvedCandidatesForAdapters(adapters, candidateByID)
-
-	progress.Plan(approvedCandidates)
 
 	for _, a := range adapters {
 		candidate := candidateByID[a.Name()]
@@ -202,6 +514,8 @@ func runApprovedFixers(
 			item = result.FromAdapterFix(adapterItem, startedAt, endedAt)
 		}
 
+		item.Project = candidate.Project
+
 		progress.Finish(item)
 		items = append(items, item)
 	}
@@ -217,18 +531,6 @@ func candidatesByScopeID(candidates []FixCandidate) map[string]FixCandidate {
 	}
 
 	return indexed
-}
-
-func approvedCandidatesForAdapters(adapters []adapter.Adapter, candidateByID map[string]FixCandidate) []FixCandidate {
-	approved := make([]FixCandidate, 0, len(adapters))
-
-	for _, a := range adapters {
-		if candidate, ok := candidateByID[a.Name()]; ok {
-			approved = append(approved, candidate)
-		}
-	}
-
-	return approved
 }
 
 type fixPlan struct {
@@ -248,7 +550,7 @@ func resolveFixPlan(candidates []FixCandidate, approver FixApprover) (fixPlan, b
 
 		switch decision {
 		case FixApply:
-			plan.approvedIDs = append(plan.approvedIDs, candidate.ScopeID)
+			plan.approvedIDs = append(plan.approvedIDs, candidateApprovalKey(candidate))
 		case FixSkip:
 			plan.skipped = append(plan.skipped, skippedFrom(candidate, "declined by user"))
 		case FixAbort:
@@ -262,6 +564,7 @@ func resolveFixPlan(candidates []FixCandidate, approver FixApprover) (fixPlan, b
 
 func skippedFrom(candidate FixCandidate, reason string) result.SkippedFix {
 	return result.SkippedFix{
+		Project:     candidate.Project,
 		ScopeID:     candidate.ScopeID,
 		DisplayName: candidate.DisplayName,
 		Command:     candidate.Command,
@@ -274,16 +577,20 @@ func filterAdaptersByIDs(adapters []adapter.Adapter, approvedIDs []string) []ada
 		return nil
 	}
 
-	approved := make(map[string]struct{}, len(approvedIDs))
+	approvedScopes := make(map[string]struct{}, len(approvedIDs))
 
 	for _, id := range approvedIDs {
-		approved[id] = struct{}{}
+		if _, after, ok := strings.Cut(id, "\x00"); ok {
+			approvedScopes[after] = struct{}{}
+		} else {
+			approvedScopes[id] = struct{}{}
+		}
 	}
 
-	filtered := make([]adapter.Adapter, 0, len(approvedIDs))
+	filtered := make([]adapter.Adapter, 0, len(approvedScopes))
 
 	for _, a := range adapters {
-		if _, ok := approved[a.Name()]; ok {
+		if _, ok := approvedScopes[a.Name()]; ok {
 			filtered = append(filtered, a)
 		}
 	}

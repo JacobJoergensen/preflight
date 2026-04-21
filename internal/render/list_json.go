@@ -2,13 +2,39 @@ package render
 
 import (
 	"io"
+	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
+// ListJSONSchemaVersion is bumped when preflight list --json output shape changes incompatibly.
+const ListJSONSchemaVersion = 1
+
 type JSONListRenderer struct {
 	Out io.Writer
+}
+
+type listReportJSON struct {
+	SchemaVersion int               `json:"schemaVersion"`
+	StartedAt     time.Time         `json:"startedAt"`
+	EndedAt       time.Time         `json:"endedAt"`
+	Items         []listItemJSON    `json:"items"`
+	Projects      []listProjectJSON `json:"projects,omitempty"`
+}
+
+type listProjectJSON struct {
+	RelativePath string `json:"relativePath"`
+	Name         string `json:"name,omitempty"`
+}
+
+type listItemJSON struct {
+	Project       string                `json:"project,omitempty"`
+	AdapterID     string                `json:"adapterId"`
+	Display       string                `json:"display"`
+	Dependencies  []string              `json:"dependencies"`
+	Outdated      []outdatedPackageJSON `json:"outdated,omitempty"`
+	ElapsedMillis int64                 `json:"elapsedMillis,omitempty"`
 }
 
 func (r JSONListRenderer) Render(report result.DependencyReport) error {
@@ -16,40 +42,69 @@ func (r JSONListRenderer) Render(report result.DependencyReport) error {
 		return encodeJSON(r.Out, quietListPayload(report), false)
 	}
 
-	return encodeJSON(r.Out, report, true)
+	items := make([]listItemJSON, 0, len(report.Items))
+
+	for _, item := range report.Items {
+		items = append(items, listItemJSON{
+			Project:       item.Project,
+			AdapterID:     item.AdapterID,
+			Display:       item.Display,
+			Dependencies:  item.Dependencies,
+			Outdated:      outdatedPackagesToJSON(item.Outdated),
+			ElapsedMillis: item.ElapsedMillis,
+		})
+	}
+
+	payload := listReportJSON{
+		SchemaVersion: ListJSONSchemaVersion,
+		StartedAt:     report.StartedAt,
+		EndedAt:       report.EndedAt,
+		Items:         items,
+		Projects:      listProjectsToJSON(report.Projects),
+	}
+
+	return encodeJSON(r.Out, payload, true)
 }
 
-func quietListPayload(report result.DependencyReport) any {
-	type outdatedPackage struct {
-		Name    string `json:"name"`
-		Current string `json:"current"`
-		Latest  string `json:"latest"`
+func listProjectsToJSON(projects []result.DependencyProject) []listProjectJSON {
+	if len(projects) == 0 {
+		return nil
 	}
 
-	type quietReport struct {
-		Dependencies map[string][]string          `json:"dependencies"`
-		Outdated     map[string][]outdatedPackage `json:"outdated,omitempty"`
-	}
+	jsonProjects := make([]listProjectJSON, len(projects))
 
-	qr := quietReport{Dependencies: report.Dependencies}
-
-	if len(report.Outdated) > 0 {
-		qr.Outdated = make(map[string][]outdatedPackage)
-
-		for id, pkgs := range report.Outdated {
-			outdatedPkgs := make([]outdatedPackage, len(pkgs))
-
-			for i, pkg := range pkgs {
-				outdatedPkgs[i] = outdatedPackage{
-					Name:    pkg.Name,
-					Current: pkg.Current,
-					Latest:  pkg.Latest,
-				}
-			}
-
-			qr.Outdated[id] = outdatedPkgs
+	for i, project := range projects {
+		jsonProjects[i] = listProjectJSON{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
 		}
 	}
 
-	return qr
+	return jsonProjects
+}
+
+func quietListPayload(report result.DependencyReport) any {
+	type quietItem struct {
+		Project      string                `json:"project,omitempty"`
+		AdapterID    string                `json:"adapterId"`
+		Dependencies []string              `json:"dependencies"`
+		Outdated     []outdatedPackageJSON `json:"outdated,omitempty"`
+	}
+
+	type quietReport struct {
+		Items []quietItem `json:"items"`
+	}
+
+	items := make([]quietItem, 0, len(report.Items))
+
+	for _, item := range report.Items {
+		items = append(items, quietItem{
+			Project:      item.Project,
+			AdapterID:    item.AdapterID,
+			Dependencies: item.Dependencies,
+			Outdated:     outdatedPackagesToJSON(item.Outdated),
+		})
+	}
+
+	return quietReport{Items: items}
 }
