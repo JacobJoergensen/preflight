@@ -75,14 +75,14 @@ func TestDiffClassifiesChanges(t *testing.T) {
 			to:      "18.1.0",
 		},
 		{
-			name:    "non-semver version change falls back to other level",
-			before:  map[string]string{"custom": "abc"},
-			after:   map[string]string{"custom": "xyz"},
-			wantKey: "custom",
+			name:    "prerelease-only change falls back to other level",
+			before:  map[string]string{"pkg": "1.0.0-alpha"},
+			after:   map[string]string{"pkg": "1.0.0-beta"},
+			wantKey: "pkg",
 			kind:    ChangeUpgraded,
 			level:   LevelOther,
-			from:    "abc",
-			to:      "xyz",
+			from:    "1.0.0-alpha",
+			to:      "1.0.0-beta",
 		},
 	}
 
