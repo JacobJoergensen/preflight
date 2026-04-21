@@ -5,19 +5,31 @@ import (
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 )
 
 type FixReport struct {
-	StartedAt     time.Time
-	EndedAt       time.Time
-	Canceled      bool
-	DryRun        bool
-	SkipBackup    bool
-	BackupDir     string
-	Force         bool
-	FixSelectors  []string
-	Items         []FixItem
-	InternalError string
+	StartedAt    time.Time
+	EndedAt      time.Time
+	Canceled     bool
+	Aborted      bool
+	DryRun       bool
+	SkipBackup   bool
+	BackupDir    string
+	Force        bool
+	FixSelectors []string
+	Items        []FixItem
+	Skipped      []SkippedFix
+	Diff         bool
+	LockDiffs    []lockdiff.FileDiff
+}
+
+// SkippedFix records an adapter the user declined during interactive approval.
+type SkippedFix struct {
+	ScopeID     string
+	DisplayName string
+	Command     string
+	Reason      string
 }
 
 type FixItem struct {

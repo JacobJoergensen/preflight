@@ -40,14 +40,6 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 		ow.Println(terminal.Bold + "\nFixing dependencies..." + terminal.Reset)
 	}
 
-	if report.InternalError != "" {
-		ow.PrintNewLines(1)
-		ow.Println(terminal.Red + "  " + terminal.CrossMark + " " + report.InternalError + terminal.Reset)
-		renderFixFooter(ow, report)
-
-		return nil
-	}
-
 	ow.PrintNewLines(1)
 
 	renderedCount := 0
@@ -65,9 +57,39 @@ func (r TTYFixRenderer) Render(report result.FixReport) error {
 		ow.Println(terminal.Dim + "  " + terminal.CheckMark + " All dependencies already up to date." + terminal.Reset)
 	}
 
+	renderFixSkipped(ow, report.Skipped)
+	renderFixDiffs(ow, report)
 	renderFixFooter(ow, report)
 
 	return nil
+}
+
+func renderFixSkipped(ow *terminal.OutputWriter, skipped []result.SkippedFix) {
+	if len(skipped) == 0 {
+		return
+	}
+
+	ow.PrintNewLines(1)
+	ow.Println(terminal.Bold + "Skipped" + terminal.Reset)
+
+	for _, entry := range skipped {
+		label := entry.DisplayName
+
+		if label == "" {
+			label = entry.ScopeID
+		}
+
+		detail := entry.Command
+
+		if detail == "" {
+			detail = entry.Reason
+		}
+
+		ow.Printf("%s  · %s%s  %s%s%s\n",
+			terminal.Yellow, label, terminal.Reset,
+			terminal.Dim, detail, terminal.Reset,
+		)
+	}
 }
 
 func renderFixItemCardTTY(ow *terminal.OutputWriter, item result.FixItem, dryRun bool) {
@@ -222,8 +244,12 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 		return terminal.WarningSign, terminal.Yellow, "Fix canceled."
 	}
 
-	if report.InternalError != "" {
-		return terminal.CrossMark, terminal.Red, "Fix failed with internal error."
+	if report.Aborted {
+		return terminal.WarningSign, terminal.Yellow, "Fix aborted — no changes applied."
+	}
+
+	if len(report.Items) == 0 && len(report.Skipped) > 0 {
+		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped."
 	}
 
 	if len(report.Items) == 0 {
@@ -258,11 +284,6 @@ func fixFailPhrase(count int) string {
 }
 
 func renderFixQuiet(ow *terminal.OutputWriter, report result.FixReport) error {
-	if report.InternalError != "" {
-		ow.Println(report.InternalError)
-		return nil
-	}
-
 	for _, item := range report.Items {
 		if item.Success {
 			continue

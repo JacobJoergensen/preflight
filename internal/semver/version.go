@@ -31,6 +31,14 @@ func ValidateVersion(installedVersion, requiredVersion string) (bool, string) {
 	return true, ""
 }
 
+func Compare(v1, v2 string) int {
+	return compareVersions(v1, v2)
+}
+
+func ParseVersion(version string) *VersionParts {
+	return parseDetailedSemver(version)
+}
+
 func ParseVersionPin(pin string) string {
 	pin = strings.TrimSpace(pin)
 

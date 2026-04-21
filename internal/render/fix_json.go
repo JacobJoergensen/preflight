@@ -27,9 +27,8 @@ func quietFixPayload(report result.FixReport) any {
 	}
 
 	type quietReport struct {
-		Canceled      bool        `json:"canceled"`
-		InternalError string      `json:"internalError,omitempty"`
-		Items         []quietItem `json:"items"`
+		Canceled bool        `json:"canceled"`
+		Items    []quietItem `json:"items"`
 	}
 
 	items := make([]quietItem, 0, len(report.Items))
@@ -47,8 +46,7 @@ func quietFixPayload(report result.FixReport) any {
 	}
 
 	return quietReport{
-		Canceled:      report.Canceled,
-		InternalError: report.InternalError,
-		Items:         items,
+		Canceled: report.Canceled,
+		Items:    items,
 	}
 }

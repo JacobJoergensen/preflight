@@ -22,6 +22,8 @@ type fixOptions struct {
 	scopes     []string
 	skipBackup bool
 	dryRun     bool
+	noDiff     bool
+	assumeYes  bool
 	json       bool
 }
 
@@ -30,8 +32,9 @@ var fixOpts fixOptions
 var fixCmd = &cobra.Command{
 	Use:   "fix",
 	Short: "Fix missing dependencies across multiple package managers",
-	Long: `Fix command installs and repairs missing dependencies for your project.
+	Long: `Fix command installs and reconciles dependencies for your project.
 Supports Composer, NPM, PNPM, Yarn, Bun, and Go modules.
+Prompts per ecosystem by default; use --yes to apply without asking.
 Example: preflight fix --pm=npm,composer`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithTimeout(cmd.Context(), fixOpts.timeout)
@@ -70,11 +73,13 @@ Example: preflight fix --pm=npm,composer`,
 			return err
 		}
 
+		approver := buildFixApprover(fixOpts)
+
 		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{
 			Force:      fixOpts.force,
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
-		})
+		}, !fixOpts.noDiff, approver)
 
 		if err != nil {
 			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -92,6 +97,18 @@ Example: preflight fix --pm=npm,composer`,
 	},
 }
 
+func buildFixApprover(opts fixOptions) engine.FixApprover {
+	if opts.assumeYes || opts.dryRun || opts.json || terminal.Quiet {
+		return engine.AutoFixApprover{}
+	}
+
+	if !terminal.IsInteractiveTTY(os.Stdin) || !terminal.IsInteractiveTTY(os.Stdout) {
+		return engine.AutoFixApprover{}
+	}
+
+	return render.NewTTYFixApprover(os.Stdin, os.Stdout)
+}
+
 func renderFix(report result.FixReport, jsonOutput bool) error {
 	if jsonOutput {
 		return render.JSONFixRenderer{Out: os.Stdout}.Render(report)
@@ -101,7 +118,7 @@ func renderFix(report result.FixReport, jsonOutput bool) error {
 }
 
 func exitCodeFromFixReport(report result.FixReport) int {
-	if report.Canceled || report.InternalError != "" {
+	if report.Canceled || report.Aborted {
 		return 1
 	}
 
@@ -121,6 +138,8 @@ func init() {
 	fixCmd.Flags().StringSliceVar(&fixOpts.scopes, "scope", []string{}, "Scopes to fix (comma-separated: js,composer,go,python,ruby)")
 	fixCmd.Flags().BoolVar(&fixOpts.skipBackup, "skip-backup", false, "Skip creating backup of lock files")
 	fixCmd.Flags().BoolVar(&fixOpts.dryRun, "dry-run", false, "Show what would be done without making changes")
+	fixCmd.Flags().BoolVar(&fixOpts.noDiff, "no-diff", false, "Hide per-package version changes from lock files")
+	fixCmd.Flags().BoolVarP(&fixOpts.assumeYes, "yes", "y", false, "Apply every ecosystem without prompting")
 	fixCmd.Flags().BoolVar(&fixOpts.json, "json", false, "Output results as JSON")
 
 	rootCmd.AddCommand(fixCmd)
