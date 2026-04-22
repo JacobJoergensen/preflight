@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Added a live progress spinner to `check` and `audit`
+- Trimmed PHP toolchain output in `check` to match other ecosystems, only the version line remains
 
 ## Version 1.2.1 (2026-04-22)
 - Rewrote the `version` command with a cleaner layout, commit and build date, and a release URL on available updates

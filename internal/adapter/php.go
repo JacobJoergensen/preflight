@@ -81,22 +81,6 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 		errs, warns, succs = validatePhpVersion(phpVersion, buildDate, vcVersion, composerConfig.PHPVersion, errs, warns, succs)
 	}
 
-	if binary, memoryLimit, maxExecution, iniErr := getPhpCLIIni(ctx, deps.Runner); iniErr != nil {
-		warns = append(warns, Message{Text: fmt.Sprintf("Could not read PHP CLI binary/ini: %v", iniErr)})
-	} else {
-		if binary != "" {
-			succs = append(succs, Message{Text: fmt.Sprintf("• PHP CLI binary: %s%s", terminal.Reset, binary)})
-		} else {
-			succs = append(succs, Message{Text: "• PHP CLI binary: (empty PHP_BINARY — check your install)"})
-		}
-
-		succs = append(succs, Message{Text: fmt.Sprintf(
-			"• PHP CLI ini: memory_limit=%s, max_execution_time=%s",
-			memoryLimit,
-			maxExecution,
-		)})
-	}
-
 	installedExtensions, err := getPhpExtensions(ctx, deps.Runner)
 
 	if err != nil {
@@ -251,24 +235,6 @@ func appendExtensionFeedback(extInfo extensionInfo, errs, warns, succs []Message
 	}
 
 	return errs, warns, succs
-}
-
-func getPhpCLIIni(ctx context.Context, runner exec.Runner) (binary, memoryLimit, maxExec string, err error) {
-	const script = `echo PHP_BINARY, "\n", ini_get("memory_limit"), "\n", ini_get("max_execution_time");`
-
-	output, err := runner.Run(ctx, "php", "-r", script)
-
-	if err != nil {
-		return "", "", "", err
-	}
-
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-
-	if len(lines) < 3 {
-		return "", "", "", fmt.Errorf("unexpected php -r output: %q", strings.TrimSpace(output))
-	}
-
-	return strings.TrimSpace(lines[0]), strings.TrimSpace(lines[1]), strings.TrimSpace(lines[2]), nil
 }
 
 func getPhpVersion(ctx context.Context, runner exec.Runner) (phpVersion, buildDate, vcVersion string, err error) {
