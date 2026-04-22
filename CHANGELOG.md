@@ -1,8 +1,10 @@
 # Changelog
 
 ## Unreleased
+
+## Version 1.3.0 (2026-04-22)
 - Added a live progress spinner to `check` and `audit`
-- Trimmed PHP toolchain output in `check` to match other ecosystems, only the version line remains
+- Trimmed PHP toolchain output in `check` to match other ecosystems
 - `check` now errors consistently when a required runtime is missing
 - `list` now exits with an error when canceled mid-run
 
