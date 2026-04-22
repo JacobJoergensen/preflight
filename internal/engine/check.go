@@ -12,15 +12,34 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
+type CheckProgress interface {
+	Plan(total int)
+	Start(scopeID, displayName string)
+	Finish(scopeID string, included bool)
+	Close()
+}
+
+type NoopCheckProgress struct{}
+
+func (NoopCheckProgress) Plan(int)             {}
+func (NoopCheckProgress) Start(string, string) {}
+func (NoopCheckProgress) Finish(string, bool)  {}
+func (NoopCheckProgress) Close()               {}
+
 func (r Runner) Check(
 	ctx context.Context,
 	scopes []string,
 	selectors []string,
 	withEnv bool,
 	outdated bool,
+	progress CheckProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.CheckReport, error) {
+	if progress == nil {
+		progress = NoopCheckProgress{}
+	}
+
 	if !disableMonorepo {
 		projects, err := monorepo.DiscoverProjects(r.WorkDir)
 
@@ -35,11 +54,11 @@ func (r Runner) Check(
 		}
 
 		if len(projects) > 0 {
-			return r.checkMonorepo(ctx, projects, scopes, selectors, withEnv, outdated)
+			return r.checkMonorepo(ctx, projects, scopes, selectors, withEnv, outdated, progress)
 		}
 	}
 
-	return r.checkProject(ctx, r.WorkDir, "", scopes, selectors, withEnv, outdated)
+	return r.checkProject(ctx, r.WorkDir, "", scopes, selectors, withEnv, outdated, progress)
 }
 
 func (r Runner) checkMonorepo(
@@ -49,6 +68,7 @@ func (r Runner) checkMonorepo(
 	selectors []string,
 	withEnv bool,
 	outdated bool,
+	progress CheckProgress,
 ) (result.CheckReport, error) {
 	startedAt := time.Now()
 
@@ -62,7 +82,7 @@ func (r Runner) checkMonorepo(
 			Name:         project.Name,
 		})
 
-		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, withEnv, outdated)
+		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, withEnv, outdated, progress)
 
 		if err != nil {
 			return result.CheckReport{}, err
@@ -88,6 +108,7 @@ func (r Runner) checkProject(
 	selectors []string,
 	withEnv bool,
 	outdated bool,
+	progress CheckProgress,
 ) (result.CheckReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeCheck})
 
@@ -109,7 +130,7 @@ func (r Runner) checkProject(
 
 	adapters = appendEnvIfRequested(adapters, withEnv, scopes, selectors)
 
-	report := runChecks(ctx, adapters, deps)
+	report := runChecks(ctx, adapters, deps, progress)
 
 	if outdated {
 		attachOutdatedPackages(ctx, adapters, deps, report.Items)
@@ -124,10 +145,19 @@ func (r Runner) checkProject(
 	return report, nil
 }
 
-func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies) result.CheckReport {
+func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies, progress CheckProgress) result.CheckReport {
 	startedAt := time.Now()
 
+	progress.Plan(len(modules))
+
 	items := runParallel(ctx, modules, func(ctx context.Context, m adapter.Adapter) (result.CheckItem, bool) {
+		scopeID := m.Name()
+
+		progress.Start(scopeID, adapter.DisplayName(m))
+
+		var included bool
+		defer func() { progress.Finish(scopeID, included) }()
+
 		itemStartedAt := time.Now()
 		errors, warnings, successes := m.Check(ctx, deps)
 		itemEndedAt := time.Now()
@@ -135,6 +165,8 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 		if len(errors) == 0 && len(warnings) == 0 && len(successes) == 0 {
 			return result.CheckItem{}, false
 		}
+
+		included = true
 
 		return result.CheckItem{
 			ScopeID:        m.Name(),

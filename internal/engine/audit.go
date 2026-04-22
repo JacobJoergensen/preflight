@@ -12,14 +12,33 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
+type AuditProgress interface {
+	Plan(total int)
+	Start(scopeID, displayName string)
+	Finish(scopeID string, included bool)
+	Close()
+}
+
+type NoopAuditProgress struct{}
+
+func (NoopAuditProgress) Plan(int)             {}
+func (NoopAuditProgress) Start(string, string) {}
+func (NoopAuditProgress) Finish(string, bool)  {}
+func (NoopAuditProgress) Close()               {}
+
 func (r Runner) Audit(
 	ctx context.Context,
 	scopes []string,
 	selectors []string,
 	minSeverity string,
+	progress AuditProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.AuditReport, error) {
+	if progress == nil {
+		progress = NoopAuditProgress{}
+	}
+
 	if !disableMonorepo {
 		projects, err := monorepo.DiscoverProjects(r.WorkDir)
 
@@ -34,11 +53,11 @@ func (r Runner) Audit(
 		}
 
 		if len(projects) > 0 {
-			return r.auditMonorepo(ctx, projects, scopes, selectors, minSeverity)
+			return r.auditMonorepo(ctx, projects, scopes, selectors, minSeverity, progress)
 		}
 	}
 
-	return r.auditProject(ctx, r.WorkDir, "", scopes, selectors, minSeverity)
+	return r.auditProject(ctx, r.WorkDir, "", scopes, selectors, minSeverity, progress)
 }
 
 func (r Runner) auditMonorepo(
@@ -47,6 +66,7 @@ func (r Runner) auditMonorepo(
 	scopes []string,
 	selectors []string,
 	minSeverity string,
+	progress AuditProgress,
 ) (result.AuditReport, error) {
 	startedAt := time.Now()
 
@@ -60,7 +80,7 @@ func (r Runner) auditMonorepo(
 			Name:         project.Name,
 		})
 
-		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity)
+		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity, progress)
 
 		if err != nil {
 			return result.AuditReport{}, err
@@ -85,6 +105,7 @@ func (r Runner) auditProject(
 	scopes []string,
 	selectors []string,
 	minSeverity string,
+	progress AuditProgress,
 ) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
 
@@ -105,7 +126,7 @@ func (r Runner) auditProject(
 	}
 
 	runners := filterAuditRunners(adapters)
-	report := runAudits(ctx, runners, deps)
+	report := runAudits(ctx, runners, deps, progress)
 
 	if minSeverity != "" {
 		report = filterAuditReportBySeverity(report, minSeverity)
@@ -132,10 +153,19 @@ func filterAuditRunners(adapters []adapter.Adapter) []adapter.AuditRunner {
 	return runners
 }
 
-func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies) result.AuditReport {
+func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies, progress AuditProgress) result.AuditReport {
 	startedAt := time.Now()
 
+	progress.Plan(len(runners))
+
 	items := runParallel(ctx, runners, func(ctx context.Context, runner adapter.AuditRunner) (result.AuditItem, bool) {
+		scopeID := runner.Name()
+
+		progress.Start(scopeID, adapter.DisplayName(runner))
+
+		var included bool
+		defer func() { progress.Finish(scopeID, included) }()
+
 		itemStartedAt := time.Now()
 		auditResult := runner.Audit(ctx, deps)
 		itemEndedAt := time.Now()
@@ -143,6 +173,8 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 		if auditResult.Skipped {
 			return result.AuditItem{}, false
 		}
+
+		included = true
 
 		return result.FromAdapterAudit(
 			runner.Name(),
