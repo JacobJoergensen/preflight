@@ -13,7 +13,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X github.com/JacobJoergensen/preflight/cmd.Version={{.Version}}
+      - -s -w -X github.com/JacobJoergensen/preflight/internal/release.Version={{.Version}} -X github.com/JacobJoergensen/preflight/internal/release.Commit={{.ShortCommit}} -X github.com/JacobJoergensen/preflight/internal/release.Date={{.Date}}
 
 archives:
   - ids:

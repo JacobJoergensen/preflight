@@ -35,6 +35,11 @@ func renderStatusFooter(ow *terminal.OutputWriter, status footerStatus, metadata
 		labelWidth := footerLabelWidth(metadata)
 
 		for _, line := range metadata {
+			if line.Value == "" {
+				ow.Printf("%s       %s\n", blueBar, line.Label)
+				continue
+			}
+
 			ow.Printf("%s       %s%s%s   %s\n",
 				blueBar,
 				terminal.Dim, padRight(line.Label, labelWidth), terminal.Reset,
@@ -52,6 +57,10 @@ func footerLabelWidth(lines []footerMetadataLine) int {
 	var width int
 
 	for _, line := range lines {
+		if line.Value == "" {
+			continue
+		}
+
 		if n := len(line.Label); n > width {
 			width = n
 		}

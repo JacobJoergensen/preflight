@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Rewrote the `version` command with a cleaner layout, commit and build date, and a release URL on available updates
 
 ## Version 1.2.0 (2026-04-22)****
 - Rewrote the `fix` command with a redesigned output, interactive per-ecosystem approval, a live progress spinner, and captured tool output surfaced on failure

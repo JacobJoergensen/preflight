@@ -6,9 +6,11 @@ type VersionReport struct {
 	StartedAt      time.Time
 	EndedAt        time.Time
 	Version        string
+	Commit         string
+	BuildDate      string
 	Platform       string
 	LatestVersion  string
+	ReleaseURL     string
 	HasUpdate      bool
-	CheckFailed    bool
 	CheckErrorText string
 }

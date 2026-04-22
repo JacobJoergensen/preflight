@@ -14,11 +14,11 @@ type VersionData struct {
 	Version       string
 	LatestVersion string
 	Platform      string
+	ReleaseURL    string
 	HasUpdate     bool
-	Error         error
 }
 
-type GitHubRelease struct {
+type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
@@ -50,7 +50,7 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 		return "", fmt.Errorf("reading response: %w", err)
 	}
 
-	var release GitHubRelease
+	var release githubRelease
 
 	if err := json.Unmarshal(body, &release); err != nil {
 		return "", fmt.Errorf("decoding JSON: %w", err)
@@ -63,28 +63,28 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 	return release.TagName, nil
 }
 
-func GetVersionInfo(currentVersion, platform string) (*VersionData, chan bool) {
-	info := &VersionData{
-		Version:  currentVersion,
-		Platform: platform,
+func FetchVersionInfo(currentVersion, platform string) (VersionData, error) {
+	latest, err := FetchLatestRelease(context.Background(), "JacobJoergensen", "preflight")
+
+	if err != nil {
+		return VersionData{
+			Version:  currentVersion,
+			Platform: platform,
+		}, err
 	}
 
-	done := make(chan bool)
+	hasUpdate := currentVersion != latest
+	releaseURL := ""
 
-	go func() {
-		defer close(done)
+	if hasUpdate {
+		releaseURL = "https://github.com/JacobJoergensen/preflight/releases/tag/" + latest
+	}
 
-		latest, err := FetchLatestRelease(context.Background(), "JacobJoergensen", "preflight")
-
-		if err != nil {
-			info.Error = err
-			info.LatestVersion = "Unable to check"
-			return
-		}
-
-		info.LatestVersion = latest
-		info.HasUpdate = currentVersion != latest
-	}()
-
-	return info, done
+	return VersionData{
+		Version:       currentVersion,
+		LatestVersion: latest,
+		Platform:      platform,
+		ReleaseURL:    releaseURL,
+		HasUpdate:     hasUpdate,
+	}, nil
 }

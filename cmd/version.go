@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"time"
@@ -13,12 +12,6 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/render"
 )
 
-func platform() string {
-	return runtime.GOOS + "/" + runtime.GOARCH
-}
-
-var Version = "1.0.0"
-
 type versionOptions struct {
 	json bool
 }
@@ -28,25 +21,26 @@ var versionOpts versionOptions
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Shows PreFlight version information",
-	Long:  `Shows detailed information about the PreFlight version including version number and build date.`,
+	Long:  `Shows the installed version, build metadata (commit, build date), platform, and checks GitHub for available updates.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		startedAt := time.Now()
-		versionData, done := release.GetVersionInfo(Version, platform())
-
-		<-done
+		version, commit, buildDate := release.BuildInfo()
+		versionData, err := release.FetchVersionInfo(version, runtime.GOOS+"/"+runtime.GOARCH)
 
 		report := result.VersionReport{
 			StartedAt:     startedAt,
 			EndedAt:       time.Now(),
 			Version:       versionData.Version,
+			Commit:        commit,
+			BuildDate:     buildDate,
 			Platform:      versionData.Platform,
 			LatestVersion: versionData.LatestVersion,
+			ReleaseURL:    versionData.ReleaseURL,
 			HasUpdate:     versionData.HasUpdate,
-			CheckFailed:   versionData.Error != nil,
 		}
 
-		if versionData.Error != nil {
-			report.CheckErrorText = fmt.Sprintf("%v", versionData.Error)
+		if err != nil {
+			report.CheckErrorText = err.Error()
 		}
 
 		if versionOpts.json {
