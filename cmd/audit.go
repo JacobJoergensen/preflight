@@ -85,7 +85,11 @@ preflight audit --json`,
 			return err
 		}
 
-		report, err := runner.Audit(ctx, scopes, managers, minSeverity, auditOpts.noMonorepo, auditOpts.projectGlobs)
+		progress := buildAuditProgress(auditOpts.json)
+
+		report, err := runner.Audit(ctx, scopes, managers, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
+
+		progress.Close()
 
 		if err != nil {
 			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -113,6 +117,18 @@ func renderAudit(report result.AuditReport, jsonOutput bool) error {
 	}
 
 	return render.TTYAuditRenderer{}.Render(report)
+}
+
+func buildAuditProgress(jsonOutput bool) engine.AuditProgress {
+	if jsonOutput || terminal.Quiet {
+		return engine.NoopAuditProgress{}
+	}
+
+	if !terminal.IsInteractiveTTY(os.Stdout) {
+		return engine.NoopAuditProgress{}
+	}
+
+	return render.NewTTYProgress(os.Stdout, "auditing…")
 }
 
 func exitCodeFromAuditReport(report result.AuditReport) int {

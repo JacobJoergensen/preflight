@@ -74,7 +74,11 @@ var checkCmd = &cobra.Command{
 			return err
 		}
 
-		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated, checkOpts.noMonorepo, checkOpts.projectGlobs)
+		progress := buildCheckProgress(checkOpts.json)
+
+		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
+
+		progress.Close()
 
 		if err != nil {
 			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
@@ -102,6 +106,18 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 	}
 
 	return render.TTYCheckRenderer{}.Render(report)
+}
+
+func buildCheckProgress(jsonOutput bool) engine.CheckProgress {
+	if jsonOutput || terminal.Quiet {
+		return engine.NoopCheckProgress{}
+	}
+
+	if !terminal.IsInteractiveTTY(os.Stdout) {
+		return engine.NoopCheckProgress{}
+	}
+
+	return render.NewTTYProgress(os.Stdout, "checking…")
 }
 
 func exitCodeFromReport(report result.CheckReport) int {
