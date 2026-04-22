@@ -156,19 +156,24 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 func validatePhpVersion(phpVersion, buildDate, vcVersion, requiredVersion string, errs, warns, succs []Message) ([]Message, []Message, []Message) {
 	feedback := fmt.Sprintf("Installed %sPHP (%s ⟶ required %s), Built: (%s, %s)", terminal.Reset, phpVersion, requiredVersion, buildDate, vcVersion)
 	versionPrefix := strings.Split(phpVersion, ".")[0] + "." + strings.Split(phpVersion, ".")[1]
-	versionFeedback := buildVersionFeedback("php", "PHP", phpVersion, requiredVersion, versionPrefix)
+	satisfied, _ := semver.ValidateVersion(phpVersion, requiredVersion)
 
 	if isEOL("php", versionPrefix) {
 		warns = append(warns, Message{Text: fmt.Sprintf("Installed %sPHP (%s ⟶ End-of-Life), Consider upgrading!", terminal.Reset, phpVersion)})
 
-		if versionFeedback.ShouldWarnExtra {
+		if satisfied {
 			warns = append(warns, Message{Text: feedback})
 		}
-	} else if versionFeedback.ShouldError {
-		errs = append(errs, Message{Text: feedback})
-	} else {
-		succs = append(succs, Message{Text: feedback})
+
+		return errs, warns, succs
 	}
+
+	if !satisfied {
+		errs = append(errs, Message{Text: feedback})
+		return errs, warns, succs
+	}
+
+	succs = append(succs, Message{Text: feedback})
 
 	return errs, warns, succs
 }

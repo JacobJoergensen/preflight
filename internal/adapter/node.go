@@ -62,19 +62,9 @@ func (n NodeModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 		}
 
 		versionPrefix := strings.TrimPrefix(strings.Split(nodeVersion, ".")[0], "v")
-		feedback := buildNodeEngineFeedback(nodeVersion, packageConfig.NodeVersion, versionPrefix)
-
-		if feedback.ShouldWarnEOL {
-			warns = append(warns, Message{Text: feedback.EOLWarning})
-
-			if feedback.ShouldWarnExtra {
-				warns = append(warns, Message{Text: feedback.Feedback})
-			}
-		} else if feedback.ShouldError {
-			errs = append(errs, Message{Text: feedback.Feedback})
-		} else if feedback.ShouldSuccess {
-			succs = append(succs, Message{Text: feedback.Feedback})
-		}
+		satisfied := nodeEngineSatisfiedByRuntime(nodeVersion, packageConfig.NodeVersion)
+		feedback := buildVersionFeedback("node", "Node.js", nodeVersion, packageConfig.NodeVersion, versionPrefix, satisfied)
+		errs, warns, succs = appendVersionFeedback(feedback, errs, warns, succs)
 	}
 
 	return errs, warns, succs

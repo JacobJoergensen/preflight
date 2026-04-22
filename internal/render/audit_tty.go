@@ -36,37 +36,12 @@ func (r TTYAuditRenderer) Render(report result.AuditReport) error {
 }
 
 func renderAuditItemsGroupedByProject(ow *terminal.OutputWriter, report result.AuditReport) {
-	if len(report.Projects) == 0 {
-		for _, item := range report.Items {
-			renderAuditCardTTY(ow, item)
-		}
-
-		return
-	}
-
-	itemsByProject := make(map[string][]result.AuditItem, len(report.Projects))
-
-	for _, item := range report.Items {
-		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
-	}
-
-	for i, project := range report.Projects {
-		items := itemsByProject[project.RelativePath]
-
-		if len(items) == 0 {
-			continue
-		}
-
-		if i > 0 {
-			ow.PrintNewLines(1)
-		}
-
-		renderAuditProjectHeader(ow, project)
-
-		for _, item := range items {
-			renderAuditCardTTY(ow, item)
-		}
-	}
+	renderByProject(ow, report.Projects, report.Items,
+		func(p result.AuditProject) string { return p.RelativePath },
+		func(i result.AuditItem) string { return i.Project },
+		renderAuditProjectHeader,
+		renderAuditCardTTY,
+	)
 }
 
 func renderAuditProjectHeader(ow *terminal.OutputWriter, project result.AuditProject) {

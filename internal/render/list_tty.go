@@ -39,37 +39,12 @@ func (r TTYListRenderer) Render(report result.DependencyReport) error {
 }
 
 func renderListItemsGroupedByProject(ow *terminal.OutputWriter, report result.DependencyReport) {
-	if len(report.Projects) == 0 {
-		for _, item := range report.Items {
-			renderListItemCardTTY(ow, item)
-		}
-
-		return
-	}
-
-	itemsByProject := make(map[string][]result.DependencyItem, len(report.Projects))
-
-	for _, item := range report.Items {
-		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
-	}
-
-	for i, project := range report.Projects {
-		items := itemsByProject[project.RelativePath]
-
-		if len(items) == 0 {
-			continue
-		}
-
-		if i > 0 {
-			ow.PrintNewLines(1)
-		}
-
-		renderListProjectHeader(ow, project)
-
-		for _, item := range items {
-			renderListItemCardTTY(ow, item)
-		}
-	}
+	renderByProject(ow, report.Projects, report.Items,
+		func(p result.DependencyProject) string { return p.RelativePath },
+		func(i result.DependencyItem) string { return i.Project },
+		renderListProjectHeader,
+		renderListItemCardTTY,
+	)
 }
 
 func renderListProjectHeader(ow *terminal.OutputWriter, project result.DependencyProject) {

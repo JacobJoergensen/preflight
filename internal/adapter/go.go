@@ -9,6 +9,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/semver"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
@@ -55,19 +56,9 @@ func (g GoModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Me
 
 	if goConfig.GoVersion != "" {
 		versionPrefix := strings.Split(goVersion, ".")[0] + "." + strings.Split(goVersion, ".")[1]
-		feedback := buildGoVersionFeedback(goVersion, goConfig.GoVersion, versionPrefix)
-
-		if feedback.ShouldWarnEOL {
-			warns = append(warns, Message{Text: feedback.EOLWarning})
-
-			if feedback.ShouldWarnExtra {
-				warns = append(warns, Message{Text: feedback.Feedback})
-			}
-		} else if feedback.ShouldError {
-			errs = append(errs, Message{Text: feedback.Feedback})
-		} else if feedback.ShouldSuccess {
-			succs = append(succs, Message{Text: feedback.Feedback})
-		}
+		satisfied := semver.MatchMinimumVersion(goVersion, goConfig.GoVersion)
+		feedback := buildVersionFeedback("go", "Go", goVersion, goConfig.GoVersion, versionPrefix, satisfied)
+		errs, warns, succs = appendVersionFeedback(feedback, errs, warns, succs)
 	} else {
 		succs = append(succs, Message{Text: fmt.Sprintf("Installed %sGo (%s ⟶ go.mod)", terminal.Reset, goVersion)})
 	}

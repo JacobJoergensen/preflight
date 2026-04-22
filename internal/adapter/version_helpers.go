@@ -17,8 +17,7 @@ type versionFeedback struct {
 	ShouldWarnExtra bool
 }
 
-func buildVersionFeedback(runtime string, display string, installedVersion string, required string, versionPrefix string) versionFeedback {
-	isValid, _ := semver.ValidateVersion(installedVersion, required)
+func buildVersionFeedback(runtime, display, installedVersion, required, versionPrefix string, satisfied bool) versionFeedback {
 	feedback := fmt.Sprintf("Installed %s%s (%s ⟶ required %s)", terminal.Reset, display, installedVersion, required)
 
 	if isEOL(runtime, versionPrefix) {
@@ -26,39 +25,40 @@ func buildVersionFeedback(runtime string, display string, installedVersion strin
 			Feedback:        feedback,
 			EOLWarning:      fmt.Sprintf("Installed %s%s (%s ⟶ End-of-Life), consider upgrading!", terminal.Reset, display, installedVersion),
 			ShouldWarnEOL:   true,
-			ShouldWarnExtra: isValid,
+			ShouldWarnExtra: satisfied,
 		}
 	}
 
-	if !isValid {
+	if !satisfied {
 		return versionFeedback{Feedback: feedback, ShouldError: true}
 	}
 
 	return versionFeedback{Feedback: feedback, ShouldSuccess: true}
 }
 
-// Uses minimum-version rules (go 1.26 allows 1.26.1), not npm-style exact semver.
-func buildGoVersionFeedback(installedVersion, required, versionPrefix string) versionFeedback {
-	ok := semver.MatchMinimumVersion(installedVersion, required)
-	feedback := fmt.Sprintf("Installed %sGo (%s ⟶ required %s)", terminal.Reset, installedVersion, required)
+func appendVersionFeedback(fb versionFeedback, errs, warns, succs []Message) ([]Message, []Message, []Message) {
+	if fb.ShouldWarnEOL {
+		warns = append(warns, Message{Text: fb.EOLWarning})
 
-	if isEOL("go", versionPrefix) {
-		return versionFeedback{
-			Feedback:        feedback,
-			EOLWarning:      fmt.Sprintf("Installed %sGo (%s ⟶ End-of-Life), consider upgrading!", terminal.Reset, installedVersion),
-			ShouldWarnEOL:   true,
-			ShouldWarnExtra: ok,
+		if fb.ShouldWarnExtra {
+			warns = append(warns, Message{Text: fb.Feedback})
 		}
+
+		return errs, warns, succs
 	}
 
-	if !ok {
-		return versionFeedback{Feedback: feedback, ShouldError: true}
+	if fb.ShouldError {
+		errs = append(errs, Message{Text: fb.Feedback})
+		return errs, warns, succs
 	}
 
-	return versionFeedback{Feedback: feedback, ShouldSuccess: true}
+	if fb.ShouldSuccess {
+		succs = append(succs, Message{Text: fb.Feedback})
+	}
+
+	return errs, warns, succs
 }
 
-// Bare versions like "20" mean minimum 20.x, not exact equality to "20.0.0".
 func nodeEngineSatisfiedByRuntime(installed, engines string) bool {
 	installed = strings.TrimPrefix(strings.TrimSpace(installed), "v")
 	engines = strings.TrimSpace(engines)
@@ -88,24 +88,4 @@ func shouldUseNodeEnginesSemverRange(engines string) bool {
 	}
 
 	return false
-}
-
-func buildNodeEngineFeedback(installedVersion, enginesField, versionPrefix string) versionFeedback {
-	ok := nodeEngineSatisfiedByRuntime(installedVersion, enginesField)
-	feedback := fmt.Sprintf("Installed %sNode.js (%s ⟶ required %s)", terminal.Reset, installedVersion, enginesField)
-
-	if isEOL("node", versionPrefix) {
-		return versionFeedback{
-			Feedback:        feedback,
-			EOLWarning:      fmt.Sprintf("Installed %sNode.js (%s ⟶ End-of-Life), consider upgrading!", terminal.Reset, installedVersion),
-			ShouldWarnEOL:   true,
-			ShouldWarnExtra: ok,
-		}
-	}
-
-	if !ok {
-		return versionFeedback{Feedback: feedback, ShouldError: true}
-	}
-
-	return versionFeedback{Feedback: feedback, ShouldSuccess: true}
 }

@@ -41,39 +41,15 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 }
 
 func renderCheckItemsGroupedByProject(ow *terminal.OutputWriter, report result.CheckReport) {
-	if len(report.Projects) == 0 {
-		for _, item := range report.Items {
+	renderByProject(ow, report.Projects, report.Items,
+		func(p result.CheckProject) string { return p.RelativePath },
+		func(i result.CheckItem) string { return i.Project },
+		renderProjectHeader,
+		func(ow *terminal.OutputWriter, item result.CheckItem) {
 			card := BuildHealthCard(item)
 			renderHealthCardTTY(ow, card, item.Outdated)
-		}
-
-		return
-	}
-
-	itemsByProject := make(map[string][]result.CheckItem, len(report.Projects))
-
-	for _, item := range report.Items {
-		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
-	}
-
-	for i, project := range report.Projects {
-		items := itemsByProject[project.RelativePath]
-
-		if len(items) == 0 {
-			continue
-		}
-
-		if i > 0 {
-			ow.PrintNewLines(1)
-		}
-
-		renderProjectHeader(ow, project)
-
-		for _, item := range items {
-			card := BuildHealthCard(item)
-			renderHealthCardTTY(ow, card, item.Outdated)
-		}
-	}
+		},
+	)
 }
 
 func renderProjectHeader(ow *terminal.OutputWriter, project result.CheckProject) {

@@ -68,37 +68,16 @@ func renderFixItemLines(ow *terminal.OutputWriter, report result.FixReport) {
 
 	nameWidth, commandWidth := fixItemColumnWidths(report.Items)
 
-	if len(report.Projects) == 0 {
-		for _, item := range report.Items {
+	renderByProject(ow, report.Projects, report.Items,
+		func(p result.FixProject) string { return p.RelativePath },
+		func(i result.FixItem) string { return i.Project },
+		func(ow *terminal.OutputWriter, p result.FixProject) {
+			ow.Println("  " + terminal.Bold + terminal.Cyan + p.RelativePath + terminal.Reset)
+		},
+		func(ow *terminal.OutputWriter, item result.FixItem) {
 			renderFixItemLine(ow, item, nameWidth, commandWidth)
-		}
-
-		return
-	}
-
-	itemsByProject := make(map[string][]result.FixItem, len(report.Projects))
-
-	for _, item := range report.Items {
-		itemsByProject[item.Project] = append(itemsByProject[item.Project], item)
-	}
-
-	for i, project := range report.Projects {
-		items := itemsByProject[project.RelativePath]
-
-		if len(items) == 0 {
-			continue
-		}
-
-		if i > 0 {
-			ow.PrintNewLines(1)
-		}
-
-		ow.Println("  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset)
-
-		for _, item := range items {
-			renderFixItemLine(ow, item, nameWidth, commandWidth)
-		}
-	}
+		},
+	)
 }
 
 func renderFixItemLine(ow *terminal.OutputWriter, item result.FixItem, nameWidth, commandWidth int) {
