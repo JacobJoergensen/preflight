@@ -57,6 +57,7 @@ func (n NodeModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 		nodeVersion, err := getNodeVersion(ctx, deps.Runner)
 
 		if err != nil {
+			errs = append(errs, Message{Text: fmt.Sprintf("Node is not installed or not on PATH: %v", err)})
 			return errs, warns, succs
 		}
 

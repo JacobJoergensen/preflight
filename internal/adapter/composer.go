@@ -57,7 +57,7 @@ func (c ComposerModule) Check(ctx context.Context, deps Dependencies) ([]Message
 	composerVersion, err := getComposerVersion(ctx, deps.Runner)
 
 	if err != nil {
-		errs = append(errs, Message{Text: "Composer is not installed or not available in path."})
+		errs = append(errs, Message{Text: fmt.Sprintf("Composer is not installed or not on PATH: %v", err)})
 		return errs, warns, succs
 	}
 

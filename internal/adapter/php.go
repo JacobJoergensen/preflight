@@ -72,7 +72,7 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 	phpVersion, buildDate, vcVersion, err := getPhpVersion(ctx, deps.Runner)
 
 	if err != nil {
-		warns = append(warns, Message{Text: fmt.Sprintf("Could not run PHP: %v", err)})
+		errs = append(errs, Message{Text: fmt.Sprintf("PHP is not installed or not on PATH: %v", err)})
 
 		return errs, warns, succs
 	}

@@ -69,20 +69,21 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 		rubyVersion, err := getRubyVersion(ctx, deps.Runner)
 
 		if err != nil {
-			warns = append(warns, Message{Text: fmt.Sprintf("Could not read Ruby version: %v", err)})
-		} else {
-			ok, msg := semver.ValidateVersion(rubyVersion, config.RequiresRuby)
+			errs = append(errs, Message{Text: fmt.Sprintf("Ruby is not installed or not on PATH: %v", err)})
+			return errs, warns, succs
+		}
 
-			if !ok {
-				if msg != "" {
-					warns = append(warns, Message{Text: msg})
-				} else {
-					warns = append(warns, Message{Text: fmt.Sprintf(
-						"Ruby version %s does not satisfy %s",
-						rubyVersion,
-						config.RequiresRuby,
-					)})
-				}
+		ok, msg := semver.ValidateVersion(rubyVersion, config.RequiresRuby)
+
+		if !ok {
+			if msg != "" {
+				warns = append(warns, Message{Text: msg})
+			} else {
+				warns = append(warns, Message{Text: fmt.Sprintf(
+					"Ruby version %s does not satisfy %s",
+					rubyVersion,
+					config.RequiresRuby,
+				)})
 			}
 		}
 	}
@@ -90,23 +91,24 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	installedVersion, err := toolVersion(ctx, deps.Runner, packageManager.Command())
 
 	if err != nil {
-		warns = append(warns, Message{Text: fmt.Sprintf("%s not available or not on PATH: %v", packageManager.Name(), err)})
-	} else {
-		tool, found := manifest.GetTool(packageManager.Command())
-
-		if !found {
-			tool = manifest.Tool{Name: packageManager.Name(), Command: packageManager.Command()}
-		}
-
-		version := trimFirstLine(installedVersion)
-		rhs := "Gemfile.lock"
-
-		if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
-			rhs = packageManager.Tool.LockFile
-		}
-
-		succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s ⟶ %s)", terminal.Reset, tool.Name, version, rhs)})
+		errs = append(errs, Message{Text: fmt.Sprintf("%s is not installed or not on PATH: %v", packageManager.Name(), err)})
+		return errs, warns, succs
 	}
+
+	tool, found := manifest.GetTool(packageManager.Command())
+
+	if !found {
+		tool = manifest.Tool{Name: packageManager.Name(), Command: packageManager.Command()}
+	}
+
+	version := trimFirstLine(installedVersion)
+	rhs := "Gemfile.lock"
+
+	if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
+		rhs = packageManager.Tool.LockFile
+	}
+
+	succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s ⟶ %s)", terminal.Reset, tool.Name, version, rhs)})
 
 	if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
 		if _, err := deps.Runner.Run(ctx, "bundle", "check"); err != nil {

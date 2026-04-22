@@ -49,7 +49,7 @@ func (g GoModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Me
 	goVersion, err := getGoVersion(ctx, deps.Runner)
 
 	if err != nil {
-		errs = append(errs, Message{Text: "Go is not installed or not available in path."})
+		errs = append(errs, Message{Text: fmt.Sprintf("Go is not installed or not on PATH: %v", err)})
 		return errs, warns, succs
 	}
 

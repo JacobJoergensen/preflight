@@ -69,20 +69,21 @@ func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, 
 		pythonVersion, err := getPythonVersion(ctx, deps.Runner)
 
 		if err != nil {
-			warns = append(warns, Message{Text: fmt.Sprintf("Could not run python --version: %v", err)})
-		} else {
-			ok, msg := semver.ValidateVersion(pythonVersion, config.RequiresPython)
+			errs = append(errs, Message{Text: fmt.Sprintf("Python is not installed or not on PATH: %v", err)})
+			return errs, warns, succs
+		}
 
-			if !ok {
-				if msg != "" {
-					warns = append(warns, Message{Text: msg})
-				} else {
-					warns = append(warns, Message{Text: fmt.Sprintf(
-						"Python version %s does not satisfy requires-python %s",
-						pythonVersion,
-						config.RequiresPython,
-					)})
-				}
+		ok, msg := semver.ValidateVersion(pythonVersion, config.RequiresPython)
+
+		if !ok {
+			if msg != "" {
+				warns = append(warns, Message{Text: msg})
+			} else {
+				warns = append(warns, Message{Text: fmt.Sprintf(
+					"Python version %s does not satisfy requires-python %s",
+					pythonVersion,
+					config.RequiresPython,
+				)})
 			}
 		}
 	}
@@ -90,28 +91,29 @@ func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, 
 	installedVersion, err := toolVersion(ctx, deps.Runner, packageManager.Command())
 
 	if err != nil {
-		warns = append(warns, Message{Text: fmt.Sprintf("%s not available or not on PATH: %v", packageManager.Name(), err)})
+		errs = append(errs, Message{Text: fmt.Sprintf("%s is not installed or not on PATH: %v", packageManager.Name(), err)})
+		return errs, warns, succs
+	}
+
+	tool, found := manifest.GetTool(packageManager.Command())
+	if !found {
+		tool = manifest.Tool{Name: packageManager.Name(), Command: packageManager.Command()}
+	}
+
+	version := trimFirstLine(installedVersion)
+	var rhs string
+
+	switch {
+	case packageManager.LockFileExists && packageManager.Tool.LockFile != "":
+		rhs = packageManager.Tool.LockFile
+	case packageManager.ConfigFileExists && packageManager.Tool.ConfigFile != "":
+		rhs = packageManager.Tool.ConfigFile
+	}
+
+	if rhs != "" {
+		succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s ⟶ %s)", terminal.Reset, tool.Name, version, rhs)})
 	} else {
-		tool, found := manifest.GetTool(packageManager.Command())
-		if !found {
-			tool = manifest.Tool{Name: packageManager.Name(), Command: packageManager.Command()}
-		}
-
-		version := trimFirstLine(installedVersion)
-		var rhs string
-
-		switch {
-		case packageManager.LockFileExists && packageManager.Tool.LockFile != "":
-			rhs = packageManager.Tool.LockFile
-		case packageManager.ConfigFileExists && packageManager.Tool.ConfigFile != "":
-			rhs = packageManager.Tool.ConfigFile
-		}
-
-		if rhs != "" {
-			succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s ⟶ %s)", terminal.Reset, tool.Name, version, rhs)})
-		} else {
-			succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s)", terminal.Reset, tool.Name, version)})
-		}
+		succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s)", terminal.Reset, tool.Name, version)})
 	}
 
 	if err := runPythonPipCheck(ctx, deps.Runner, packageManager.Command()); err != nil {
