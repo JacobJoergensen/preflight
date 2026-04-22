@@ -13,7 +13,6 @@ var ErrSilentFailure = errors.New("")
 type rootOptions struct {
 	quiet   bool
 	noColor bool
-	noEmoji bool
 	profile string
 }
 
@@ -36,10 +35,6 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 			terminal.DisableColor()
 		}
 
-		if rootOpts.noEmoji {
-			terminal.DisableEmoji()
-		}
-
 		return nil
 	},
 }
@@ -53,6 +48,5 @@ func init() {
 
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.quiet, "quiet", false, "Suppress non-essential output")
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.noColor, "no-color", false, "Disable colored output")
-	rootCmd.PersistentFlags().BoolVar(&rootOpts.noEmoji, "no-emoji", false, "Disable emoji output")
 	rootCmd.PersistentFlags().StringVar(&rootOpts.profile, "profile", "", "Active profile in preflight.yml (overrides PREFLIGHT_PROFILE)")
 }

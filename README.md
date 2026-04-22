@@ -167,7 +167,6 @@ These work with any command:
 | `--profile` | Use specific profile from `preflight.yml` |
 | `--quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
-| `--no-emoji` | Disable emoji output |
 
 ## Configuration
 

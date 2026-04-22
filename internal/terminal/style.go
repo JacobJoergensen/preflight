@@ -14,16 +14,10 @@ var (
 	Red    = "\033[31m"
 	Yellow = "\033[33m"
 
-	Clock = " ⏰ "
-
 	CheckMark   = "✓"
 	CrossMark   = "✗"
 	WarningSign = "⚠"
 	Lightning   = "⚡"
-	Wrench      = "🛠"
-
-	Rocket = "🚀"
-	Box    = "📦"
 )
 
 func DisableColor() {
@@ -36,11 +30,4 @@ func DisableColor() {
 	Green = ""
 	Red = ""
 	Yellow = ""
-}
-
-func DisableEmoji() {
-	Clock = ""
-	Wrench = ""
-	Rocket = ""
-	Box = ""
 }
