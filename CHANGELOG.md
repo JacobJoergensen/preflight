@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## Version 1.2.1 (2026-04-22)
 - Rewrote the `version` command with a cleaner layout, commit and build date, and a release URL on available updates
 
-## Version 1.2.0 (2026-04-22)****
+## Version 1.2.0 (2026-04-22)
 - Rewrote the `fix` command with a redesigned output, interactive per-ecosystem approval, a live progress spinner, and captured tool output surfaced on failure
 - Added a lock file diff summary to the `fix` command, rendered by default; use `--no-diff` to hide it
 - Added GitHub Actions step summary output: `check`, `audit`, and `fix` append a Markdown report to `$GITHUB_STEP_SUMMARY` when the env var is set
