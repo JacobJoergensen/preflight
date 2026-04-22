@@ -51,17 +51,19 @@ preflight check --with-env
 | `--with-env` | Also validate `.env` against `.env.example` |
 | `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
+| `--no-monorepo` | Only check the current directory |
+| `--project` | Restrict to sub-projects matching path globs (e.g. `packages/*`) |
 | `--json` | Output as JSON |
 
 ### fix
 
-Installs missing dependencies.
+Installs missing dependencies. Prompts per ecosystem by default and prints a lock file diff after each step.
 
 ```sh
 preflight fix
 preflight fix --pm=npm
 preflight fix --dry-run
-preflight fix --force
+preflight fix --yes --no-diff
 ```
 
 | Flag | Description |
@@ -70,8 +72,12 @@ preflight fix --force
 | `--scope` | Scopes to fix |
 | `--force`, `-f` | Force reinstall |
 | `--dry-run` | Show what would run without executing |
+| `--yes`, `-y` | Apply every ecosystem without prompting |
+| `--no-diff` | Hide the lock file diff summary |
 | `--skip-backup` | Skip lockfile backup |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
+| `--no-monorepo` | Only fix the current directory |
+| `--project` | Restrict to sub-projects matching path globs |
 | `--json` | Output as JSON |
 
 ### audit
@@ -96,7 +102,10 @@ preflight audit --json
 |------|-------------|
 | `--pm`, `-p` | Package managers to audit |
 | `--scope` | Scopes to audit |
+| `--min-severity` | Minimum severity to report (info, low, moderate, high, critical) |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
+| `--no-monorepo` | Only audit the current directory |
+| `--project` | Restrict to sub-projects matching path globs |
 | `--json` | Output as JSON |
 
 ### list
@@ -113,6 +122,8 @@ preflight list --pm=composer,go
 | `--pm`, `-p` | Package managers to list |
 | `--scope` | Scopes to list |
 | `--outdated` | Show outdated packages with version info |
+| `--no-monorepo` | Only list the current directory |
+| `--project` | Restrict to sub-projects matching path globs |
 | `--json` | Output as JSON |
 
 ### run
@@ -127,7 +138,7 @@ preflight run build --dry-run
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Print command without running |
-| `--timeout` | Timeout duration (default: 30m) |
+| `--timeout`, `-t` | Timeout duration (default: 30m) |
 
 ### hooks
 
@@ -158,6 +169,19 @@ preflight init --force
 |------|-------------|
 | `--force` | Overwrite existing file |
 
+### version
+
+Prints the installed version and checks for updates.
+
+```sh
+preflight version
+preflight version --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
 ### Global Flags
 
 These work with any command:
@@ -167,6 +191,12 @@ These work with any command:
 | `--profile` | Use specific profile from `preflight.yml` |
 | `--quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
+
+## Monorepo
+
+`check`, `audit`, `list`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
+
+Disable with `--no-monorepo`. Narrow the scope with `--project packages/*`.
 
 ## Configuration
 
