@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 	Short: "PreFlight is a CLI tool for checking project dependencies.",
 	Long: `A CLI tool that validates your project dependencies before you run into problems. Checks if everything is installed, fixes what's missing, and runs security audits across package managers.
 
-Supports npm, yarn, pnpm, bun, Composer, Go, pip, Poetry, and Bundler.
+Supports npm, yarn, pnpm, bun, Composer, Go, pip, Poetry, uv, and Bundler.
 Configure with preflight.yml for profiles, scripts, and CI integration.`,
 	Example:       "preflight check --pm=npm,composer",
 	SilenceErrors: true,

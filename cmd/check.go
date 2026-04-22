@@ -31,6 +31,7 @@ var checkOpts checkOptions
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Checks if all required dependencies are installed",
+	Long:  `Validates installed dependencies for the selected scopes. Supports monorepo traversal, .env validation (--with-env), and outdated package reporting (--outdated).`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx, cancel := context.WithTimeout(cmd.Context(), checkOpts.timeout)
 		defer cancel()

@@ -9,7 +9,6 @@ import (
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
-// ParseKeys extracts deduplicated variable names from dotenv content, preserving first-seen order.
 func ParseKeys(content []byte) []string {
 	content = bytes.TrimPrefix(content, utf8BOM)
 	scanner := bufio.NewScanner(bytes.NewReader(content))

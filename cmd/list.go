@@ -26,7 +26,7 @@ var listOpts listOptions
 var listCmd = &cobra.Command{
 	Use:     "list",
 	Short:   "List all required dependencies for this project",
-	Long:    `Lists all dependencies required by this project based on package manager configuration files.`,
+	Long:    `Lists dependencies from detected manifests. Use --outdated to flag packages with available updates; runs per sub-project in monorepos.`,
 	Example: "preflight list --pm=composer,go",
 	Aliases: []string{"dependencies", "deps"},
 	RunE: func(cmd *cobra.Command, _ []string) error {

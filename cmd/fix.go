@@ -33,12 +33,10 @@ type fixOptions struct {
 var fixOpts fixOptions
 
 var fixCmd = &cobra.Command{
-	Use:   "fix",
-	Short: "Fix missing dependencies across multiple package managers",
-	Long: `Fix command installs and reconciles dependencies for your project.
-Supports Composer, NPM, PNPM, Yarn, Bun, and Go modules.
-Prompts per ecosystem by default; use --yes to apply without asking.
-Example: preflight fix --pm=npm,composer`,
+	Use:     "fix",
+	Short:   "Fix missing dependencies across multiple package managers",
+	Long:    `Installs missing dependencies across Composer, NPM, PNPM, Yarn, Bun, and Go. Interactive by default (--yes to auto-approve), prints a lock file diff per step (--no-diff to hide), and runs per sub-project in monorepos.`,
+	Example: "preflight fix --pm=npm,composer",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithTimeout(cmd.Context(), fixOpts.timeout)
 		defer cancel()

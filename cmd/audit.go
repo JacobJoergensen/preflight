@@ -30,7 +30,7 @@ var auditOpts auditOptions
 var auditCmd = &cobra.Command{
 	Use:   "audit",
 	Short: "Run native security audits (npm audit, composer audit, govulncheck, …)",
-	Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes.
+	Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
 
 Tools used by scope:
   • js — npm/pnpm/yarn/bun audit --json
