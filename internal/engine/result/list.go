@@ -9,6 +9,7 @@ import (
 type DependencyReport struct {
 	StartedAt time.Time
 	EndedAt   time.Time
+	Canceled  bool
 	Items     []DependencyItem
 	Projects  []DependencyProject
 }

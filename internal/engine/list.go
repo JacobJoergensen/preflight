@@ -70,6 +70,7 @@ func (r Runner) listMonorepo(
 	return result.DependencyReport{
 		StartedAt: startedAt,
 		EndedAt:   time.Now(),
+		Canceled:  ctx.Err() != nil,
 		Items:     allItems,
 		Projects:  projectSummaries,
 	}, nil
@@ -101,6 +102,10 @@ func (r Runner) listProject(
 	items := make([]result.DependencyItem, 0, len(adapters))
 
 	for _, a := range adapters {
+		if ctx.Err() != nil {
+			break
+		}
+
 		lister, ok := a.(adapter.DependencyLister)
 
 		if !ok {
@@ -139,6 +144,7 @@ func (r Runner) listProject(
 	return result.DependencyReport{
 		StartedAt: startedAt,
 		EndedAt:   time.Now(),
+		Canceled:  ctx.Err() != nil,
 		Items:     items,
 	}, nil
 }

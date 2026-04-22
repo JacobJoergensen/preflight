@@ -176,6 +176,10 @@ func listDepCountSummary(count int) string {
 }
 
 func listStatusFromReport(report result.DependencyReport) (icon string, color string, text string) {
+	if report.Canceled {
+		return terminal.WarningSign, terminal.Yellow, "Listing canceled."
+	}
+
 	if len(report.Items) == 0 {
 		return terminal.WarningSign, terminal.Yellow, "Nothing to list."
 	}

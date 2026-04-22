@@ -73,8 +73,20 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
+		if exitCodeFromListReport(report) != 0 {
+			return ErrSilentFailure
+		}
+
 		return nil
 	},
+}
+
+func exitCodeFromListReport(report result.DependencyReport) int {
+	if report.Canceled {
+		return 1
+	}
+
+	return 0
 }
 
 func renderList(report result.DependencyReport, jsonOutput bool) error {

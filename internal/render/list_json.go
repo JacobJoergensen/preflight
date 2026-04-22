@@ -19,6 +19,7 @@ type listReportJSON struct {
 	SchemaVersion int               `json:"schemaVersion"`
 	StartedAt     time.Time         `json:"startedAt"`
 	EndedAt       time.Time         `json:"endedAt"`
+	Canceled      bool              `json:"canceled,omitempty"`
 	Items         []listItemJSON    `json:"items"`
 	Projects      []listProjectJSON `json:"projects,omitempty"`
 }
@@ -59,6 +60,7 @@ func (r JSONListRenderer) Render(report result.DependencyReport) error {
 		SchemaVersion: ListJSONSchemaVersion,
 		StartedAt:     report.StartedAt,
 		EndedAt:       report.EndedAt,
+		Canceled:      report.Canceled,
 		Items:         items,
 		Projects:      listProjectsToJSON(report.Projects),
 	}
