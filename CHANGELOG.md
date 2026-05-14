@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Version 1.4.0 (2026-05-14)
 - Added Rust ecosystem support: `check`, `list`, `audit`, `fix`, and `run` now recognize Cargo projects via `Cargo.toml`, verify direct and dev dependencies against `Cargo.lock`, dispatch `rust:` script targets to `cargo`, surface outdated crates via `cargo outdated` (when installed), and run security audits via `cargo audit` (when installed)
 - `list` now splits dev dependencies into their own section under each ecosystem, matching the layout used by `check`
 - `list` now shows optional dependencies (`optionalDependencies` for npm, `suggest` for Composer, non-dev extras for PEP 621 pyproject.toml, `optional = true` markers for Poetry) in a separate section under each ecosystem
