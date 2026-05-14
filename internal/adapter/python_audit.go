@@ -3,53 +3,23 @@ package adapter
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/manifest"
 )
 
 func (p PythonModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
-	_, found := deps.Loader.DetectPackageManager(manifest.PackageTypePython)
-
-	if !found {
+	if _, found := deps.Loader.DetectPackageManager(manifest.PackageTypePython); !found {
 		return AuditResult{Skipped: true, SkipReason: "no Python project detected"}
 	}
 
-	if _, err := exec.LookPath("pip-audit"); err != nil {
-		return AuditResult{
-			Skipped:    true,
-			SkipReason: "pip-audit not found on PATH (install: pip install pip-audit)",
-		}
-	}
-
-	workDir := deps.Loader.WorkDir
-	args := []string{"--format", "json"}
-	cmdLine := "pip-audit " + strings.Join(args, " ")
-
-	stdout, stderr, code, err := runAuditCommand(ctx, workDir, "pip-audit", args)
-
-	if err != nil {
-		return AuditResult{
-			CommandLine: cmdLine,
-			Err:         err,
-			Output:      mergeAuditOutput(stdout, stderr),
-		}
-	}
-
-	output := mergeAuditOutput(stdout, stderr)
-	counts := parsePipAuditCounts(stdout)
-	rank := severityRankFromCounts(counts)
-	passed := code == 0
-
-	return AuditResult{
-		CommandLine:  cmdLine,
-		ExitCode:     code,
-		OK:           passed,
-		SeverityRank: rank,
-		Counts:       counts,
-		Output:       output,
-	}
+	return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
+		Name:            "pip-audit",
+		Display:         "pip-audit",
+		Args:            []string{"--format", "json"},
+		ParseCounts:     parsePipAuditCounts,
+		ToolMissingHint: "pip-audit not found on PATH (install: pip install pip-audit)",
+	})
 }
 
 func parsePipAuditCounts(jsonText string) map[string]int {

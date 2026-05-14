@@ -7,39 +7,16 @@ import (
 )
 
 func (c ComposerModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
-	composerConfig := deps.Loader.LoadComposerConfig()
-
-	if !composerConfig.HasConfig {
+	if !deps.Loader.LoadComposerConfig().HasConfig {
 		return AuditResult{Skipped: true, SkipReason: "no composer.json"}
 	}
 
-	workDir := deps.Loader.WorkDir
-	args := []string{"audit", "--format=json"}
-	cmdLine := "composer " + strings.Join(args, " ")
-
-	stdout, stderr, code, err := runAuditCommand(ctx, workDir, "composer", args)
-
-	if err != nil {
-		return AuditResult{
-			CommandLine: cmdLine,
-			Err:         err,
-			Output:      mergeAuditOutput(stdout, stderr),
-		}
-	}
-
-	output := mergeAuditOutput(stdout, stderr)
-	counts := parseComposerAdvisoryCounts(stdout)
-	rank := severityRankFromCounts(counts)
-	passed := code == 0
-
-	return AuditResult{
-		CommandLine:  cmdLine,
-		ExitCode:     code,
-		OK:           passed,
-		SeverityRank: rank,
-		Counts:       counts,
-		Output:       output,
-	}
+	return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
+		Name:        "composer",
+		Display:     "composer",
+		Args:        []string{"audit", "--format=json"},
+		ParseCounts: parseComposerAdvisoryCounts,
+	})
 }
 
 func parseComposerAdvisoryCounts(jsonText string) map[string]int {

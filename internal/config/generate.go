@@ -16,7 +16,7 @@ func Generate(workDir string, filesystem fs.FS) ([]byte, error) {
 
 	var scopes []string
 
-	for _, packageType := range []string{manifest.PackageTypeComposer, manifest.PackageTypeJS, manifest.PackageTypeGo, manifest.PackageTypePython, manifest.PackageTypeRuby} {
+	for _, packageType := range []string{manifest.PackageTypeComposer, manifest.PackageTypeJS, manifest.PackageTypeGo, manifest.PackageTypeRust, manifest.PackageTypePython, manifest.PackageTypeRuby} {
 		if _, ok := loader.DetectPackageManager(packageType); ok {
 			scopes = append(scopes, packageType)
 		}

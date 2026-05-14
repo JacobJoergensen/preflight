@@ -23,6 +23,7 @@ const (
 	PackageTypeGo       = "go"
 	PackageTypePython   = "python"
 	PackageTypeRuby     = "ruby"
+	PackageTypeRust     = "rust"
 )
 
 var Tools = map[string]Tool{
@@ -174,6 +175,21 @@ var Tools = map[string]Tool{
 		Command:     "node",
 		VersionArgs: []string{"--version"},
 	},
+	"rustc": {
+		Name:        "Rust",
+		Command:     "rustc",
+		VersionArgs: []string{"--version"},
+	},
+	"cargo": {
+		Name:        "Cargo",
+		Command:     "cargo",
+		PackageType: PackageTypeRust,
+		ConfigFile:  "Cargo.toml",
+		LockFile:    "Cargo.lock",
+		VersionArgs: []string{"--version"},
+		InstallArgs: []string{"fetch"},
+		ForceArgs:   []string{},
+	},
 }
 
 func GetTool(command string) (Tool, bool) {
@@ -219,7 +235,7 @@ func AnyMatchesPackageType(commands []string, packageType string) bool {
 
 func IsPackageType(name string) bool {
 	switch name {
-	case PackageTypeJS, PackageTypeComposer, PackageTypeGo, PackageTypePython, PackageTypeRuby:
+	case PackageTypeJS, PackageTypeComposer, PackageTypeGo, PackageTypePython, PackageTypeRuby, PackageTypeRust:
 		return true
 	default:
 		return false

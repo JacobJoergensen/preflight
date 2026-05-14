@@ -46,9 +46,10 @@ func TestGetPriority(t *testing.T) {
 		{"node", 3, true},
 		{"js", 4, true},
 		{"go", 5, true},
-		{"python", 6, true},
-		{"ruby", 7, true},
-		{"env", 8, true},
+		{"rust", 6, true},
+		{"python", 7, true},
+		{"ruby", 8, true},
+		{"env", 9, true},
 		{"PHP", 1, true}, // case insensitive
 		{"unknown", 1000, false},
 		{"", 1000, false},

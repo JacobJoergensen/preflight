@@ -24,6 +24,8 @@ func ProjectSignals(scopeID string, loader manifest.Loader) []string {
 		return pythonProjectSignals(loader)
 	case "ruby":
 		return rubyProjectSignals(loader)
+	case "rust":
+		return rustProjectSignals(loader)
 	case "php":
 		return phpProjectSignals()
 	case "env":
@@ -54,6 +56,8 @@ func FixPMHint(scopeID string, loader manifest.Loader) string {
 		}
 	case "ruby":
 		return "bundle"
+	case "rust":
+		return "cargo"
 	case "node", "php":
 		return ""
 	default:
@@ -263,6 +267,20 @@ func goProjectSignals(l manifest.Loader) []string {
 
 	if l.FileExists("go.sum") {
 		lines = append(lines, "go.sum exists")
+	}
+
+	return lines
+}
+
+func rustProjectSignals(l manifest.Loader) []string {
+	var lines []string
+
+	if l.FileExists("Cargo.toml") {
+		lines = append(lines, "Cargo.toml exists")
+	}
+
+	if l.FileExists("Cargo.lock") {
+		lines = append(lines, "Cargo.lock exists")
 	}
 
 	return lines

@@ -49,6 +49,7 @@ type ScriptTarget struct {
 	Go       string `yaml:"go,omitempty"`
 	Ruby     string `yaml:"ruby,omitempty"`
 	Python   string `yaml:"python,omitempty"`
+	Rust     string `yaml:"rust,omitempty"`
 }
 
 type ScriptTargets []ScriptTarget
@@ -177,13 +178,17 @@ func (s ScriptTarget) Validate() error {
 		count++
 	}
 
+	if s.Rust != "" {
+		count++
+	}
+
 	switch count {
 	case 0:
-		return errors.New("set exactly one of js, composer, go, ruby, python")
+		return errors.New("set exactly one of js, composer, go, ruby, python, rust")
 	case 1:
 		return nil
 	default:
-		return errors.New("set only one of js, composer, go, ruby, python per script")
+		return errors.New("set only one of js, composer, go, ruby, python, rust per script")
 	}
 }
 

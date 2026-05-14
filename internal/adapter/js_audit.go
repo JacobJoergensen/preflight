@@ -9,9 +9,7 @@ import (
 )
 
 func (p PackageModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
-	config := deps.Loader.LoadPackageConfig()
-
-	if !config.HasConfig {
+	if !deps.Loader.LoadPackageConfig().HasConfig {
 		return AuditResult{Skipped: true, SkipReason: "no package.json"}
 	}
 
@@ -22,33 +20,13 @@ func (p PackageModule) Audit(ctx context.Context, deps Dependencies) AuditResult
 	}
 
 	cmd := packageManager.Command()
-	workDir := deps.Loader.WorkDir
-	args := []string{"audit", "--json"}
-	cmdLine := cmd + " " + strings.Join(args, " ")
 
-	stdout, stderr, code, err := runAuditCommand(ctx, workDir, cmd, args)
-
-	if err != nil {
-		return AuditResult{
-			CommandLine: cmdLine,
-			Err:         err,
-			Output:      mergeAuditOutput(stdout, stderr),
-		}
-	}
-
-	output := mergeAuditOutput(stdout, stderr)
-	counts := parseNPMVulnerabilityCounts(stdout)
-	rank := severityRankFromCounts(counts)
-	passed := code == 0
-
-	return AuditResult{
-		CommandLine:  cmdLine,
-		ExitCode:     code,
-		OK:           passed,
-		SeverityRank: rank,
-		Counts:       counts,
-		Output:       output,
-	}
+	return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
+		Name:        cmd,
+		Display:     cmd,
+		Args:        []string{"audit", "--json"},
+		ParseCounts: parseNPMVulnerabilityCounts,
+	})
 }
 
 func parseNPMVulnerabilityCounts(jsonText string) map[string]int {

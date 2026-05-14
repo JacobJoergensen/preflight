@@ -90,6 +90,19 @@ func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, a
 		default:
 			return "python", parts, nil
 		}
+
+	case target.Rust != "":
+		parts := strings.Fields(target.Rust)
+
+		if len(parts) == 0 {
+			return "", nil, errors.New("rust script value is empty")
+		}
+
+		if parts[0] == "cargo" {
+			return "cargo", parts[1:], nil
+		}
+
+		return "cargo", parts, nil
 	}
 
 	return "", nil, errors.New("internal: script target did not resolve")

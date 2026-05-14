@@ -107,7 +107,7 @@ var (
 )
 
 var priorities = map[string]int{
-	"php": 1, "composer": 2, "node": 3, "js": 4, "go": 5, "python": 6, "ruby": 7, "env": 8,
+	"php": 1, "composer": 2, "node": 3, "js": 4, "go": 5, "rust": 6, "python": 7, "ruby": 8, "env": 9,
 }
 
 const defaultPriority = 1000

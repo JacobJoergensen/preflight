@@ -9,10 +9,55 @@ import (
 	"strings"
 )
 
+type auditCommand struct {
+	Name        string
+	Display     string
+	Args        []string
+	ParseCounts func(stdout string) map[string]int
+
+	// ToolMissingHint, when non-empty, marks Name as an externally-installed companion tool
+	// (e.g., govulncheck, cargo-audit). The helper does a PATH lookup first and returns
+	// Skipped with this hint if the binary is missing. Empty for tools assumed to be present
+	// because they're the project's own package manager (composer, npm, etc.).
+	ToolMissingHint string
+}
+
+func executeAudit(ctx context.Context, workDir string, cmd auditCommand) AuditResult {
+	if cmd.ToolMissingHint != "" {
+		if _, err := exec.LookPath(cmd.Name); err != nil {
+			return AuditResult{Skipped: true, SkipReason: cmd.ToolMissingHint}
+		}
+	}
+
+	cmdLine := cmd.Display + " " + strings.Join(cmd.Args, " ")
+
+	stdout, stderr, code, err := runAuditCommand(ctx, workDir, cmd.Name, cmd.Args)
+
+	if err != nil {
+		return AuditResult{
+			CommandLine: cmdLine,
+			Err:         err,
+			Output:      mergeAuditOutput(stdout, stderr),
+		}
+	}
+
+	counts := cmd.ParseCounts(stdout)
+
+	return AuditResult{
+		CommandLine:  cmdLine,
+		ExitCode:     code,
+		OK:           code == 0,
+		SeverityRank: severityRankFromCounts(counts),
+		Counts:       counts,
+		Output:       mergeAuditOutput(stdout, stderr),
+	}
+}
+
 var auditAllowlist = map[string]struct{}{
 	"bun":          {},
 	"bundle":       {},
 	"bundle-audit": {},
+	"cargo-audit":  {},
 	"composer":     {},
 	"go":           {},
 	"govulncheck":  {},
