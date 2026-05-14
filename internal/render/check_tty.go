@@ -116,7 +116,7 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 
 	hasProdDeps := len(card.DepSuccess) > 0 || len(card.DepWarnings) > 0 || len(card.DepErrors) > 0
 	hasDevDeps := len(card.DepDevSuccess) > 0 || len(card.DepDevWarnings) > 0 || len(card.DepDevErrors) > 0
-	hasOptionalDeps := len(card.DepOptionalSuccess) > 0 || len(card.DepOptionalWarnings) > 0
+	hasOptionalDeps := len(card.DepOptionalSuccess) > 0 || len(card.DepOptionalWarnings) > 0 || len(card.DepOptionalInfo) > 0
 
 	if hasProdDeps || hasDevDeps || hasOptionalDeps {
 		if hasProdDeps {
@@ -137,6 +137,7 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 			printSection("Optional dependencies")
 			printDepsWithOutdated(ow, card.DepOptionalSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepOptionalWarnings, terminal.Yellow, terminal.WarningSign, "optional dependency warnings")
+			printOptionalInfoLines(ow, card.DepOptionalInfo)
 		}
 	}
 
@@ -250,6 +251,15 @@ func printMessages(ow *terminal.OutputWriter, messages []model.Message, color st
 		}
 
 		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", indent), symbol, msg.Text)
+	}
+}
+
+func printOptionalInfoLines(ow *terminal.OutputWriter, messages []model.Message) {
+	for _, msg := range messages {
+		ow.Printf("%s%s%s%s\n",
+			terminal.Dim, strings.Repeat(" ", ttyProjectBodySpaces),
+			msg.Text, terminal.Reset,
+		)
 	}
 }
 

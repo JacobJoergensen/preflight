@@ -137,6 +137,8 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 		}
 	}
 
+	skippedCrossPlatform := 0
+
 	for _, dep := range packageConfig.OptionalDependencies {
 		if version, installed := installedPackages[dep]; installed {
 			succs = append(succs, Message{Text: fmt.Sprintf("Installed package %s%s (%s)", terminal.Reset, dep, version), Nested: true, Optional: true})
@@ -144,10 +146,26 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 		}
 
 		if !optionalDepMatchesHost(dep) {
+			skippedCrossPlatform++
 			continue
 		}
 
 		warns = append(warns, Message{Text: fmt.Sprintf("Optional package %s%s not installed", terminal.Reset, dep), Nested: true, Optional: true})
+	}
+
+	if skippedCrossPlatform > 0 {
+		noun := "packages"
+
+		if skippedCrossPlatform == 1 {
+			noun = "package"
+		}
+
+		succs = append(succs, Message{
+			Text:     fmt.Sprintf("%d %s skipped (platform mismatch)", skippedCrossPlatform, noun),
+			Nested:   true,
+			Optional: true,
+			Info:     true,
+		})
 	}
 
 	return errs, warns, succs

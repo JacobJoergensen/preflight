@@ -40,6 +40,7 @@ type HealthCard struct {
 
 	DepOptionalSuccess  []model.Message `json:"dependencyOptionalSuccesses,omitempty"`
 	DepOptionalWarnings []model.Message `json:"dependencyOptionalWarnings,omitempty"`
+	DepOptionalInfo     []model.Message `json:"dependencyOptionalInfo,omitempty"`
 
 	SuggestedActions []string `json:"suggestedActions,omitempty"`
 	Blockers         []string `json:"blockers,omitempty"`
@@ -61,6 +62,8 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 		switch {
 		case msg.Nested:
 			switch {
+			case msg.Optional && msg.Info:
+				card.DepOptionalInfo = append(card.DepOptionalInfo, msg)
 			case msg.Optional:
 				card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
 			case msg.Dev:

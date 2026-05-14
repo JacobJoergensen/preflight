@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -454,9 +455,9 @@ func quietFailureSummary(item result.FixItem) string {
 	if trimmed != "" {
 		lines := strings.Split(trimmed, "\n")
 
-		for i := len(lines) - 1; i >= 0; i-- {
-			if line := strings.TrimSpace(lines[i]); line != "" {
-				return line
+		for _, line := range slices.Backward(lines) {
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				return trimmed
 			}
 		}
 	}
