@@ -46,8 +46,8 @@ preflight check --with-env
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to check (npm, yarn, pnpm, bun, composer, go, pip, bundle) |
-| `--scope` | Scopes to check (js, php, composer, node, go, python, ruby, env) |
+| `--pm`, `-p` | Package managers to check (npm, yarn, pnpm, bun, composer, go, cargo, pip, bundle) |
+| `--scope` | Scopes to check (js, php, composer, node, go, rust, python, ruby, env) |
 | `--with-env` | Also validate `.env` against `.env.example` |
 | `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
@@ -95,6 +95,7 @@ preflight audit --json
 | js | npm/pnpm/yarn/bun audit |
 | composer | composer audit |
 | go | govulncheck |
+| rust | cargo-audit |
 | python | pip-audit |
 | ruby | bundle-audit |
 
@@ -254,6 +255,8 @@ run:
       ruby: "rspec"            # runs: bundle exec rspec
     check:
       python: "pytest"         # runs: poetry run pytest (or pip)
+    test-rust:
+      rust: "test --all"       # runs: cargo test --all
 ```
 
 ## Scopes vs Package Managers
@@ -265,6 +268,7 @@ Use `--scope` for categories, `--pm` for specific tools.
 | js | npm, yarn, pnpm, bun |
 | composer | composer |
 | go | go |
+| rust | cargo |
 | python | pip, poetry, uv |
 | ruby | bundle |
 | php | (runtime check only) |
@@ -280,6 +284,7 @@ You can use either `--scope` or `--pm`, not both.
 | JavaScript | Node.js | npm, yarn, pnpm, bun |
 | PHP | PHP | Composer |
 | Go | Go | Go modules |
+| Rust | Rust | Cargo |
 | Python | Python | pip, Poetry, uv |
 | Ruby | Ruby | Bundler |
 
