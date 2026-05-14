@@ -7,6 +7,8 @@
 - `check` now shows a count of npm optional packages skipped due to platform mismatch under the Optional dependencies section
 - `check --outdated` and `list --outdated` now include outdated optional dependencies for npm and Python
 - `check` no longer reports Poetry dependencies marked `optional = true` as missing when not installed
+- `check` now supports Yarn Plug'n'Play projects (yarn berry default): when `.pnp.cjs` or `.pnp.loader.mjs` is present, dependency installation status is verified from `yarn.lock` instead of scanning `node_modules/`
+- `fix` now reports lockfile diffs for `yarn.lock` alongside the other supported lockfiles
 - Fixed `check` silently treating missing npm packages and Composer dependencies as installed
 
 ## Version 1.3.0 (2026-04-22)

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/JacobJoergensen/preflight/internal/fs"
+	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
 	"github.com/JacobJoergensen/preflight/internal/semver"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -125,7 +126,14 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 	}
 
 	succs = append(succs, Message{Text: "package.json found:"})
-	installedPackages := getInstalledPackages(ctx, deps.FS, deps.Loader.WorkDir, packageConfig.Dependencies, packageConfig.DevDependencies, packageConfig.OptionalDependencies)
+
+	var installedPackages map[string]string
+
+	if isPnPProject(deps.FS, deps.Loader.WorkDir) {
+		installedPackages = installedFromYarnLock(deps.FS, deps.Loader.WorkDir)
+	} else {
+		installedPackages = getInstalledPackages(ctx, deps.FS, deps.Loader.WorkDir, packageConfig.Dependencies, packageConfig.DevDependencies, packageConfig.OptionalDependencies)
+	}
 
 	for _, dep := range append(packageConfig.Dependencies, packageConfig.DevDependencies...) {
 		isDev := slices.Contains(packageConfig.DevDependencies, dep)
@@ -367,6 +375,38 @@ func getInstalledPackages(ctx context.Context, fsys fs.FS, workDir string, depen
 	wg.Wait()
 
 	return installedPackages
+}
+
+func isPnPProject(fsys fs.FS, workDir string) bool {
+	for _, marker := range []string{".pnp.cjs", ".pnp.loader.mjs"} {
+		if _, err := fsys.Stat(filepath.Join(workDir, marker)); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func installedFromYarnLock(fsys fs.FS, workDir string) map[string]string {
+	data, err := fsys.ReadFile(filepath.Join(workDir, "yarn.lock"))
+
+	if err != nil {
+		return map[string]string{}
+	}
+
+	parser, ok := lockdiff.ParserFor("yarn.lock")
+
+	if !ok {
+		return map[string]string{}
+	}
+
+	packages, err := parser.Parse(data)
+
+	if err != nil {
+		return map[string]string{}
+	}
+
+	return packages
 }
 
 var npmOSToGoos = map[string]string{
