@@ -20,10 +20,12 @@ type DependencyProject struct {
 }
 
 type DependencyItem struct {
-	Project       string
-	AdapterID     string
-	Display       string
-	Dependencies  []string
-	Outdated      []adapter.OutdatedPackage
-	ElapsedMillis int64
+	Project         string
+	AdapterID       string
+	Display         string
+	Dependencies    []string
+	DevDependencies []string
+	Optional        []string
+	Outdated        []adapter.OutdatedPackage
+	ElapsedMillis   int64
 }

@@ -179,7 +179,51 @@ func (p PythonModule) ListDependencies(ctx context.Context, deps Dependencies) (
 		return nil, nil
 	}
 
-	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
+	return slices.Clone(config.Dependencies), nil
+}
+
+func (p PythonModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPythonConfig()
+
+	if config.PackageManager.Tool.Command == "" {
+		return nil, nil
+	}
+
+	if config.Error != nil {
+		return nil, config.Error
+	}
+
+	if !config.HasConfig {
+		return nil, nil
+	}
+
+	return slices.Clone(config.DevDependencies), nil
+}
+
+func (p PythonModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPythonConfig()
+
+	if config.PackageManager.Tool.Command == "" {
+		return nil, nil
+	}
+
+	if config.Error != nil {
+		return nil, config.Error
+	}
+
+	if !config.HasConfig {
+		return nil, nil
+	}
+
+	return slices.Clone(config.OptionalDependencies), nil
 }
 
 func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
@@ -205,7 +249,7 @@ func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Ou
 		return nil, err
 	}
 
-	direct := toSet(config.Dependencies, config.DevDependencies)
+	direct := toSet(config.Dependencies, config.DevDependencies, config.OptionalDependencies)
 
 	return filterDirectOutdated(packages, direct), nil
 }

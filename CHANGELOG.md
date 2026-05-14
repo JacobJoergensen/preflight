@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- `list` now splits dev dependencies into their own section under each ecosystem, matching the layout used by `check`
+- `list` now shows optional dependencies (`optionalDependencies` for npm, `suggest` for Composer, non-dev extras for PEP 621 pyproject.toml, `optional = true` markers for Poetry) in a separate section under each ecosystem
+- `check` now reports npm `optionalDependencies` in a dedicated section and warns when one targeting the host platform is not installed (packages with mismatched OS/CPU tokens in their name are skipped)
+- `check --outdated` and `list --outdated` now include outdated optional dependencies for npm and Python
+- `check` no longer reports Poetry dependencies marked `optional = true` as missing when not installed
+- Fixed `check` silently treating missing npm packages and Composer dependencies as installed
 
 ## Version 1.3.0 (2026-04-22)
 - Added a live progress spinner to `check` and `audit`

@@ -116,16 +116,30 @@ func (r Runner) listProject(
 
 		dependencies, listErr := lister.ListDependencies(ctx, deps)
 
-		if listErr != nil || len(dependencies) == 0 {
+		var devDependencies []string
+
+		if devLister, ok := a.(adapter.DevDependencyLister); ok {
+			devDependencies, _ = devLister.ListDevDependencies(ctx, deps)
+		}
+
+		var optional []string
+
+		if optionalLister, ok := a.(adapter.OptionalLister); ok {
+			optional, _ = optionalLister.ListOptionalDependencies(ctx, deps)
+		}
+
+		if listErr != nil || (len(dependencies) == 0 && len(devDependencies) == 0 && len(optional) == 0) {
 			continue
 		}
 
 		item := result.DependencyItem{
-			Project:       projectPath,
-			AdapterID:     a.Name(),
-			Display:       adapter.DisplayName(a),
-			Dependencies:  dependencies,
-			ElapsedMillis: time.Since(adapterStartedAt).Milliseconds(),
+			Project:         projectPath,
+			AdapterID:       a.Name(),
+			Display:         adapter.DisplayName(a),
+			Dependencies:    dependencies,
+			DevDependencies: devDependencies,
+			Optional:        optional,
+			ElapsedMillis:   time.Since(adapterStartedAt).Milliseconds(),
 		}
 
 		if outdated {

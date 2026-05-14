@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -90,7 +89,35 @@ func (c ComposerModule) ListDependencies(ctx context.Context, deps Dependencies)
 		return nil, config.Error
 	}
 
-	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
+	return slices.Clone(config.Dependencies), nil
+}
+
+func (c ComposerModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadComposerConfig()
+
+	if !config.HasConfig || config.Error != nil {
+		return nil, config.Error
+	}
+
+	return slices.Clone(config.DevDependencies), nil
+}
+
+func (c ComposerModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadComposerConfig()
+
+	if !config.HasConfig || config.Error != nil {
+		return nil, config.Error
+	}
+
+	return slices.Clone(config.OptionalDependencies), nil
 }
 
 func (c ComposerModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
@@ -245,7 +272,11 @@ func fillMissingComposerDeps(ctx context.Context, runner exec.Runner, installed 
 		go func(dep string) {
 			defer wg.Done()
 
-			version := cmp.Or(composerDepVersion(ctx, runner, dep), "version unknown")
+			version := composerDepVersion(ctx, runner, dep)
+
+			if version == "" {
+				return
+			}
 
 			mu.Lock()
 			installed[dep] = version

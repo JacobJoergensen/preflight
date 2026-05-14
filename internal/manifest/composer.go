@@ -10,17 +10,19 @@ import (
 type ComposerJSON struct {
 	Require    map[string]string `json:"require"`
 	RequireDev map[string]string `json:"require-dev"`
+	Suggest    map[string]string `json:"suggest"`
 }
 
 type ComposerConfig struct {
-	PackageManager  PackageManager
-	PHPVersion      string
-	PHPExtensions   []string
-	Dependencies    []string
-	DevDependencies []string
-	HasConfig       bool
-	HasLock         bool
-	Error           error
+	PackageManager       PackageManager
+	PHPVersion           string
+	PHPExtensions        []string
+	Dependencies         []string
+	DevDependencies      []string
+	OptionalDependencies []string
+	HasConfig            bool
+	HasLock              bool
+	Error                error
 }
 
 func (l Loader) HasComposerJSON() bool {
@@ -90,4 +92,17 @@ func parseComposerJSON(config *ComposerConfig, data *ComposerJSON) {
 
 	slices.Sort(devDeps)
 	config.DevDependencies = devDeps
+
+	var suggested []string
+
+	for dep := range data.Suggest {
+		if strings.HasPrefix(dep, "ext-") {
+			continue
+		}
+
+		suggested = append(suggested, dep)
+	}
+
+	slices.Sort(suggested)
+	config.OptionalDependencies = suggested
 }

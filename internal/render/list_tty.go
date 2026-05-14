@@ -77,7 +77,7 @@ func renderListItemCardTTY(ow *terminal.OutputWriter, item result.DependencyItem
 
 	badge := terminal.Green + terminal.Bold + "OK" + terminal.Reset
 
-	if len(item.Dependencies) == 0 {
+	if len(item.Dependencies) == 0 && len(item.DevDependencies) == 0 && len(item.Optional) == 0 {
 		badge = terminal.Yellow + terminal.Bold + "EMPTY" + terminal.Reset
 	}
 
@@ -100,13 +100,19 @@ func renderListItemCardTTY(ow *terminal.OutputWriter, item result.DependencyItem
 
 	ow.Println(header)
 
-	if len(item.Dependencies) > 0 {
-		ow.Println(terminal.Dim + "  " + listDepCountSummary(len(item.Dependencies)) + terminal.Reset)
+	if len(item.Dependencies) > 0 || len(item.DevDependencies) > 0 || len(item.Optional) > 0 {
+		ow.Println(terminal.Dim + "  " + listDepCountSummary(len(item.Dependencies), len(item.DevDependencies), len(item.Optional)) + terminal.Reset)
 	} else {
 		ow.Println(terminal.Dim + "  No dependencies in this scope" + terminal.Reset)
 	}
 
 	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
+
+	outdatedByName := make(map[string]adapter.OutdatedPackage, len(item.Outdated))
+
+	for _, pkg := range item.Outdated {
+		outdatedByName[pkg.Name] = pkg
+	}
 
 	ow.Println(terminal.Dim + "  Dependencies" + terminal.Reset)
 
@@ -115,17 +121,23 @@ func renderListItemCardTTY(ow *terminal.OutputWriter, item result.DependencyItem
 			terminal.Red, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CrossMark,
 			"No dependencies found.", terminal.Reset,
 		)
-
-		return
+	} else {
+		renderListDependencyLines(ow, item.Dependencies, outdatedByName)
 	}
 
-	outdatedByName := make(map[string]adapter.OutdatedPackage, len(item.Outdated))
-
-	for _, pkg := range item.Outdated {
-		outdatedByName[pkg.Name] = pkg
+	if len(item.DevDependencies) > 0 {
+		ow.Println(terminal.Dim + "  Dev dependencies" + terminal.Reset)
+		renderListDependencyLines(ow, item.DevDependencies, outdatedByName)
 	}
 
-	for _, dep := range item.Dependencies {
+	if len(item.Optional) > 0 {
+		ow.Println(terminal.Dim + "  Optional" + terminal.Reset)
+		renderListDependencyLines(ow, item.Optional, outdatedByName)
+	}
+}
+
+func renderListDependencyLines(ow *terminal.OutputWriter, names []string, outdatedByName map[string]adapter.OutdatedPackage) {
+	for _, dep := range names {
 		if pkg, isOutdated := outdatedByName[dep]; isOutdated {
 			ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
 				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
@@ -142,12 +154,24 @@ func renderListItemCardTTY(ow *terminal.OutputWriter, item result.DependencyItem
 	}
 }
 
-func listDepCountSummary(count int) string {
-	if count == 1 {
-		return "1 required dependency"
+func listDepCountSummary(required, dev, optional int) string {
+	requiredLabel := "required dependencies"
+
+	if required == 1 {
+		requiredLabel = "required dependency"
 	}
 
-	return fmt.Sprintf("%d required dependencies", count)
+	summary := fmt.Sprintf("%d %s", required, requiredLabel)
+
+	if dev > 0 {
+		summary = fmt.Sprintf("%s, %d dev", summary, dev)
+	}
+
+	if optional > 0 {
+		summary = fmt.Sprintf("%s, %d optional", summary, optional)
+	}
+
+	return summary
 }
 
 func listStatusFromReport(report result.DependencyReport) (icon string, color string, text string) {
@@ -166,7 +190,7 @@ func listStatusFromReport(report result.DependencyReport) (icon string, color st
 	totalDeps := 0
 
 	for _, item := range report.Items {
-		totalDeps += len(item.Dependencies)
+		totalDeps += len(item.Dependencies) + len(item.DevDependencies) + len(item.Optional)
 	}
 
 	line := "Listed " + listDepPhrase(totalDeps) + " across " + listManagerPhrase(len(report.Items)) + "."
@@ -179,11 +203,11 @@ func monorepoListStatusFromReport(report result.DependencyReport) (icon string, 
 	managersWithDeps := 0
 
 	for _, item := range report.Items {
-		if len(item.Dependencies) == 0 {
+		if len(item.Dependencies) == 0 && len(item.DevDependencies) == 0 && len(item.Optional) == 0 {
 			continue
 		}
 
-		totalDeps += len(item.Dependencies)
+		totalDeps += len(item.Dependencies) + len(item.DevDependencies) + len(item.Optional)
 		managersWithDeps++
 	}
 

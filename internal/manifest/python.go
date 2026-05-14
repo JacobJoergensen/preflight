@@ -12,6 +12,7 @@ type PythonConfig struct {
 	PackageManager           PackageManager
 	Dependencies             []string
 	DevDependencies          []string
+	OptionalDependencies     []string
 	RequiresPython           string // effective constraint (pyproject or .python-version fallback)
 	RequiresPythonConstraint string // from pyproject.toml only
 	PythonVersionPin         string // raw .python-version content
@@ -20,9 +21,12 @@ type PythonConfig struct {
 }
 
 var (
-	pep508NameFromLine = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)`)
-	requiresPythonRe   = regexp.MustCompile(`(?m)^requires-python\s*=\s*["']([^"']+)["']`)
-	pythonVersionRe    = regexp.MustCompile(`(?m)^python\s*=\s*["']([^"']+)["']`)
+	pep508NameFromLine   = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)`)
+	requiresPythonRe     = regexp.MustCompile(`(?m)^requires-python\s*=\s*["']([^"']+)["']`)
+	pythonVersionRe      = regexp.MustCompile(`(?m)^python\s*=\s*["']([^"']+)["']`)
+	pep621ExtraNameRe    = regexp.MustCompile(`(?m)^([a-zA-Z][a-zA-Z0-9_-]*)\s*=\s*\[`)
+	pep621DevExtraNames  = map[string]struct{}{"dev": {}, "test": {}, "docs": {}}
+	poetryOptionalMarker = regexp.MustCompile(`(?:^|[,{ \t])optional\s*=\s*true(?:[\s,}]|$)`)
 )
 
 func (l Loader) LoadPythonConfig() PythonConfig {
@@ -40,9 +44,9 @@ func (l Loader) LoadPythonConfig() PythonConfig {
 	case "pip":
 		config.Dependencies, err = l.loadRequirementsTxtDeps("requirements.txt")
 	case "poetry":
-		config.Dependencies, config.DevDependencies, config.RequiresPythonConstraint, err = l.loadPoetryPyproject()
+		config.Dependencies, config.DevDependencies, config.OptionalDependencies, config.RequiresPythonConstraint, err = l.loadPoetryPyproject()
 	case "uv", "pdm":
-		config.Dependencies, config.DevDependencies, config.RequiresPythonConstraint, err = l.loadPEP621Pyproject()
+		config.Dependencies, config.DevDependencies, config.OptionalDependencies, config.RequiresPythonConstraint, err = l.loadPEP621Pyproject()
 	case "pipenv":
 		config.Dependencies, config.DevDependencies, err = l.loadPipfileDeps()
 	default:
@@ -121,11 +125,11 @@ func extractPackageName(line string) string {
 	return strings.TrimSpace(line)
 }
 
-func (l Loader) loadPoetryPyproject() (main, dev []string, requiresPython string, err error) {
+func (l Loader) loadPoetryPyproject() (main, dev, optional []string, requiresPython string, err error) {
 	raw, err := l.readFile("pyproject.toml")
 
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
 	}
 
 	content := string(raw)
@@ -145,21 +149,63 @@ func (l Loader) loadPoetryPyproject() (main, dev []string, requiresPython string
 		}
 	}
 
-	main = parseTomlKeyValueSection(content, "[tool.poetry.dependencies]", true)
-	dev = parseTomlKeyValueSection(content, "[tool.poetry.group.dev.dependencies]", false)
+	depsSection := extractTomlSection(content, "[tool.poetry.dependencies]")
+	main, optional = parsePoetryDependenciesSection(depsSection)
+
+	dev = parseTomlKeyValueSection(content, "[tool.poetry.group.dev.dependencies]")
 
 	if len(dev) == 0 {
-		dev = parseTomlKeyValueSection(content, "[tool.poetry.dev-dependencies]", false)
+		dev = parseTomlKeyValueSection(content, "[tool.poetry.dev-dependencies]")
 	}
 
-	return dedupeSorted(main), dedupeSorted(dev), requiresPython, nil
+	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), requiresPython, nil
 }
 
-func (l Loader) loadPEP621Pyproject() (main, dev []string, requiresPython string, err error) {
+func parsePoetryDependenciesSection(section string) (required, optional []string) {
+	if section == "" {
+		return nil, nil
+	}
+
+	if newline := strings.Index(section, "\n"); newline >= 0 {
+		section = section[newline+1:]
+	}
+
+	for line := range strings.SplitSeq(section, "\n") {
+		line = strings.TrimSpace(strings.Split(line, "#")[0])
+
+		if line == "" || strings.HasPrefix(line, "[") {
+			continue
+		}
+
+		eq := strings.Index(line, "=")
+
+		if eq <= 0 {
+			continue
+		}
+
+		name := strings.Trim(strings.TrimSpace(line[:eq]), `"'`)
+
+		if name == "" || strings.EqualFold(name, "python") {
+			continue
+		}
+
+		value := strings.TrimSpace(line[eq+1:])
+
+		if strings.HasPrefix(value, "{") && poetryOptionalMarker.MatchString(value) {
+			optional = append(optional, name)
+		} else {
+			required = append(required, name)
+		}
+	}
+
+	return required, optional
+}
+
+func (l Loader) loadPEP621Pyproject() (main, dev, optional []string, requiresPython string, err error) {
 	raw, err := l.readFile("pyproject.toml")
 
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
 	}
 
 	content := string(raw)
@@ -168,18 +214,38 @@ func (l Loader) loadPEP621Pyproject() (main, dev []string, requiresPython string
 	project := extractTomlSection(content, "[project]")
 
 	if project == "" {
-		return nil, nil, requiresPython, errors.New("pyproject.toml has no [project] section")
+		return nil, nil, nil, requiresPython, errors.New("pyproject.toml has no [project] section")
 	}
 
 	main = parseTomlArray(project, `(?m)^dependencies\s*=\s*\[`)
 
-	if opt := extractTomlSection(content, "[project.optional-dependencies]"); opt != "" {
-		for _, group := range []string{"dev", "test", "docs"} {
-			dev = append(dev, parseTomlArray(opt, fmt.Sprintf(`(?m)^%s\s*=\s*\[`, regexp.QuoteMeta(group)))...)
+	if extras := extractTomlSection(content, "[project.optional-dependencies]"); extras != "" {
+		for _, extraName := range extraGroupNames(extras) {
+			pattern := fmt.Sprintf(`(?m)^%s\s*=\s*\[`, regexp.QuoteMeta(extraName))
+			items := parseTomlArray(extras, pattern)
+
+			if _, isDev := pep621DevExtraNames[strings.ToLower(extraName)]; isDev {
+				dev = append(dev, items...)
+			} else {
+				optional = append(optional, items...)
+			}
 		}
 	}
 
-	return dedupeSorted(main), dedupeSorted(dev), requiresPython, nil
+	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), requiresPython, nil
+}
+
+func extraGroupNames(section string) []string {
+	matches := pep621ExtraNameRe.FindAllStringSubmatch(section, -1)
+	names := make([]string, 0, len(matches))
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			names = append(names, match[1])
+		}
+	}
+
+	return names
 }
 
 func (l Loader) loadPipfileDeps() (main, dev []string, err error) {
@@ -190,8 +256,8 @@ func (l Loader) loadPipfileDeps() (main, dev []string, err error) {
 	}
 
 	content := string(raw)
-	main = parseTomlKeyValueSection(content, "[packages]", false)
-	dev = parseTomlKeyValueSection(content, "[dev-packages]", false)
+	main = parseTomlKeyValueSection(content, "[packages]")
+	dev = parseTomlKeyValueSection(content, "[dev-packages]")
 
 	return dedupeSorted(main), dedupeSorted(dev), nil
 }
@@ -248,8 +314,8 @@ func parseTomlArray(content, anchorPattern string) []string {
 	return output
 }
 
-// parseTomlKeyValueSection parses sections like `[packages]`. skipPython excludes "python" entries.
-func parseTomlKeyValueSection(full, header string, skipPython bool) []string {
+// parseTomlKeyValueSection parses sections like `[packages]`.
+func parseTomlKeyValueSection(full, header string) []string {
 	_, section, ok := strings.Cut(full, header)
 
 	if !ok {
@@ -274,10 +340,6 @@ func parseTomlKeyValueSection(full, header string, skipPython bool) []string {
 		name = strings.Trim(name, `"'`)
 
 		if name == "" {
-			continue
-		}
-
-		if skipPython && strings.EqualFold(name, "python") {
 			continue
 		}
 

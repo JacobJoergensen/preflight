@@ -37,6 +37,14 @@ type DependencyLister interface {
 	ListDependencies(ctx context.Context, deps Dependencies) ([]string, error)
 }
 
+type OptionalLister interface {
+	ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error)
+}
+
+type DevDependencyLister interface {
+	ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error)
+}
+
 type OutdatedPackage struct {
 	Name    string
 	Current string

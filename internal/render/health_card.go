@@ -38,6 +38,9 @@ type HealthCard struct {
 	DepDevWarnings []model.Message `json:"dependencyDevWarnings,omitempty"`
 	DepDevErrors   []model.Message `json:"dependencyDevErrors,omitempty"`
 
+	DepOptionalSuccess  []model.Message `json:"dependencyOptionalSuccesses,omitempty"`
+	DepOptionalWarnings []model.Message `json:"dependencyOptionalWarnings,omitempty"`
+
 	SuggestedActions []string `json:"suggestedActions,omitempty"`
 	Blockers         []string `json:"blockers,omitempty"`
 	Summary          string   `json:"summary,omitempty"`
@@ -57,9 +60,12 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 	for _, msg := range item.Successes {
 		switch {
 		case msg.Nested:
-			if msg.Dev {
+			switch {
+			case msg.Optional:
+				card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
+			case msg.Dev:
 				card.DepDevSuccess = append(card.DepDevSuccess, msg)
-			} else {
+			default:
 				card.DepSuccess = append(card.DepSuccess, msg)
 			}
 		case isProjectSignalLine(msg.Text):
@@ -76,9 +82,12 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 
 	for _, msg := range item.Warnings {
 		if msg.Nested {
-			if msg.Dev {
+			switch {
+			case msg.Optional:
+				card.DepOptionalWarnings = append(card.DepOptionalWarnings, msg)
+			case msg.Dev:
 				card.DepDevWarnings = append(card.DepDevWarnings, msg)
-			} else {
+			default:
 				card.DepWarnings = append(card.DepWarnings, msg)
 			}
 		} else {
@@ -138,7 +147,7 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 	}
 
 	depErr := len(card.DepErrors) + len(card.DepDevErrors)
-	depWarn := len(card.DepWarnings) + len(card.DepDevWarnings)
+	depWarn := len(card.DepWarnings) + len(card.DepDevWarnings) + len(card.DepOptionalWarnings)
 	flatErr := len(card.FlatErrors)
 	flatWarn := len(card.FlatWarnings)
 

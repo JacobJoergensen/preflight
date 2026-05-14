@@ -16,21 +16,23 @@ type PackageJSON struct {
 		Yarn string `json:"yarn,omitempty"`
 		Bun  string `json:"bun,omitempty"`
 	} `json:"engines"`
-	Dependencies    map[string]string `json:"dependencies"`
-	DevDependencies map[string]string `json:"devDependencies"`
+	Dependencies         map[string]string `json:"dependencies"`
+	DevDependencies      map[string]string `json:"devDependencies"`
+	OptionalDependencies map[string]string `json:"optionalDependencies"`
 }
 
 type PackageConfig struct {
-	PackageManager  PackageManager
-	NodeVersion     string
-	NPMVersion      string
-	PNPMVersion     string
-	YarnVersion     string
-	BunVersion      string
-	Dependencies    []string
-	DevDependencies []string
-	HasConfig       bool
-	Error           error
+	PackageManager       PackageManager
+	NodeVersion          string
+	NPMVersion           string
+	PNPMVersion          string
+	YarnVersion          string
+	BunVersion           string
+	Dependencies         []string
+	DevDependencies      []string
+	OptionalDependencies []string
+	HasConfig            bool
+	Error                error
 }
 
 func (l Loader) LoadPackageConfig() PackageConfig {
@@ -70,4 +72,5 @@ func parsePackageJSON(config *PackageConfig, data *PackageJSON) {
 
 	config.Dependencies = slices.Sorted(maps.Keys(data.Dependencies))
 	config.DevDependencies = slices.Sorted(maps.Keys(data.DevDependencies))
+	config.OptionalDependencies = slices.Sorted(maps.Keys(data.OptionalDependencies))
 }

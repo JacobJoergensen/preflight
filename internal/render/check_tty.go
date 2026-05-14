@@ -116,8 +116,9 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 
 	hasProdDeps := len(card.DepSuccess) > 0 || len(card.DepWarnings) > 0 || len(card.DepErrors) > 0
 	hasDevDeps := len(card.DepDevSuccess) > 0 || len(card.DepDevWarnings) > 0 || len(card.DepDevErrors) > 0
+	hasOptionalDeps := len(card.DepOptionalSuccess) > 0 || len(card.DepOptionalWarnings) > 0
 
-	if hasProdDeps || hasDevDeps {
+	if hasProdDeps || hasDevDeps || hasOptionalDeps {
 		if hasProdDeps {
 			printSection("Dependencies")
 			printDepsWithOutdated(ow, card.DepSuccess, outdatedByName)
@@ -130,6 +131,12 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 			printDepsWithOutdated(ow, card.DepDevSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
 			printMessagesUniformCapped(ow, card.DepDevErrors, terminal.Red, terminal.CrossMark, "dev dependency errors")
+		}
+
+		if hasOptionalDeps {
+			printSection("Optional dependencies")
+			printDepsWithOutdated(ow, card.DepOptionalSuccess, outdatedByName)
+			printMessagesUniformCapped(ow, card.DepOptionalWarnings, terminal.Yellow, terminal.WarningSign, "optional dependency warnings")
 		}
 	}
 
@@ -212,6 +219,10 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 
 		if len(card.DepDevWarnings) > 0 {
 			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
+		}
+
+		if len(card.DepOptionalWarnings) > 0 {
+			printMessagesUniformCapped(ow, card.DepOptionalWarnings, terminal.Yellow, terminal.WarningSign, "optional dependency warnings")
 		}
 
 		printOutdatedLinesQuietTTY(ow, outdated)

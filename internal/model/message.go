@@ -1,7 +1,8 @@
 package model
 
 type Message struct {
-	Text   string `json:"text"`
-	Nested bool   `json:"nested"`
-	Dev    bool   `json:"dev,omitempty"` // Only meaningful when Nested is true, indicates a dev-only dependency
+	Text     string `json:"text"`
+	Nested   bool   `json:"nested"`
+	Dev      bool   `json:"dev,omitempty"`      // Only meaningful when Nested is true, indicates a dev-only dependency
+	Optional bool   `json:"optional,omitempty"` // Only meaningful when Nested is true, indicates an optional dependency
 }

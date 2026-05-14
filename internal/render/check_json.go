@@ -11,7 +11,7 @@ import (
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 9
+const CheckJSONSchemaVersion = 10
 
 type JSONCheckRenderer struct {
 	Out io.Writer

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -124,7 +125,7 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 	}
 
 	succs = append(succs, Message{Text: "package.json found:"})
-	installedPackages := getInstalledPackages(ctx, deps.FS, deps.Loader.WorkDir, packageConfig.Dependencies, packageConfig.DevDependencies)
+	installedPackages := getInstalledPackages(ctx, deps.FS, deps.Loader.WorkDir, packageConfig.Dependencies, packageConfig.DevDependencies, packageConfig.OptionalDependencies)
 
 	for _, dep := range append(packageConfig.Dependencies, packageConfig.DevDependencies...) {
 		isDev := slices.Contains(packageConfig.DevDependencies, dep)
@@ -134,6 +135,19 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 		} else {
 			errs = append(errs, Message{Text: fmt.Sprintf("Missing package %s%s, Run `%s install %s`", terminal.Reset, dep, packageManager.Command(), dep), Nested: true, Dev: isDev})
 		}
+	}
+
+	for _, dep := range packageConfig.OptionalDependencies {
+		if version, installed := installedPackages[dep]; installed {
+			succs = append(succs, Message{Text: fmt.Sprintf("Installed package %s%s (%s)", terminal.Reset, dep, version), Nested: true, Optional: true})
+			continue
+		}
+
+		if !optionalDepMatchesHost(dep) {
+			continue
+		}
+
+		warns = append(warns, Message{Text: fmt.Sprintf("Optional package %s%s not installed", terminal.Reset, dep), Nested: true, Optional: true})
 	}
 
 	return errs, warns, succs
@@ -150,7 +164,35 @@ func (p PackageModule) ListDependencies(ctx context.Context, deps Dependencies) 
 		return nil, config.Error
 	}
 
-	return append(slices.Clone(config.Dependencies), config.DevDependencies...), nil
+	return slices.Clone(config.Dependencies), nil
+}
+
+func (p PackageModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPackageConfig()
+
+	if !config.HasConfig || config.Error != nil {
+		return nil, config.Error
+	}
+
+	return slices.Clone(config.DevDependencies), nil
+}
+
+func (p PackageModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	config := deps.Loader.LoadPackageConfig()
+
+	if !config.HasConfig || config.Error != nil {
+		return nil, config.Error
+	}
+
+	return slices.Clone(config.OptionalDependencies), nil
 }
 
 func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
@@ -176,7 +218,7 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 		return nil, err
 	}
 
-	direct := toSet(config.Dependencies, config.DevDependencies)
+	direct := toSet(config.Dependencies, config.DevDependencies, config.OptionalDependencies)
 
 	return filterDirectOutdated(packages, direct), nil
 }
@@ -252,25 +294,31 @@ func requiredPMVersion(config manifest.PackageConfig, command string) string {
 	}
 }
 
-func getInstalledPackages(ctx context.Context, fsys fs.FS, workDir string, dependencies, devDependencies []string) map[string]string {
+func getInstalledPackages(ctx context.Context, fsys fs.FS, workDir string, dependencies, devDependencies, optionalDependencies []string) map[string]string {
 	installedPackages := make(map[string]string)
 
 	if ctx.Err() != nil {
 		return installedPackages
 	}
 
+	candidates := make(map[string]struct{}, len(dependencies)+len(devDependencies)+len(optionalDependencies))
+
 	for _, dep := range dependencies {
-		installedPackages[dep] = "unknown"
+		candidates[dep] = struct{}{}
 	}
 
 	for _, devDep := range devDependencies {
-		installedPackages[devDep] = "unknown"
+		candidates[devDep] = struct{}{}
+	}
+
+	for _, optionalDep := range optionalDependencies {
+		candidates[optionalDep] = struct{}{}
 	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for dep := range installedPackages {
+	for dep := range candidates {
 		wg.Add(1)
 
 		go func(dep string) {
@@ -288,17 +336,65 @@ func getInstalledPackages(ctx context.Context, fsys fs.FS, workDir string, depen
 
 			version := readPackageVersion(fsys, filepath.Join(workDir, path))
 
-			if version != "" {
-				mu.Lock()
-				installedPackages[dep] = version
-				mu.Unlock()
+			if version == "" {
+				return
 			}
+
+			mu.Lock()
+			installedPackages[dep] = version
+			mu.Unlock()
 		}(dep)
 	}
 
 	wg.Wait()
 
 	return installedPackages
+}
+
+var npmOSToGoos = map[string]string{
+	"linux":   "linux",
+	"darwin":  "darwin",
+	"win32":   "windows",
+	"freebsd": "freebsd",
+	"openbsd": "openbsd",
+	"netbsd":  "netbsd",
+	"android": "android",
+	"sunos":   "solaris",
+}
+
+var npmArchToGoarch = map[string]string{
+	"x64":     "amd64",
+	"ia32":    "386",
+	"arm":     "arm",
+	"arm64":   "arm64",
+	"mips":    "mips",
+	"mipsel":  "mipsle",
+	"ppc64":   "ppc64",
+	"ppc64le": "ppc64le",
+	"riscv64": "riscv64",
+	"s390x":   "s390x",
+}
+
+func optionalDepMatchesHost(name string) bool {
+	return optionalDepMatchesPlatform(name, runtime.GOOS, runtime.GOARCH)
+}
+
+func optionalDepMatchesPlatform(name, goos, goarch string) bool {
+	tokens := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '-' || r == '/' || r == '@'
+	})
+
+	for _, token := range tokens {
+		if mappedOS, ok := npmOSToGoos[token]; ok && mappedOS != goos {
+			return false
+		}
+
+		if mappedArch, ok := npmArchToGoarch[token]; ok && mappedArch != goarch {
+			return false
+		}
+	}
+
+	return true
 }
 
 func buildPackagePath(name string) (string, bool) {

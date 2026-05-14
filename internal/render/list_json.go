@@ -9,7 +9,7 @@ import (
 )
 
 // ListJSONSchemaVersion is bumped when preflight list --json output shape changes incompatibly.
-const ListJSONSchemaVersion = 1
+const ListJSONSchemaVersion = 2
 
 type JSONListRenderer struct {
 	Out io.Writer
@@ -30,12 +30,14 @@ type listProjectJSON struct {
 }
 
 type listItemJSON struct {
-	Project       string                `json:"project,omitempty"`
-	AdapterID     string                `json:"adapterId"`
-	Display       string                `json:"display"`
-	Dependencies  []string              `json:"dependencies"`
-	Outdated      []outdatedPackageJSON `json:"outdated,omitempty"`
-	ElapsedMillis int64                 `json:"elapsedMillis,omitempty"`
+	Project         string                `json:"project,omitempty"`
+	AdapterID       string                `json:"adapterId"`
+	Display         string                `json:"display"`
+	Dependencies    []string              `json:"dependencies"`
+	DevDependencies []string              `json:"devDependencies,omitempty"`
+	Optional        []string              `json:"optional,omitempty"`
+	Outdated        []outdatedPackageJSON `json:"outdated,omitempty"`
+	ElapsedMillis   int64                 `json:"elapsedMillis,omitempty"`
 }
 
 func (r JSONListRenderer) Render(report result.DependencyReport) error {
@@ -47,12 +49,14 @@ func (r JSONListRenderer) Render(report result.DependencyReport) error {
 
 	for _, item := range report.Items {
 		items = append(items, listItemJSON{
-			Project:       item.Project,
-			AdapterID:     item.AdapterID,
-			Display:       item.Display,
-			Dependencies:  item.Dependencies,
-			Outdated:      outdatedPackagesToJSON(item.Outdated),
-			ElapsedMillis: item.ElapsedMillis,
+			Project:         item.Project,
+			AdapterID:       item.AdapterID,
+			Display:         item.Display,
+			Dependencies:    item.Dependencies,
+			DevDependencies: item.DevDependencies,
+			Optional:        item.Optional,
+			Outdated:        outdatedPackagesToJSON(item.Outdated),
+			ElapsedMillis:   item.ElapsedMillis,
 		})
 	}
 
