@@ -244,7 +244,15 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 		return nil, err
 	}
 
-	direct := toSet(config.Dependencies, config.DevDependencies, config.OptionalDependencies)
+	hostOptionals := make([]string, 0, len(config.OptionalDependencies))
+
+	for _, dep := range config.OptionalDependencies {
+		if optionalDepMatchesHost(dep) {
+			hostOptionals = append(hostOptionals, dep)
+		}
+	}
+
+	direct := toSet(config.Dependencies, config.DevDependencies, hostOptionals)
 
 	return filterDirectOutdated(packages, direct), nil
 }
