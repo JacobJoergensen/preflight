@@ -2,6 +2,7 @@
 
 ## Unreleased
 - Fixed `check --outdated` and `list --outdated` counting npm optional dependencies skipped due to platform mismatch
+- `check` now lists PIE-managed PHP extensions via `pie show` for accurate detection across all PIE installation methods
 
 ## Version 1.4.0 (2026-05-14)
 - Added Rust ecosystem support: `check`, `list`, `audit`, `fix`, and `run` now recognize Cargo projects via `Cargo.toml`, verify direct and dev dependencies against `Cargo.lock`, dispatch `rust:` script targets to `cargo`, surface outdated crates via `cargo outdated` (when installed), and run security audits via `cargo audit` (when installed)

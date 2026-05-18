@@ -2,10 +2,6 @@ package adapter
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	goexec "os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -13,152 +9,81 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
-var piePharPaths = []string{
-	"./pie.phar",
-	"/usr/local/bin/pie.phar",
-	"/usr/bin/pie.phar",
-}
-
 type pieConfig struct {
 	IsInstalled bool
 	Extensions  []string
-	PharPath    string
 	Error       error
 }
 
 func loadpieConfig(ctx context.Context, runner exec.Runner, fsys fs.FS) pieConfig {
 	config := pieConfig{}
-	config.IsInstalled = checkPIEInstalled(ctx, runner, fsys)
 
-	if !config.IsInstalled {
+	invocation := findPIEInvocation(ctx, runner, fsys)
+
+	if invocation == nil {
 		return config
 	}
 
-	pharPath, err := findPIEPharPath(ctx, fsys)
+	config.IsInstalled = true
+
+	extensions, err := getPIEExtensions(ctx, runner, invocation)
 
 	if err != nil {
-		config.Error = fmt.Errorf("could not locate pie.phar: %w", err)
+		config.Error = err
 		return config
 	}
 
-	config.PharPath = pharPath
-	extensionsMap := getPIEExtensions(ctx, runner, pharPath)
-
-	for ext := range extensionsMap {
-		if ext == "" || ext == "Core" || ext == "standard" ||
-			ext == "[PHP Modules]" || ext == "[Zend Modules]" {
-			continue
-		}
-
-		config.Extensions = append(config.Extensions, ext)
-	}
-
-	slices.Sort(config.Extensions)
+	slices.Sort(extensions)
+	config.Extensions = extensions
 
 	return config
 }
 
-func checkPIEInstalled(ctx context.Context, runner exec.Runner, fsys fs.FS) bool {
+func findPIEInvocation(ctx context.Context, runner exec.Runner, fsys fs.FS) []string {
 	if _, err := runner.Run(ctx, "pie", "--version"); err == nil {
-		return true
+		return []string{"pie"}
 	}
 
-	for _, path := range piePharPaths {
-		if _, err := fsys.Stat(path); err == nil {
-			return true
-		}
+	if _, err := fsys.Stat("./pie.phar"); err == nil {
+		return []string{"php", "./pie.phar"}
 	}
 
-	return false
+	return nil
 }
 
-func findPIEPharPath(_ context.Context, fsys fs.FS) (string, error) {
-	for _, path := range piePharPaths {
-		if _, err := fsys.Stat(path); err == nil {
-			return path, nil
-		}
+func getPIEExtensions(ctx context.Context, runner exec.Runner, invocation []string) ([]string, error) {
+	name := invocation[0]
+	args := append(invocation[1:], "show")
+
+	output, err := runner.Run(ctx, name, args...)
+
+	if err != nil {
+		return nil, err
 	}
 
-	piePath, err := goexec.LookPath("pie")
-
-	if err == nil && piePath != "" {
-		if filepath.Ext(piePath) == ".phar" {
-			return piePath, nil
-		}
-
-		pharPath := filepath.Join(filepath.Dir(piePath), "pie.phar")
-
-		if _, err := fsys.Stat(pharPath); err == nil {
-			return pharPath, nil
-		}
-	}
-
-	return "", errors.New("could not find pie.phar")
+	return parsePIEShowOutput(output), nil
 }
 
-func getPIEExtensions(ctx context.Context, runner exec.Runner, pharPath string) map[string]struct{} {
-	extensions := make(map[string]struct{})
+func parsePIEShowOutput(output string) []string {
+	var extensions []string
 
-	if output, err := runner.Run(ctx, "pie", "-m"); err == nil {
-		for ext := range strings.SplitSeq(output, "\n") {
-			if ext = strings.TrimSpace(ext); ext != "" {
-				extensions[ext] = struct{}{}
-			}
+	for line := range strings.SplitSeq(output, "\n") {
+		line = strings.TrimSpace(line)
+
+		if line == "" || !strings.Contains(line, "(from ") {
+			continue
 		}
-	}
 
-	if pharPath == "" {
-		return extensions
-	}
+		name, _, ok := strings.Cut(line, ":")
 
-	metadataScript := fmt.Sprintf(`
-		try {
-			$phar = new Phar('%s');
-			$meta = $phar->getMetadata();
-			if (isset($meta['extensions'])) echo implode("\n", $meta['extensions']);
-			if (isset($meta['xdebug']) || isset($meta['extensions']['xdebug'])) echo "\nxdebug";
-		} catch (Exception $e) { exit(1); }
-	`, pharPath)
-
-	if output, err := runner.Run(ctx, "php", "-r", metadataScript); err == nil {
-		for ext := range strings.SplitSeq(output, "\n") {
-			if ext = strings.TrimSpace(ext); ext != "" {
-				extensions[ext] = struct{}{}
-			}
+		if !ok {
+			continue
 		}
-	}
 
-	scanScript := fmt.Sprintf(`
-		try {
-			$phar = new Phar('%s');
-			foreach (new RecursiveIteratorIterator($phar) as $file) {
-				$p = $file->getPathname();
-				if (strpos($p, 'xdebug') !== false) echo "xdebug\n";
-				if (preg_match('/extensions\/([a-zA-Z0-9_-]+)\//', $p, $m)) echo $m[1] . "\n";
-			}
-		} catch (Exception $e) { exit(1); }
-	`, pharPath)
+		name = strings.TrimSpace(name)
 
-	if output, err := runner.Run(ctx, "php", "-r", scanScript); err == nil {
-		for ext := range strings.SplitSeq(output, "\n") {
-			if ext = strings.TrimSpace(ext); ext != "" {
-				extensions[ext] = struct{}{}
-			}
-		}
-	}
-
-	for _, ext := range []string{"xdebug", "opcache", "pcov"} {
-		checkScript := fmt.Sprintf(`
-			try {
-				$phar = new Phar('%s');
-				if ($phar->offsetExists('extensions/%s') ||
-					$phar->offsetExists('ext/%s') ||
-					$phar->offsetExists('%s')) echo "found";
-			} catch (Exception $e) { exit(1); }
-		`, pharPath, ext, ext, ext)
-
-		if output, err := runner.Run(ctx, "php", "-r", checkScript); err == nil && strings.Contains(output, "found") {
-			extensions[ext] = struct{}{}
+		if name != "" {
+			extensions = append(extensions, name)
 		}
 	}
 
