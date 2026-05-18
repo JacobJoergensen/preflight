@@ -44,11 +44,6 @@ var experimentalExtensions = map[string]struct{}{
 	"svm": {}, "svn": {}, "ui": {}, "omq": {},
 }
 
-var (
-	phpVersionRegex = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
-	phpBuildRegex   = regexp.MustCompile(`\(built: ([^)]+)\) \((.*?)\)`)
-)
-
 func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
@@ -241,6 +236,11 @@ func appendExtensionFeedback(extInfo extensionInfo, errs, warns, succs []Message
 
 	return errs, warns, succs
 }
+
+var (
+	phpVersionRegex = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
+	phpBuildRegex   = regexp.MustCompile(`\(built: ([^)]+)\) \((.*?)\)`)
+)
 
 func getPhpVersion(ctx context.Context, runner exec.Runner) (phpVersion, buildDate, vcVersion string, err error) {
 	output, err := runner.Run(ctx, "php", "--version")

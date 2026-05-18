@@ -20,8 +20,6 @@ const (
 	AnswerApplyProject
 )
 
-const maxPromptAttempts = 3
-
 func (a Answer) String() string {
 	switch a {
 	case AnswerYes:
@@ -42,6 +40,8 @@ func (a Answer) String() string {
 type ConfirmOptions struct {
 	ShowApplyProject bool
 }
+
+const maxPromptAttempts = 3
 
 func Confirm(in io.Reader, out io.Writer, question, hint string, opts ConfirmOptions) (Answer, error) {
 	if in == nil || out == nil {

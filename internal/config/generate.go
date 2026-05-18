@@ -10,6 +10,24 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/manifest"
 )
 
+const headerComment = `# PreFlight — https://github.com/JacobJoergensen/preflight
+# CLI flags override values from this file. Profile resolution:
+#   --profile > $PREFLIGHT_PROFILE > profile: below > "default"
+#
+# Named scripts for: preflight run <name>
+#   profiles.<profile>.run.scripts.<name> sets exactly one of:
+#     js, composer, go, ruby, python
+# Example:
+#   run:
+#     scripts:
+#       test:
+#         js: test
+#       phpunit:
+#         composer: test
+#
+
+`
+
 func Generate(workDir string, filesystem fs.FS) ([]byte, error) {
 	loader := manifest.NewLoader(workDir)
 	loader.FS = filesystem
@@ -45,24 +63,6 @@ func Generate(workDir string, filesystem fs.FS) ([]byte, error) {
 
 	return buffer.Bytes(), nil
 }
-
-const headerComment = `# PreFlight — https://github.com/JacobJoergensen/preflight
-# CLI flags override values from this file. Profile resolution:
-#   --profile > $PREFLIGHT_PROFILE > profile: below > "default"
-#
-# Named scripts for: preflight run <name>
-#   profiles.<profile>.run.scripts.<name> sets exactly one of:
-#     js, composer, go, ruby, python
-# Example:
-#   run:
-#     scripts:
-#       test:
-#         js: test
-#       phpunit:
-#         composer: test
-#
-
-`
 
 func buildProfile(scopes []string, withEnv bool) Profile {
 	var profile Profile

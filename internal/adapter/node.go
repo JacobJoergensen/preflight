@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
+	"github.com/JacobJoergensen/preflight/internal/semver"
 )
 
 func init() {
@@ -78,4 +79,35 @@ func getNodeVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	}
 
 	return strings.TrimSpace(output), nil
+}
+
+func nodeEngineSatisfiedByRuntime(installed, engines string) bool {
+	installed = strings.TrimPrefix(strings.TrimSpace(installed), "v")
+	engines = strings.TrimSpace(engines)
+
+	if engines == "" {
+		return true
+	}
+
+	if shouldUseNodeEnginesSemverRange(engines) {
+		return semver.MatchVersionConstraint(installed, engines)
+	}
+
+	return semver.MatchMinimumVersion(installed, engines)
+}
+
+func shouldUseNodeEnginesSemverRange(engines string) bool {
+	if strings.Contains(engines, "||") || strings.Contains(engines, " - ") {
+		return true
+	}
+
+	if strings.ContainsAny(engines, "^~><=*") {
+		return true
+	}
+
+	if strings.Contains(strings.ToLower(engines), "x") {
+		return true
+	}
+
+	return false
 }

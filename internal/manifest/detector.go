@@ -20,19 +20,6 @@ func (pm PackageManager) LockFile() string {
 	return pm.Tool.LockFile
 }
 
-type pythonDetector struct {
-	lockFile   string
-	configFile string
-	command    string
-}
-
-var pythonDetectors = []pythonDetector{
-	{"poetry.lock", "pyproject.toml", "poetry"},
-	{"uv.lock", "pyproject.toml", "uv"},
-	{"Pipfile.lock", "Pipfile", "pipenv"},
-	{"pdm.lock", "pyproject.toml", "pdm"},
-}
-
 func (l Loader) DetectPackageManager(packageType string) (PackageManager, bool) {
 	tools := GetToolsByPackageType(packageType)
 
@@ -101,6 +88,19 @@ func (l Loader) detectJSPackageManager(tools []Tool) (PackageManager, bool) {
 	}
 
 	return PackageManager{}, false
+}
+
+type pythonDetector struct {
+	lockFile   string
+	configFile string
+	command    string
+}
+
+var pythonDetectors = []pythonDetector{
+	{"poetry.lock", "pyproject.toml", "poetry"},
+	{"uv.lock", "pyproject.toml", "uv"},
+	{"Pipfile.lock", "Pipfile", "pipenv"},
+	{"pdm.lock", "pyproject.toml", "pdm"},
 }
 
 func (l Loader) detectPythonPackageManager() (PackageManager, bool) {
