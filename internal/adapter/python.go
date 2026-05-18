@@ -104,8 +104,8 @@ func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, 
 	var rhs string
 
 	switch {
-	case packageManager.LockFileExists && packageManager.Tool.LockFile != "":
-		rhs = packageManager.Tool.LockFile
+	case packageManager.LockFileExists && packageManager.LockFile() != "":
+		rhs = packageManager.LockFile()
 	case packageManager.ConfigFileExists && packageManager.Tool.ConfigFile != "":
 		rhs = packageManager.Tool.ConfigFile
 	}

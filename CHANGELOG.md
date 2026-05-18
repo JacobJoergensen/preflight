@@ -3,7 +3,9 @@
 ## Unreleased
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)
 - `check` now lists PIE-managed PHP extensions via `pie show` for accurate detection across all PIE installation methods
+- `check` and `fix` now report the correct lockfile name for legacy bun projects using `bun.lockb`
 - Fixed `check --outdated` and `list --outdated` counting npm optional dependencies skipped due to platform mismatch
+- Fixed `check --outdated` and `list --outdated` silently reporting zero outdated packages for bun projects (bun does not support JSON output for the `outdated` command)
 
 ## Version 1.4.0 (2026-05-14)
 - Added Rust ecosystem support: `check`, `list`, `audit`, `fix`, and `run` now recognize Cargo projects via `Cargo.toml`, verify direct and dev dependencies against `Cargo.lock`, dispatch `rust:` script targets to `cargo`, surface outdated crates via `cargo outdated` (when installed), and run security audits via `cargo audit` (when installed)

@@ -104,13 +104,13 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	version := trimFirstLine(installedVersion)
 	rhs := "Gemfile.lock"
 
-	if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
-		rhs = packageManager.Tool.LockFile
+	if packageManager.LockFileExists && packageManager.LockFile() != "" {
+		rhs = packageManager.LockFile()
 	}
 
 	succs = append(succs, Message{Text: fmt.Sprintf("Installed %s%s (%s ⟶ %s)", terminal.Reset, tool.Name, version, rhs)})
 
-	if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
+	if packageManager.LockFileExists && packageManager.LockFile() != "" {
 		if _, err := deps.Runner.Run(ctx, "bundle", "check"); err != nil {
 			errs = append(errs, Message{Text: formatExecFailure("bundle check failed", err)})
 		}

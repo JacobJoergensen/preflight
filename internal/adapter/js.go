@@ -232,6 +232,10 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 		return nil, nil
 	}
 
+	if config.PackageManager.Command() == "bun" {
+		return nil, nil
+	}
+
 	output, err := deps.Runner.Run(ctx, config.PackageManager.Command(), "outdated", "--json")
 
 	if err != nil && output == "" {

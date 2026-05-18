@@ -626,8 +626,8 @@ func buildFixCandidates(adapters []adapter.Adapter, deps adapter.Dependencies) [
 }
 
 func candidateSummary(packageManager manifest.PackageManager) string {
-	if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
-		return "sync " + packageManager.Tool.ConfigFile + " + " + packageManager.Tool.LockFile
+	if packageManager.LockFileExists && packageManager.LockFile() != "" {
+		return "sync " + packageManager.Tool.ConfigFile + " + " + packageManager.LockFile()
 	}
 
 	return "install from " + packageManager.Tool.ConfigFile

@@ -296,8 +296,8 @@ func pythonProjectSignals(l manifest.Loader) []string {
 			lines = append(lines, packageManager.Tool.ConfigFile+" exists")
 		}
 
-		if packageManager.LockFileExists && packageManager.Tool.LockFile != "" {
-			lines = append(lines, packageManager.Tool.LockFile+" exists")
+		if packageManager.LockFileExists && packageManager.LockFile() != "" {
+			lines = append(lines, packageManager.LockFile()+" exists")
 		}
 	}
 
@@ -326,8 +326,8 @@ func rubyProjectSignals(l manifest.Loader) []string {
 			lines = append(lines, "gems.rb exists")
 		}
 
-		if packageManager.LockFileExists && packageManager.Tool.LockFile != "" && l.FileExists(packageManager.Tool.LockFile) {
-			lines = append(lines, packageManager.Tool.LockFile+" exists")
+		if packageManager.LockFileExists && packageManager.LockFile() != "" && l.FileExists(packageManager.LockFile()) {
+			lines = append(lines, packageManager.LockFile()+" exists")
 		}
 	}
 
