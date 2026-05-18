@@ -103,18 +103,18 @@ func parseYarnHeaderNames(header string) []string {
 func parseYarnVersionLine(trimmed string) string {
 	const prefix = "version"
 
-	rest, ok := strings.CutPrefix(trimmed, prefix)
+	version, ok := strings.CutPrefix(trimmed, prefix)
 
 	if !ok {
 		return ""
 	}
 
-	rest = strings.TrimSpace(rest)
-	rest = strings.TrimPrefix(rest, ":")
-	rest = strings.TrimSpace(rest)
-	rest = strings.Trim(rest, `"`)
+	version = strings.TrimSpace(version)
+	version = strings.TrimPrefix(version, ":")
+	version = strings.TrimSpace(version)
+	version = strings.Trim(version, `"`)
 
-	return rest
+	return version
 }
 
 func init() {

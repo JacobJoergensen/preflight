@@ -19,15 +19,15 @@ var piePharPaths = []string{
 	"/usr/bin/pie.phar",
 }
 
-type PIEConfig struct {
+type pieConfig struct {
 	IsInstalled bool
 	Extensions  []string
 	PharPath    string
 	Error       error
 }
 
-func loadPIEConfig(ctx context.Context, runner exec.Runner, fsys fs.FS) PIEConfig {
-	config := PIEConfig{}
+func loadpieConfig(ctx context.Context, runner exec.Runner, fsys fs.FS) pieConfig {
+	config := pieConfig{}
 	config.IsInstalled = checkPIEInstalled(ctx, runner, fsys)
 
 	if !config.IsInstalled {

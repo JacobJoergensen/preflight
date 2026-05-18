@@ -83,7 +83,7 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 		return errs, warns, succs
 	}
 
-	pieConfig := loadPIEConfig(ctx, deps.Runner, deps.FS)
+	pie := loadPIEConfig(ctx, deps.Runner, deps.FS)
 	extensionSources := make(map[string]string)
 
 	for ext := range installedExtensions {
@@ -92,8 +92,8 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 
 	pieExtensions := make(map[string]struct{})
 
-	if semver.MatchVersionConstraint(phpVersion, ">=8.4") && pieConfig.IsInstalled {
-		for _, ext := range pieConfig.Extensions {
+	if semver.MatchVersionConstraint(phpVersion, ">=8.4") && pie.IsInstalled {
+		for _, ext := range pie.Extensions {
 			pieExtensions[ext] = struct{}{}
 			extensionSources[ext] = "pie"
 		}
