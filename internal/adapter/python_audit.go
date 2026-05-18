@@ -9,8 +9,19 @@ import (
 )
 
 func (p PythonModule) Audit(ctx context.Context, deps Dependencies) AuditResult {
-	if _, found := deps.Loader.DetectPackageManager(manifest.PackageTypePython); !found {
+	packageManager, found := deps.Loader.DetectPackageManager(manifest.PackageTypePython)
+
+	if !found {
 		return AuditResult{Skipped: true, SkipReason: "no Python project detected"}
+	}
+
+	if packageManager.Command() == "uv" {
+		return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
+			Name:        "uv",
+			Display:     "uv audit",
+			Args:        []string{"audit", "--format", "json"},
+			ParseCounts: parseUvAuditCounts,
+		})
 	}
 
 	return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
@@ -50,4 +61,28 @@ func parsePipAuditCounts(jsonText string) map[string]int {
 	}
 
 	return map[string]int{"high": vulnCount}
+}
+
+func parseUvAuditCounts(jsonText string) map[string]int {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" {
+		return nil
+	}
+
+	var report struct {
+		Summary struct {
+			Vulnerabilities int `json:"vulnerabilities"`
+		} `json:"summary"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &report); err != nil {
+		return nil
+	}
+
+	if report.Summary.Vulnerabilities == 0 {
+		return nil
+	}
+
+	return map[string]int{"high": report.Summary.Vulnerabilities}
 }

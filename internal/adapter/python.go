@@ -371,7 +371,7 @@ func runPythonPipCheck(ctx context.Context, runner exec.Runner, pmCommand string
 
 		return err
 	case "uv":
-		_, err := runner.Run(ctx, "uv", append([]string{"run", "python"}, check...)...)
+		_, err := runner.Run(ctx, "uv", "pip", "check")
 
 		return err
 	case "pipenv":
@@ -402,7 +402,13 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 	case "poetry":
 		return pipListMap(ctx, runner, []string{"poetry", "run"})
 	case "uv":
-		return pipListMap(ctx, runner, []string{"uv", "run"})
+		output, err := runner.Run(ctx, "uv", "pip", "list", "--format=json")
+
+		if err != nil {
+			return map[string]string{}
+		}
+
+		return parsePipListJSON(output)
 	case "pipenv":
 		return pipListMap(ctx, runner, []string{"pipenv", "run"})
 	case "pdm":
@@ -419,6 +425,10 @@ func pipListMap(ctx context.Context, runner exec.Runner, prefix []string) map[st
 		return map[string]string{}
 	}
 
+	return parsePipListJSON(output)
+}
+
+func parsePipListJSON(output string) map[string]string {
 	var entries []struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`

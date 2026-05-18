@@ -99,6 +99,7 @@ var auditAllowlist = map[string]struct{}{
 	"npm":          {},
 	"pnpm":         {},
 	"pip-audit":    {},
+	"uv":           {},
 	"yarn":         {},
 }
 
