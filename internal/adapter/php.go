@@ -83,7 +83,7 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 		return errs, warns, succs
 	}
 
-	pie := loadPIEConfig(ctx, deps.Runner, deps.FS)
+	pie := loadpieConfig(ctx, deps.Runner, deps.FS)
 	extensionSources := make(map[string]string)
 
 	for ext := range installedExtensions {
