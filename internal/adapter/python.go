@@ -237,13 +237,21 @@ func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Ou
 		return nil, nil
 	}
 
-	output, err := runPipListOutdated(ctx, deps.Runner, config.PackageManager.Command())
+	pmCommand := config.PackageManager.Command()
+
+	output, err := runPipListOutdated(ctx, deps.Runner, pmCommand)
 
 	if err != nil {
 		return nil, err
 	}
 
-	packages, err := parsePipOutdated(output)
+	var packages []OutdatedPackage
+
+	if pmCommand == "pdm" {
+		packages, err = parsePDMOutdated(output)
+	} else {
+		packages, err = parsePipOutdated(output)
+	}
 
 	if err != nil {
 		return nil, err
@@ -259,13 +267,13 @@ func runPipListOutdated(ctx context.Context, runner exec.Runner, pmCommand strin
 
 	switch pmCommand {
 	case "poetry":
-		return runner.Run(ctx, "poetry", append([]string{"run", "python"}, args...)...)
+		return runner.Run(ctx, "poetry", "show", "--outdated", "--format", "json")
 	case "uv":
 		return runner.Run(ctx, "uv", append([]string{"run", "python"}, args...)...)
 	case "pipenv":
 		return runner.Run(ctx, "pipenv", append([]string{"run", "python"}, args...)...)
 	case "pdm":
-		return runner.Run(ctx, "pdm", append([]string{"run", "python"}, args...)...)
+		return runner.Run(ctx, "pdm", "outdated", "--json")
 	default:
 		output, err := runner.Run(ctx, "python", args...)
 
@@ -275,6 +283,38 @@ func runPipListOutdated(ctx context.Context, runner exec.Runner, pmCommand strin
 
 		return output, nil
 	}
+}
+
+func parsePDMOutdated(output string) ([]OutdatedPackage, error) {
+	if strings.TrimSpace(output) == "" {
+		return nil, nil
+	}
+
+	var entries []struct {
+		Package          string `json:"package"`
+		InstalledVersion string `json:"installed_version"`
+		LatestVersion    string `json:"latest_version"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		return nil, err
+	}
+
+	packages := make([]OutdatedPackage, 0, len(entries))
+
+	for _, entry := range entries {
+		packages = append(packages, OutdatedPackage{
+			Name:    entry.Package,
+			Current: entry.InstalledVersion,
+			Latest:  entry.LatestVersion,
+		})
+	}
+
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+
+	return packages, nil
 }
 
 func parsePipOutdated(output string) ([]OutdatedPackage, error) {
@@ -400,7 +440,13 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 	case "pip":
 		return pipListMap(ctx, runner, nil)
 	case "poetry":
-		return pipListMap(ctx, runner, []string{"poetry", "run"})
+		output, err := runner.Run(ctx, "poetry", "show", "--format", "json")
+
+		if err != nil {
+			return map[string]string{}
+		}
+
+		return parsePipListJSON(output)
 	case "uv":
 		output, err := runner.Run(ctx, "uv", "pip", "list", "--format=json")
 
@@ -412,7 +458,13 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 	case "pipenv":
 		return pipListMap(ctx, runner, []string{"pipenv", "run"})
 	case "pdm":
-		return pipListMap(ctx, runner, []string{"pdm", "run"})
+		output, err := runner.Run(ctx, "pdm", "list", "--json")
+
+		if err != nil {
+			return map[string]string{}
+		}
+
+		return parsePipListJSON(output)
 	default:
 		return pipListMap(ctx, runner, nil)
 	}

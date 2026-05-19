@@ -3,6 +3,8 @@
 ## Unreleased
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)
 - `audit` now uses native `yarn npm audit` for yarn 4 (Berry) projects; yarn 1 is skipped (incompatible JSON output)
+- `check` and `list` now use native `poetry show` for Poetry projects instead of shelling pip through `poetry run` (requires Poetry 2.2.0 or newer)
+- `check` and `list` now use native `pdm list` and `pdm outdated` for PDM projects instead of shelling pip through `pdm run`
 - `check` now lists PIE-managed PHP extensions via `pie show` for accurate detection across all PIE installation methods
 - `check` and `fix` now report the correct lockfile name for legacy bun projects using `bun.lockb`
 - Fixed `check --outdated` and `list --outdated` counting npm optional dependencies skipped due to platform mismatch
