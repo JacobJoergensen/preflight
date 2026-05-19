@@ -48,7 +48,6 @@ preflight audit --json`,
 		defer cancel()
 
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
@@ -56,13 +55,11 @@ preflight audit --json`,
 		runner := engine.NewRunner(workDir)
 
 		config, profileName, err := loadPreflightConfig(workDir)
-
 		if err != nil {
 			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profileName)
-
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}

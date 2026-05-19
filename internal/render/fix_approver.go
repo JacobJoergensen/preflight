@@ -41,7 +41,6 @@ func (a *TTYFixApprover) Approve(candidate engine.FixCandidate) (engine.FixDecis
 	inMonorepo := candidate.Project != ""
 
 	answer, err := terminal.Confirm(a.in, a.out, "Apply fix?", "", terminal.ConfirmOptions{ShowApplyProject: inMonorepo})
-
 	if err != nil {
 		return 0, err
 	}

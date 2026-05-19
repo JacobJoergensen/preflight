@@ -45,7 +45,6 @@ func (l Loader) LoadPackageConfig() PackageConfig {
 	}
 
 	raw, err := l.readFile("package.json")
-
 	if err != nil {
 		config.Error = fmt.Errorf("failed to read package.json: %w", err)
 		return config

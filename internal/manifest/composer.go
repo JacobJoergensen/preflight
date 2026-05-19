@@ -44,7 +44,6 @@ func (l Loader) LoadComposerConfig() ComposerConfig {
 	}
 
 	raw, err := l.readFile("composer.json")
-
 	if err != nil {
 		config.Error = fmt.Errorf("failed to read composer.json: %w", err)
 		return config

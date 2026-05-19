@@ -57,7 +57,6 @@ func fixByPackageType(
 
 	tool := packageManager.Tool
 	version, err := deps.Runner.Run(ctx, tool.Command, tool.VersionArgs...)
-
 	if err != nil {
 		return FixItem{
 			ScopeID:        scopeID,

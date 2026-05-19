@@ -36,7 +36,6 @@ func TestDiscoverByWalkReturnsNilWhenFewerThanTwoProjects(t *testing.T) {
 			root := writeTestTree(t, tt.files)
 
 			projects, err := discoverByWalk(root)
-
 			if err != nil {
 				t.Fatalf("discoverByWalk returned error: %v", err)
 			}
@@ -58,7 +57,6 @@ func TestDiscoverByWalkFindsMultipleSubprojects(t *testing.T) {
 	})
 
 	projects, err := discoverByWalk(root)
-
 	if err != nil {
 		t.Fatalf("discoverByWalk returned error: %v", err)
 	}
@@ -82,7 +80,6 @@ func TestDiscoverByWalkIncludesRootWhenOtherSubprojectsPresent(t *testing.T) {
 	})
 
 	projects, err := discoverByWalk(root)
-
 	if err != nil {
 		t.Fatalf("discoverByWalk returned error: %v", err)
 	}
@@ -108,7 +105,6 @@ func TestDiscoverByWalkSkipsNoiseDirectories(t *testing.T) {
 	})
 
 	projects, err := discoverByWalk(root)
-
 	if err != nil {
 		t.Fatalf("discoverByWalk returned error: %v", err)
 	}
@@ -134,7 +130,6 @@ func TestDiscoverByWalkIgnoresDotDirectories(t *testing.T) {
 	})
 
 	projects, err := discoverByWalk(root)
-
 	if err != nil {
 		t.Fatalf("discoverByWalk returned error: %v", err)
 	}
@@ -158,7 +153,6 @@ func TestDiscoverByWalkRespectsMaxDepth(t *testing.T) {
 	})
 
 	projects, err := discoverByWalk(root)
-
 	if err != nil {
 		t.Fatalf("discoverByWalk returned error: %v", err)
 	}

@@ -67,7 +67,6 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 
 	if config.RequiresRuby != "" {
 		rubyVersion, err := getRubyVersion(ctx, deps.Runner)
-
 		if err != nil {
 			errs = append(errs, Message{Text: fmt.Sprintf("Ruby is not installed or not on PATH: %v", err)})
 			return errs, warns, succs
@@ -89,7 +88,6 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	}
 
 	installedVersion, err := toolVersion(ctx, deps.Runner, packageManager.Command())
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("%s is not installed or not on PATH: %v", packageManager.Name(), err)})
 		return errs, warns, succs
@@ -230,7 +228,6 @@ func getRubyVersion(ctx context.Context, runner exec.Runner) (string, error) {
 
 func installedGemsFromBundle(ctx context.Context, runner exec.Runner) map[string]string {
 	output, err := runner.Run(ctx, "bundle", "list")
-
 	if err != nil {
 		return map[string]string{}
 	}

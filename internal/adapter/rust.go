@@ -51,7 +51,6 @@ func (r RustModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	}
 
 	cargoVersion, err := getCargoVersion(ctx, deps.Runner)
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("Cargo is not installed or not on PATH: %v", err)})
 		return errs, warns, succs
@@ -156,7 +155,6 @@ func (r RustModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Outd
 	}
 
 	packages, err := parseCargoOutdated(output)
-
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +170,6 @@ func (r RustModule) Fix(ctx context.Context, deps Dependencies, _ []string, opti
 
 func getCargoVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	output, err := runner.Run(ctx, "cargo", "--version")
-
 	if err != nil {
 		return "", fmt.Errorf("failed to run cargo --version: %w", err)
 	}
@@ -188,7 +185,6 @@ func getCargoVersion(ctx context.Context, runner exec.Runner) (string, error) {
 
 func getRustcVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	output, err := runner.Run(ctx, "rustc", "--version")
-
 	if err != nil {
 		return "", fmt.Errorf("failed to run rustc --version: %w", err)
 	}
@@ -204,7 +200,6 @@ func getRustcVersion(ctx context.Context, runner exec.Runner) (string, error) {
 
 func installedFromCargoLock(fsys fs.FS, workDir string) map[string]string {
 	data, err := fsys.ReadFile(filepath.Join(workDir, "Cargo.lock"))
-
 	if err != nil {
 		return map[string]string{}
 	}
@@ -216,7 +211,6 @@ func installedFromCargoLock(fsys fs.FS, workDir string) map[string]string {
 	}
 
 	parsed, err := parser.Parse(data)
-
 	if err != nil {
 		return map[string]string{}
 	}

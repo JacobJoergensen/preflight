@@ -41,13 +41,11 @@ func (r Runner) Audit(
 
 	if !disableMonorepo {
 		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-
 		if err != nil {
 			return result.AuditReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
 		}
 
 		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-
 		if err != nil {
 			return result.AuditReport{}, fmt.Errorf("project filter failed: %w", err)
 		}
@@ -81,7 +79,6 @@ func (r Runner) auditMonorepo(
 		})
 
 		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity, progress)
-
 		if err != nil {
 			return result.AuditReport{}, err
 		}
@@ -108,7 +105,6 @@ func (r Runner) auditProject(
 	progress AuditProgress,
 ) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
-
 	if err != nil {
 		return result.AuditReport{}, err
 	}

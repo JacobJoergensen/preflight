@@ -71,7 +71,6 @@ func versionFooterMetadata(report result.VersionReport) []footerMetadataLine {
 
 func formatBuildDate(raw string) string {
 	parsed, err := time.Parse(time.RFC3339, raw)
-
 	if err != nil {
 		return raw
 	}

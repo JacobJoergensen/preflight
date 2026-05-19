@@ -27,13 +27,11 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-
 	if err != nil {
 		return "", fmt.Errorf("creating request: %w", err)
 	}
 
 	response, err := client.Do(request)
-
 	if err != nil {
 		return "", fmt.Errorf("fetching release: %w", err)
 	}
@@ -45,7 +43,6 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 	}
 
 	body, err := io.ReadAll(response.Body)
-
 	if err != nil {
 		return "", fmt.Errorf("reading response: %w", err)
 	}
@@ -65,7 +62,6 @@ func FetchLatestRelease(ctx context.Context, owner, repo string) (string, error)
 
 func FetchVersionInfo(currentVersion, platform string) (VersionData, error) {
 	latest, err := FetchLatestRelease(context.Background(), "JacobJoergensen", "preflight")
-
 	if err != nil {
 		return VersionData{
 			Version:  currentVersion,

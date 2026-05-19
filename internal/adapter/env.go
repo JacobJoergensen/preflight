@@ -38,7 +38,6 @@ func (e EnvModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 	examplePath := filepath.Join(base, envExampleFile)
 
 	exampleData, err := deps.FS.ReadFile(examplePath)
-
 	if err != nil {
 		errs = append(errs, Message{
 			Text: "No `" + envExampleFile + "` file found. Add one to document required environment variables.",

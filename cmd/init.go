@@ -28,7 +28,6 @@ present in the project (composer.json, package.json, go.mod, etc.).
 Existing files are left untouched unless --force is set.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
@@ -46,7 +45,6 @@ Existing files are left untouched unless --force is set.`,
 		}
 
 		body, err := config.Generate(workDir, fs.OSFS{})
-
 		if err != nil {
 			return err
 		}

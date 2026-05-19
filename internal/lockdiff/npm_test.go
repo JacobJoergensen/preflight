@@ -15,7 +15,6 @@ func TestNpmParserExtractsPackagesFromLockfileV3(t *testing.T) {
 	}`)
 
 	got, err := npmParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -43,7 +42,6 @@ func TestNpmParserUsesInnermostNodeModulesSegment(t *testing.T) {
 	}`)
 
 	got, err := npmParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -68,7 +66,6 @@ func TestNpmParserFallsBackToDependenciesWhenPackagesEmpty(t *testing.T) {
 	}`)
 
 	got, err := npmParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}

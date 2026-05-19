@@ -51,7 +51,6 @@ func walkCollectProjects(rootDir, currentDir string, depth int, found *[]Project
 
 	if hasProjectManifest(currentDir) {
 		project, err := projectFromDir(rootDir, currentDir)
-
 		if err != nil {
 			return err
 		}
@@ -60,7 +59,6 @@ func walkCollectProjects(rootDir, currentDir string, depth int, found *[]Project
 	}
 
 	entries, err := os.ReadDir(currentDir)
-
 	if err != nil {
 		// Unreadable directories are silently skipped so a single permissions error doesn't abort discovery for the whole tree.
 		return nil

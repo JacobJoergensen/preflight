@@ -20,13 +20,11 @@ func (r Runner) List(
 ) (result.DependencyReport, error) {
 	if !disableMonorepo {
 		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-
 		if err != nil {
 			return result.DependencyReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
 		}
 
 		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-
 		if err != nil {
 			return result.DependencyReport{}, fmt.Errorf("project filter failed: %w", err)
 		}
@@ -59,7 +57,6 @@ func (r Runner) listMonorepo(
 		})
 
 		projectReport, err := r.listProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, outdated)
-
 		if err != nil {
 			return result.DependencyReport{}, err
 		}
@@ -85,7 +82,6 @@ func (r Runner) listProject(
 	outdated bool,
 ) (result.DependencyReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeList})
-
 	if err != nil {
 		return result.DependencyReport{}, err
 	}

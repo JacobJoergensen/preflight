@@ -48,7 +48,6 @@ func (g GoModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Me
 	}
 
 	goVersion, err := getGoVersion(ctx, deps.Runner)
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("Go is not installed or not on PATH: %v", err)})
 		return errs, warns, succs
@@ -165,7 +164,6 @@ func formatGoModVerifyFailure(err error) string {
 
 func getGoVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	output, err := runner.Run(ctx, "go", "version")
-
 	if err != nil {
 		return "", fmt.Errorf("failed to run go version: %w", err)
 	}
@@ -184,7 +182,6 @@ func getInstalledModules(ctx context.Context, runner exec.Runner) map[string]str
 	modules := make(map[string]struct{})
 
 	output, err := runner.Run(ctx, "go", "list", "-m", "all")
-
 	if err != nil {
 		return modules
 	}

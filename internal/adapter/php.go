@@ -65,7 +65,6 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 	}
 
 	phpVersion, buildDate, vcVersion, err := getPhpVersion(ctx, deps.Runner)
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("PHP is not installed or not on PATH: %v", err)})
 
@@ -77,7 +76,6 @@ func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []M
 	}
 
 	installedExtensions, err := getPhpExtensions(ctx, deps.Runner)
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("Failed to check PHP extensions: %v", err)})
 		return errs, warns, succs
@@ -244,7 +242,6 @@ var (
 
 func getPhpVersion(ctx context.Context, runner exec.Runner) (phpVersion, buildDate, vcVersion string, err error) {
 	output, err := runner.Run(ctx, "php", "--version")
-
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to run php --version: %w", err)
 	}
@@ -272,7 +269,6 @@ func getPhpVersion(ctx context.Context, runner exec.Runner) (phpVersion, buildDa
 
 func getPhpExtensions(ctx context.Context, runner exec.Runner) (map[string]struct{}, error) {
 	output, err := runner.Run(ctx, "php", "-m")
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to run php -m: %w", err)
 	}

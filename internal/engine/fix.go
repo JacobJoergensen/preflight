@@ -74,13 +74,11 @@ func (r Runner) Fix(
 
 	if !disableMonorepo {
 		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-
 		if err != nil {
 			return result.FixReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
 		}
 
 		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-
 		if err != nil {
 			return result.FixReport{}, fmt.Errorf("project filter failed: %w", err)
 		}
@@ -138,7 +136,6 @@ func (r Runner) fixMonorepo(
 
 	plannedFixes := plannedFixesFromCandidates(allCandidates)
 	plan, aborted, err := resolveFixPlan(allCandidates, approver)
-
 	if err != nil {
 		return result.FixReport{}, fmt.Errorf("approval failed: %w", err)
 	}
@@ -237,7 +234,6 @@ func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, sel
 		prep := projectFixPrep{project: project}
 
 		selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
-
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +282,6 @@ func (r Runner) fixSingleProject(
 	progress FixProgress,
 ) (result.FixReport, error) {
 	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
-
 	if err != nil {
 		return result.FixReport{}, err
 	}
@@ -308,7 +303,6 @@ func (r Runner) fixSingleProject(
 
 	plannedFixes := plannedFixesFromCandidates(candidates)
 	plan, aborted, err := resolveFixPlan(candidates, approver)
-
 	if err != nil {
 		return result.FixReport{}, fmt.Errorf("approval failed: %w", err)
 	}
@@ -334,7 +328,6 @@ func (r Runner) fixSingleProject(
 
 	if !opts.DryRun && !opts.SkipBackup && len(approvedAdapters) > 0 {
 		dir, err := backupSelectedLockFiles(deps, adapter.Names(approvedAdapters), selection.FixSelectors)
-
 		if err != nil {
 			return result.FixReport{}, fmt.Errorf("failed to backup lock files: %w", err)
 		}
@@ -543,7 +536,6 @@ func resolveFixPlan(candidates []FixCandidate, approver FixApprover) (fixPlan, b
 
 	for _, candidate := range candidates {
 		decision, err := approver.Approve(candidate)
-
 		if err != nil {
 			return fixPlan{}, false, err
 		}
@@ -638,7 +630,6 @@ func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.Fi
 
 	for _, filename := range lockdiff.RegisteredFilenames() {
 		backupBytes, err := deps.FS.ReadFile(filepath.Join(backupDir, filename))
-
 		if err != nil {
 			continue
 		}
@@ -650,7 +641,6 @@ func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.Fi
 		}
 
 		before, err := parser.Parse(backupBytes)
-
 		if err != nil {
 			continue
 		}
@@ -686,24 +676,23 @@ func backupSelectedLockFiles(deps adapter.Dependencies, adapterIDs []string, sel
 
 	backupDir := filepath.Join(deps.Loader.WorkDir, ".preflight", "backups", time.Now().Format("20060102-150405"))
 
-	if err := deps.FS.MkdirAll(backupDir, 0750); err != nil {
+	if err := deps.FS.MkdirAll(backupDir, 0o750); err != nil {
 		return "", err
 	}
 
 	for _, lock := range collectLockFilesForBackup(deps, want, selectors) {
 		src, err := deps.FS.ReadFile(filepath.Join(deps.Loader.WorkDir, lock))
-
 		if err != nil {
 			return "", err
 		}
 
 		dst := filepath.Join(backupDir, lock)
 
-		if err := deps.FS.MkdirAll(filepath.Dir(dst), 0750); err != nil {
+		if err := deps.FS.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 			return "", err
 		}
 
-		if err := deps.FS.WriteFile(dst, src, 0600); err != nil {
+		if err := deps.FS.WriteFile(dst, src, 0o600); err != nil {
 			return "", err
 		}
 	}

@@ -85,7 +85,6 @@ func IsInteractiveTTY(f *os.File) bool {
 	}
 
 	info, err := f.Stat()
-
 	if err != nil {
 		return false
 	}

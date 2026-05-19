@@ -14,7 +14,6 @@ import (
 func Load(workDir string, filesystem fs.FS) (File, error) {
 	path := filepath.Join(workDir, FileName)
 	raw, err := filesystem.ReadFile(path)
-
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return File{}, nil

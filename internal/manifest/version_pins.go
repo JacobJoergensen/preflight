@@ -34,7 +34,6 @@ func (l Loader) readToolVersionPinFile(name string) string {
 	}
 
 	raw, err := l.readFile(name)
-
 	if err != nil {
 		return ""
 	}

@@ -67,7 +67,6 @@ func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, 
 
 	if config.RequiresPython != "" {
 		pythonVersion, err := getPythonVersion(ctx, deps.Runner)
-
 		if err != nil {
 			errs = append(errs, Message{Text: fmt.Sprintf("Python is not installed or not on PATH: %v", err)})
 			return errs, warns, succs
@@ -89,7 +88,6 @@ func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, 
 	}
 
 	installedVersion, err := toolVersion(ctx, deps.Runner, packageManager.Command())
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("%s is not installed or not on PATH: %v", packageManager.Name(), err)})
 		return errs, warns, succs
@@ -240,7 +238,6 @@ func (p PythonModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Ou
 	pmCommand := config.PackageManager.Command()
 
 	output, err := runPipListOutdated(ctx, deps.Runner, pmCommand)
-
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +273,6 @@ func runPipListOutdated(ctx context.Context, runner exec.Runner, pmCommand strin
 		return runner.Run(ctx, "pdm", "outdated", "--json")
 	default:
 		output, err := runner.Run(ctx, "python", args...)
-
 		if err != nil {
 			return runner.Run(ctx, "python3", args...)
 		}
@@ -361,7 +357,6 @@ func toolVersion(ctx context.Context, runner exec.Runner, command string) (strin
 	}
 
 	output, err := runner.Run(ctx, tool.Command, tool.VersionArgs...)
-
 	if err != nil {
 		return "", err
 	}
@@ -373,7 +368,6 @@ var pythonSemverFromVersion = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
 
 func getPythonVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	output, err := runner.Run(ctx, "python", "--version")
-
 	if err != nil {
 		output, err = runner.Run(ctx, "python3", "--version")
 	}
@@ -398,7 +392,6 @@ func runPythonPipCheck(ctx context.Context, runner exec.Runner, pmCommand string
 	switch pmCommand {
 	case "pip":
 		_, err := runner.Run(ctx, "python", check...)
-
 		if err != nil {
 			_, err2 := runner.Run(ctx, "python3", check...)
 
@@ -424,7 +417,6 @@ func runPythonPipCheck(ctx context.Context, runner exec.Runner, pmCommand string
 		return err
 	default:
 		_, err := runner.Run(ctx, "python", check...)
-
 		if err != nil {
 			_, err2 := runner.Run(ctx, "python3", check...)
 
@@ -441,7 +433,6 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 		return pipListMap(ctx, runner, nil)
 	case "poetry":
 		output, err := runner.Run(ctx, "poetry", "show", "--format", "json")
-
 		if err != nil {
 			return map[string]string{}
 		}
@@ -449,7 +440,6 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 		return parsePipListJSON(output)
 	case "uv":
 		output, err := runner.Run(ctx, "uv", "pip", "list", "--format=json")
-
 		if err != nil {
 			return map[string]string{}
 		}
@@ -459,7 +449,6 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 		return pipListMap(ctx, runner, []string{"pipenv", "run"})
 	case "pdm":
 		output, err := runner.Run(ctx, "pdm", "list", "--json")
-
 		if err != nil {
 			return map[string]string{}
 		}
@@ -472,7 +461,6 @@ func installedPackagesForPython(ctx context.Context, runner exec.Runner, command
 
 func pipListMap(ctx context.Context, runner exec.Runner, prefix []string) map[string]string {
 	output, err := runPipListJSON(ctx, runner, prefix)
-
 	if err != nil {
 		return map[string]string{}
 	}
@@ -508,7 +496,6 @@ func runPipListJSON(ctx context.Context, runner exec.Runner, prefix []string) (s
 
 	if len(prefix) == 0 {
 		output, err := runner.Run(ctx, "python", args...)
-
 		if err != nil {
 			return runner.Run(ctx, "python3", args...)
 		}

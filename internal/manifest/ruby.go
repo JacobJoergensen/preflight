@@ -43,7 +43,6 @@ func (l Loader) LoadRubyConfig() RubyConfig {
 	var err error
 
 	config.Dependencies, config.RequiresRubyFromGemfile, err = l.loadRubyDependencies(gemfileName)
-
 	if err != nil {
 		config.Error = err
 	}

@@ -37,7 +37,6 @@ var checkCmd = &cobra.Command{
 		defer cancel()
 
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
@@ -45,13 +44,11 @@ var checkCmd = &cobra.Command{
 		runner := engine.NewRunner(workDir)
 
 		config, profName, err := loadPreflightConfig(workDir)
-
 		if err != nil {
 			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profName)
-
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}

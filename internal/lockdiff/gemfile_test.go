@@ -24,7 +24,6 @@ BUNDLED WITH
 `)
 
 	got, err := gemfileParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -65,7 +64,6 @@ GEM
 `)
 
 	got, err := gemfileParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}

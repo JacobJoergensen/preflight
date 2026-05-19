@@ -42,7 +42,6 @@ var fixCmd = &cobra.Command{
 		defer cancel()
 
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
@@ -50,13 +49,11 @@ var fixCmd = &cobra.Command{
 		runner := engine.NewRunner(workDir)
 
 		config, profName, err := loadPreflightConfig(workDir)
-
 		if err != nil {
 			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profName)
-
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
@@ -82,7 +79,6 @@ var fixCmd = &cobra.Command{
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
 		}, !fixOpts.noDiff, approver, progress, fixOpts.noMonorepo, fixOpts.projectGlobs)
-
 		if err != nil {
 			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
 		}

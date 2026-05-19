@@ -54,7 +54,6 @@ func (c ComposerModule) Check(ctx context.Context, deps Dependencies) ([]Message
 	}
 
 	composerVersion, err := getComposerVersion(ctx, deps.Runner)
-
 	if err != nil {
 		errs = append(errs, Message{Text: fmt.Sprintf("Composer is not installed or not on PATH: %v", err)})
 		return errs, warns, succs
@@ -197,7 +196,6 @@ func warnsMissingComposerJSON(lockFile string) []Message {
 
 func getComposerVersion(ctx context.Context, runner exec.Runner) (string, error) {
 	output, err := runner.Run(ctx, "composer", "--version")
-
 	if err != nil {
 		return "", fmt.Errorf("failed to run composer --version: %w", err)
 	}
@@ -227,7 +225,6 @@ func getInstalledDependencies(ctx context.Context, runner exec.Runner, dependenc
 func composerInstalledFromJSON(ctx context.Context, runner exec.Runner) map[string]string {
 	installed := make(map[string]string)
 	output, err := runner.Run(ctx, "composer", "show", "--format=json")
-
 	if err != nil {
 		return installed
 	}
@@ -289,7 +286,6 @@ func fillMissingComposerDeps(ctx context.Context, runner exec.Runner, installed 
 
 func composerDepVersion(ctx context.Context, runner exec.Runner, dep string) string {
 	output, err := runner.Run(ctx, "composer", "show", dep)
-
 	if err != nil {
 		return ""
 	}

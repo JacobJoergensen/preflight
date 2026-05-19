@@ -150,7 +150,6 @@ pytest = "^8.0"
 
 	loader := NewLoader(tempDir)
 	main, dev, optional, requiresPython, err := loader.loadPoetryPyproject()
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -199,7 +198,6 @@ aws = ["boto3"]
 
 	loader := NewLoader(tempDir)
 	main, dev, optional, requiresPython, err := loader.loadPEP621Pyproject()
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

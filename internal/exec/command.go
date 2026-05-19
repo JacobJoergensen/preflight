@@ -38,7 +38,6 @@ func Run(ctx context.Context, name string, args ...string) (string, error) {
 	}
 
 	path, err := exec.LookPath(name)
-
 	if err != nil {
 		return "", fmt.Errorf("command not found: %s", name)
 	}

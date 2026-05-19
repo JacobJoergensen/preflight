@@ -31,7 +31,6 @@ var listCmd = &cobra.Command{
 	Aliases: []string{"dependencies", "deps"},
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
@@ -39,13 +38,11 @@ var listCmd = &cobra.Command{
 		runner := engine.NewRunner(workDir)
 
 		config, profileName, err := loadPreflightConfig(workDir)
-
 		if err != nil {
 			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}
 
 		profile, err := config.ProfileFor(profileName)
-
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
@@ -64,7 +61,6 @@ var listCmd = &cobra.Command{
 		}
 
 		report, err := runner.List(cmd.Context(), scopes, managers, listOpts.outdated, listOpts.noMonorepo, listOpts.projectGlobs)
-
 		if err != nil {
 			return fmt.Errorf("%slist failed: %w%s", terminal.Red, err, terminal.Reset)
 		}

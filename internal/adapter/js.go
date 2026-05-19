@@ -75,7 +75,6 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 		}
 
 		installedVersion, err := deps.Runner.Run(ctx, requirement.command, "--version")
-
 		if err != nil {
 			warns = append(warns, Message{Text: fmt.Sprintf("Could not retrieve version for '%s': %v", requirement.command, err)})
 			continue
@@ -244,7 +243,6 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 	}
 
 	packages, err := parseNPMOutdated(output)
-
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +405,6 @@ func isYarnBerry(fsys fs.FS, workDir string) bool {
 
 func installedFromYarnLock(fsys fs.FS, workDir string) map[string]string {
 	data, err := fsys.ReadFile(filepath.Join(workDir, "yarn.lock"))
-
 	if err != nil {
 		return map[string]string{}
 	}
@@ -419,7 +416,6 @@ func installedFromYarnLock(fsys fs.FS, workDir string) map[string]string {
 	}
 
 	packages, err := parser.Parse(data)
-
 	if err != nil {
 		return map[string]string{}
 	}
@@ -503,7 +499,6 @@ func buildPackagePath(name string) (string, bool) {
 
 func readPackageVersion(fsys fs.FS, path string) string {
 	data, err := fsys.ReadFile(path)
-
 	if err != nil {
 		return ""
 	}

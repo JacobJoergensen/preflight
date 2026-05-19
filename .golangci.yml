@@ -59,6 +59,7 @@ formatters:
   enable:
     - gci
     - gofmt
+    - gofumpt
     - golines
   settings:
     gci:

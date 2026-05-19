@@ -144,7 +144,6 @@ func (l Loader) detectPythonPackageManager() (PackageManager, bool) {
 
 func (l Loader) inferPythonToolFromPyproject() string {
 	raw, err := l.readFile("pyproject.toml")
-
 	if err != nil {
 		return ""
 	}

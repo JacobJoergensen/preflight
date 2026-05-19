@@ -90,7 +90,6 @@ func workspacePatternsFromJSON(raw json.RawMessage) []string {
 func readNpmName(absDir string) string {
 	// #nosec G304 - absDir is a discovered sub-project directory resolved during workspace traversal; the fixed "package.json" suffix means we only read declared manifest files.
 	raw, err := os.ReadFile(filepath.Join(absDir, "package.json"))
-
 	if err != nil {
 		return ""
 	}

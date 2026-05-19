@@ -26,7 +26,6 @@ func (l Loader) LoadCargoConfig() CargoConfig {
 	}
 
 	raw, err := l.readFile("Cargo.toml")
-
 	if err != nil {
 		config.Error = fmt.Errorf("failed to read Cargo.toml: %w", err)
 		return config

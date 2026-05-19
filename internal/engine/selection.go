@@ -47,7 +47,6 @@ func Select(input SelectInput) (Selection, error) {
 
 	if len(normalized) == 0 {
 		adapters, err := adapter.Select()
-
 		if err != nil {
 			return Selection{}, err
 		}
@@ -69,7 +68,6 @@ func Select(input SelectInput) (Selection, error) {
 		}
 
 		adapters, err := adapter.Select(ids...)
-
 		if err != nil {
 			return Selection{}, err
 		}
@@ -95,7 +93,6 @@ func selectByScopes(scopes []string, mode Mode) (Selection, error) {
 	}
 
 	adapters, err := adapter.Select(scopes...)
-
 	if err != nil {
 		return Selection{}, err
 	}
@@ -147,7 +144,6 @@ func selectForFix(normalized []string) (Selection, error) {
 	}
 
 	adapters, err := adapter.Select(selectedIDs...)
-
 	if err != nil {
 		return Selection{}, err
 	}

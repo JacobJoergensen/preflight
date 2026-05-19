@@ -18,7 +18,6 @@ func ResolveScripts(l manifest.Loader, targets config.ScriptTargets) ([]Resolved
 
 	for _, target := range targets {
 		bin, args, err := ResolveScript(l, target)
-
 		if err != nil {
 			return nil, err
 		}

@@ -24,7 +24,6 @@ func GitRoot(workDir string) (string, error) {
 	cmd.Dir = workDir
 
 	output, err := cmd.Output()
-
 	if err != nil {
 		return "", fmt.Errorf("not a git repository (or git not in PATH): %w", err)
 	}
@@ -34,7 +33,6 @@ func GitRoot(workDir string) (string, error) {
 
 func validatePreCommitPath(path string) error {
 	abs, err := filepath.Abs(filepath.Clean(path))
-
 	if err != nil {
 		return fmt.Errorf("pre-commit path: %w", err)
 	}
@@ -72,7 +70,6 @@ func writeHookFile(path string, data []byte) error {
 
 func PreCommitPath(workDir string) (string, error) {
 	root, err := GitRoot(workDir)
-
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +168,6 @@ func Remove(preCommitPath string) error {
 	}
 
 	data, err := os.ReadFile(preCommitPath) // #nosec G304 - path checked by validatePreCommitPath
-
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("pre-commit hook not found: %s", preCommitPath)

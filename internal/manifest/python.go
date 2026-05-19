@@ -69,7 +69,6 @@ func (l Loader) LoadPythonConfig() PythonConfig {
 
 func (l Loader) loadRequirementsTxtDeps(filename string) ([]string, error) {
 	raw, err := l.readFile(filename)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
@@ -127,7 +126,6 @@ func extractPackageName(line string) string {
 
 func (l Loader) loadPoetryPyproject() (main, dev, optional []string, requiresPython string, err error) {
 	raw, err := l.readFile("pyproject.toml")
-
 	if err != nil {
 		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
 	}
@@ -203,7 +201,6 @@ func parsePoetryDependenciesSection(section string) (required, optional []string
 
 func (l Loader) loadPEP621Pyproject() (main, dev, optional []string, requiresPython string, err error) {
 	raw, err := l.readFile("pyproject.toml")
-
 	if err != nil {
 		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
 	}
@@ -250,7 +247,6 @@ func extraGroupNames(section string) []string {
 
 func (l Loader) loadPipfileDeps() (main, dev []string, err error) {
 	raw, err := l.readFile("Pipfile")
-
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read Pipfile: %w", err)
 	}

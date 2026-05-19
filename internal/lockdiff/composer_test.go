@@ -16,7 +16,6 @@ func TestComposerParserMergesRuntimeAndDevPackages(t *testing.T) {
 	}`)
 
 	got, err := composerParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}

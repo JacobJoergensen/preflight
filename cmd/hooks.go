@@ -38,13 +38,11 @@ preflight hooks install --force
 preflight hooks install --command "preflight check --with-env"`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
 
 		path, err := hooks.PreCommitPath(workDir)
-
 		if err != nil {
 			return err
 		}
@@ -52,7 +50,6 @@ preflight hooks install --command "preflight check --with-env"`,
 		cmd := hooksInstallOpts.command
 
 		err = hooks.Install(path, cmd, hooksInstallOpts.force)
-
 		if err != nil {
 			if errors.Is(err, hooks.ErrHookExists) {
 				return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
@@ -79,13 +76,11 @@ var hooksRemoveCmd = &cobra.Command{
 If the file becomes empty, it is deleted.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
 
 		path, err := hooks.PreCommitPath(workDir)
-
 		if err != nil {
 			return err
 		}

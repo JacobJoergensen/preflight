@@ -67,7 +67,6 @@ func executeAudit(ctx context.Context, workDir string, cmd auditCommand) AuditRe
 	cmdLine := cmd.Display + " " + strings.Join(cmd.Args, " ")
 
 	stdout, stderr, code, err := runAuditCommand(ctx, workDir, cmd.Name, cmd.Args)
-
 	if err != nil {
 		return AuditResult{
 			CommandLine: cmdLine,

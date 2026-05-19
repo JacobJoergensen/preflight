@@ -39,19 +39,16 @@ preflight run build --profile ci`,
 		alias := args[0]
 
 		workDir, err := os.Getwd()
-
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
 
 		config, profileName, err := loadPreflightConfig(workDir)
-
 		if err != nil {
 			return err
 		}
 
 		profile, err := config.ProfileFor(profileName)
-
 		if err != nil {
 			return err
 		}
@@ -79,7 +76,6 @@ preflight run build --profile ci`,
 		loader := manifest.NewLoader(workDir)
 
 		scripts, err := run.ResolveScripts(loader, targets)
-
 		if err != nil {
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}

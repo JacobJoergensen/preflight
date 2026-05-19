@@ -9,7 +9,6 @@ import (
 
 func loadPreflightConfig(workDir string) (config.File, string, error) {
 	cfg, err := config.Load(workDir, fs.OSFS{})
-
 	if err != nil {
 		return config.File{}, "", err
 	}

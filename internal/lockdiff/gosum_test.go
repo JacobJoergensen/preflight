@@ -8,7 +8,6 @@ func TestGoSumParserStripsGoModSuffix(t *testing.T) {
 	data := []byte("github.com/spf13/cobra v1.10.1/go.mod h1:abc\n")
 
 	got, err := goSumParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -28,7 +27,6 @@ github.com/foo/bar v1.2.0/go.mod h1:jkl
 `)
 
 	got, err := goSumParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
@@ -49,7 +47,6 @@ github.com/baz/qux v2.0.0 h1:xyz
 `)
 
 	got, err := goSumParser{}.Parse(data)
-
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}

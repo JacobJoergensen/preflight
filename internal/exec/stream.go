@@ -21,7 +21,6 @@ func RunStreamingInDir(ctx context.Context, dir, name string, args []string, std
 	}
 
 	path, err := goexec.LookPath(name)
-
 	if err != nil {
 		return fmt.Errorf("command not found: %s", name)
 	}

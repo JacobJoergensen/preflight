@@ -24,7 +24,6 @@ func (l Loader) LoadGoConfig() GoConfig {
 	}
 
 	raw, err := l.readFile("go.mod")
-
 	if err != nil {
 		config.Error = fmt.Errorf("failed to read go.mod: %w", err)
 		return config

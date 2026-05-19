@@ -23,7 +23,6 @@ func NewOutputWriterFor(w io.Writer) *OutputWriter {
 
 func (ow *OutputWriter) Println(text string) bool {
 	_, err := fmt.Fprintln(ow.w, text)
-
 	if err != nil {
 		return false
 	}
@@ -33,7 +32,6 @@ func (ow *OutputWriter) Println(text string) bool {
 
 func (ow *OutputWriter) Printf(format string, args ...any) bool {
 	_, err := fmt.Fprintf(ow.w, format, args...)
-
 	if err != nil {
 		return false
 	}

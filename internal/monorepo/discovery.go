@@ -19,7 +19,6 @@ func DiscoverProjects(workDir string) ([]Project, error) {
 
 	for _, source := range sources {
 		discovered, err := source(workDir)
-
 		if err != nil {
 			return nil, err
 		}
@@ -36,7 +35,6 @@ func DiscoverProjects(workDir string) ([]Project, error) {
 
 	if len(projects) == 0 {
 		walked, err := discoverByWalk(workDir)
-
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +59,6 @@ func FilterByGlobs(projects []Project, patterns []string) ([]Project, error) {
 	for _, project := range projects {
 		for _, pattern := range patterns {
 			matched, err := filepath.Match(pattern, project.RelativePath)
-
 			if err != nil {
 				return nil, err
 			}
@@ -78,7 +75,6 @@ func FilterByGlobs(projects []Project, patterns []string) ([]Project, error) {
 
 func projectsFromGlobs(workDir string, patterns []string) ([]Project, error) {
 	directories, err := expandGlobPatterns(workDir, patterns)
-
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +83,6 @@ func projectsFromGlobs(workDir string, patterns []string) ([]Project, error) {
 
 	for _, dir := range directories {
 		project, err := projectFromDir(workDir, dir)
-
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +100,6 @@ func expandGlobPatterns(workDir string, patterns []string) ([]string, error) {
 		absPattern := filepath.Join(workDir, filepath.FromSlash(pattern))
 
 		matches, err := filepath.Glob(absPattern)
-
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +120,6 @@ func expandGlobPatterns(workDir string, patterns []string) ([]string, error) {
 
 func projectFromDir(workDir, absDir string) (Project, error) {
 	rel, err := filepath.Rel(workDir, absDir)
-
 	if err != nil {
 		return Project{}, err
 	}

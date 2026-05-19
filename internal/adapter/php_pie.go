@@ -27,7 +27,6 @@ func loadpieConfig(ctx context.Context, runner exec.Runner, fsys fs.FS) pieConfi
 	config.IsInstalled = true
 
 	extensions, err := getPIEExtensions(ctx, runner, invocation)
-
 	if err != nil {
 		config.Error = err
 		return config
@@ -56,7 +55,6 @@ func getPIEExtensions(ctx context.Context, runner exec.Runner, invocation []stri
 	args := append(invocation[1:], "show")
 
 	output, err := runner.Run(ctx, name, args...)
-
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,6 @@ func discoverGoWork(workDir string) ([]Project, error) {
 		}
 
 		project, err := projectFromDir(workDir, absDir)
-
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +89,6 @@ func parseGoWorkUseDirectives(content string) []string {
 func readGoModuleName(absDir string) string {
 	// #nosec G304 - absDir is a discovered sub-project directory resolved during workspace traversal; the fixed "go.mod" suffix means we only read declared module manifests, not arbitrary user input.
 	raw, err := os.ReadFile(filepath.Join(absDir, "go.mod"))
-
 	if err != nil {
 		return ""
 	}

@@ -15,7 +15,6 @@ func writeGitHubSummary(render func(io.Writer) error) {
 
 	// #nosec G304,G703 - path is read from GITHUB_STEP_SUMMARY, set by the GitHub Actions runner; we never open arbitrary user input here
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not open GITHUB_STEP_SUMMARY: %v\n", err)
 		return
