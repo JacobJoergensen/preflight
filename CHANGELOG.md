@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## Version 1.5.0 (2026-05-19)
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)
 - `audit` now uses native `yarn npm audit` for yarn 4 (Berry) projects; yarn 1 is skipped (incompatible JSON output)
 - `check` and `list` now use native `poetry show` for Poetry projects instead of shelling pip through `poetry run` (requires Poetry 2.2.0 or newer)
