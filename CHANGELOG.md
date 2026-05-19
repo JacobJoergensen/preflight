@@ -7,8 +7,11 @@
 - `check` and `list` now use native `pdm list` and `pdm outdated` for PDM projects instead of shelling pip through `pdm run`
 - `check` now lists PIE-managed PHP extensions via `pie show` for accurate detection across all PIE installation methods
 - `check` and `fix` now report the correct lockfile name for legacy bun projects using `bun.lockb`
+- `check` now suggests `cargo build` instead of `cargo fetch` for missing Rust crates
+- Fixed Rust audit severity classification: vulnerabilities now correctly bucket by CVSS score (critical/high/moderate/low) instead of all reporting as info
 - Fixed `check --outdated` and `list --outdated` counting npm optional dependencies skipped due to platform mismatch
 - Fixed `check --outdated` and `list --outdated` silently reporting zero outdated packages for bun and yarn projects (neither produces npm-shape JSON for `outdated`)
+- Fixed `check --outdated` and `list --outdated` silently swallowing real cargo errors for Rust projects when stdout was empty
 
 ## Version 1.4.0 (2026-05-14)
 - Added Rust ecosystem support: `check`, `list`, `audit`, `fix`, and `run` now recognize Cargo projects via `Cargo.toml`, verify direct and dev dependencies against `Cargo.lock`, dispatch `rust:` script targets to `cargo`, surface outdated crates via `cargo outdated` (when installed), and run security audits via `cargo audit` (when installed)

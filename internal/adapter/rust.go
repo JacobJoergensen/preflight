@@ -81,7 +81,7 @@ func (r RustModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 		if version, ok := installed[dep]; ok {
 			succs = append(succs, Message{Text: fmt.Sprintf("Installed crate %s%s (%s)", terminal.Reset, dep, version), Nested: true})
 		} else {
-			errs = append(errs, Message{Text: fmt.Sprintf("Missing crate %s%s, Run `cargo fetch`", terminal.Reset, dep), Nested: true})
+			errs = append(errs, Message{Text: fmt.Sprintf("Missing crate %s%s, Run `cargo build`", terminal.Reset, dep), Nested: true})
 		}
 	}
 
@@ -89,7 +89,7 @@ func (r RustModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 		if version, ok := installed[dep]; ok {
 			succs = append(succs, Message{Text: fmt.Sprintf("Installed crate %s%s (%s)", terminal.Reset, dep, version), Nested: true, Dev: true})
 		} else {
-			errs = append(errs, Message{Text: fmt.Sprintf("Missing crate %s%s, Run `cargo fetch`", terminal.Reset, dep), Nested: true, Dev: true})
+			errs = append(errs, Message{Text: fmt.Sprintf("Missing crate %s%s, Run `cargo build`", terminal.Reset, dep), Nested: true, Dev: true})
 		}
 	}
 
@@ -152,7 +152,7 @@ func (r RustModule) ListOutdated(ctx context.Context, deps Dependencies) ([]Outd
 	output, err := deps.Runner.Run(ctx, "cargo", "outdated", "--format", "json", "--depth", "1")
 
 	if err != nil && output == "" {
-		return nil, nil
+		return nil, err
 	}
 
 	packages, err := parseCargoOutdated(output)
