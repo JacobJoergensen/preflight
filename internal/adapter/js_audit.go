@@ -21,12 +21,61 @@ func (p PackageModule) Audit(ctx context.Context, deps Dependencies) AuditResult
 
 	cmd := packageManager.Command()
 
+	if cmd == "yarn" {
+		if !isYarnBerry(deps.FS, deps.Loader.WorkDir) {
+			return AuditResult{Skipped: true, SkipReason: "yarn 1 audit JSON is unsupported; upgrade to yarn 4 (Berry) for audit support"}
+		}
+
+		return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
+			Name:        "yarn",
+			Display:     "yarn npm audit",
+			Args:        []string{"npm", "audit", "--json"},
+			ParseCounts: parseYarnNpmAuditCounts,
+		})
+	}
+
 	return executeAudit(ctx, deps.Loader.WorkDir, auditCommand{
 		Name:        cmd,
 		Display:     cmd,
 		Args:        []string{"audit", "--json"},
 		ParseCounts: parseNPMVulnerabilityCounts,
 	})
+}
+
+func parseYarnNpmAuditCounts(jsonText string) map[string]int {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" || !strings.HasPrefix(jsonText, "{") {
+		return nil
+	}
+
+	var advisories map[string][]struct {
+		Severity string `json:"severity"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &advisories); err != nil {
+		return nil
+	}
+
+	counts := make(map[string]int)
+
+	for _, list := range advisories {
+		for _, advisory := range list {
+			severity := strings.ToLower(strings.TrimSpace(advisory.Severity))
+
+			if severity == "" {
+				continue
+			}
+
+			counts[severity]++
+		}
+	}
+
+	if len(counts) == 0 {
+		return nil
+	}
+
+	return counts
 }
 
 func parseNPMVulnerabilityCounts(jsonText string) map[string]int {

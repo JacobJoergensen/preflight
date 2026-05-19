@@ -232,7 +232,8 @@ func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]O
 		return nil, nil
 	}
 
-	if config.PackageManager.Command() == "bun" {
+	switch config.PackageManager.Command() {
+	case "bun", "yarn":
 		return nil, nil
 	}
 
@@ -397,6 +398,11 @@ func isPnPProject(fsys fs.FS, workDir string) bool {
 	}
 
 	return false
+}
+
+func isYarnBerry(fsys fs.FS, workDir string) bool {
+	_, err := fsys.Stat(filepath.Join(workDir, ".yarnrc.yml"))
+	return err == nil
 }
 
 func installedFromYarnLock(fsys fs.FS, workDir string) map[string]string {
