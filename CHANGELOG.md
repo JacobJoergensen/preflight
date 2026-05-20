@@ -6,6 +6,7 @@
 - Removed the `list` command
 - Replaced the `--pm` and `--scope` flags with a single `--only` flag
 - Colored output now turns off automatically when output is not a terminal and honors the `NO_COLOR` and `FORCE_COLOR` environment variables
+- Usage and internal errors now exit with code 2, leaving exit code 1 for findings such as missing dependencies, vulnerabilities, or fix failures
 
 ## Version 1.5.0 (2026-05-19)
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)

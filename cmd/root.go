@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"time"
@@ -13,6 +14,12 @@ import (
 )
 
 var ErrSilentFailure = errors.New("")
+
+const (
+	exitSuccess  = 0
+	exitFindings = 1
+	exitError    = 2
+)
 
 type rootOptions struct {
 	quiet   bool
@@ -49,8 +56,25 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 	},
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func Execute() int {
+	err := rootCmd.Execute()
+
+	if err != nil && !errors.Is(err, ErrSilentFailure) {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+	}
+
+	return exitCode(err)
+}
+
+func exitCode(err error) int {
+	switch {
+	case err == nil:
+		return exitSuccess
+	case errors.Is(err, ErrSilentFailure):
+		return exitFindings
+	default:
+		return exitError
+	}
 }
 
 func printVersion(out *terminal.OutputWriter) {
