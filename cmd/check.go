@@ -35,21 +35,9 @@ var checkCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(cmd.Context(), checkOpts.timeout)
 		defer cancel()
 
-		workDir, err := os.Getwd()
+		runner, profile, err := commandSetup("check failed")
 		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		runner := engine.NewRunner(workDir)
-
-		config, profName, err := loadPreflightConfig(workDir)
-		if err != nil {
-			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		profile, err := config.ProfileFor(profName)
-		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
+			return err
 		}
 
 		var profileOnly *[]string
@@ -65,14 +53,14 @@ var checkCmd = &cobra.Command{
 
 		only := resolveOnly(cmd, checkOpts.only, profileOnly)
 
-		progress := buildCheckProgress(checkOpts.json)
+		progress := buildScanProgress(checkOpts.json, "checking…")
 
 		report, err := runner.Check(ctx, only, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
 
 		progress.Close()
 
 		if err != nil {
-			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
+			return fmt.Errorf("check failed: %w", err)
 		}
 
 		if err := renderCheck(report, checkOpts.json); err != nil {
@@ -99,16 +87,16 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 	return render.TTYCheckRenderer{}.Render(report)
 }
 
-func buildCheckProgress(jsonOutput bool) engine.CheckProgress {
+func buildScanProgress(jsonOutput bool, label string) engine.ScanProgress {
 	if jsonOutput || terminal.Quiet {
-		return engine.NoopCheckProgress{}
+		return engine.NoopScanProgress{}
 	}
 
 	if !terminal.IsInteractiveTTY(os.Stdout) {
-		return engine.NoopCheckProgress{}
+		return engine.NoopScanProgress{}
 	}
 
-	return render.NewTTYProgress(os.Stdout, "checking…")
+	return render.NewTTYProgress(os.Stdout, label)
 }
 
 func exitCodeFromReport(report result.CheckReport) int {

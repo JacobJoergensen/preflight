@@ -11,12 +11,7 @@ type AuditReport struct {
 	EndedAt   time.Time
 	Canceled  bool
 	Items     []AuditItem
-	Projects  []AuditProject
-}
-
-type AuditProject struct {
-	RelativePath string
-	Name         string
+	Projects  []Project
 }
 
 type AuditItem struct {

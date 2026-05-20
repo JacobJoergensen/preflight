@@ -9,9 +9,11 @@ import (
 	"sync"
 
 	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
 type Runner struct {
@@ -28,6 +30,46 @@ func NewRunner(workDir string) Runner {
 		Command:       exec.DefaultRunner{},
 		CommandStream: exec.DefaultStreamRunner{},
 	}
+}
+
+func discoverProjects(workDir string, disableMonorepo bool, projectGlobs []string) ([]monorepo.Project, error) {
+	if disableMonorepo {
+		return nil, nil
+	}
+
+	projects, err := monorepo.DiscoverProjects(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("monorepo discovery failed: %w", err)
+	}
+
+	projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
+	if err != nil {
+		return nil, fmt.Errorf("project filter failed: %w", err)
+	}
+
+	return projects, nil
+}
+
+func aggregateProjects[T any](projects []monorepo.Project, perProject func(monorepo.Project) ([]T, error)) ([]T, []result.Project, error) {
+	var items []T
+
+	summaries := make([]result.Project, 0, len(projects))
+
+	for _, project := range projects {
+		summaries = append(summaries, result.Project{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
+
+		projectItems, err := perProject(project)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		items = append(items, projectItems...)
+	}
+
+	return items, summaries, nil
 }
 
 func (r Runner) depsForDir(workDir string) adapter.Dependencies {

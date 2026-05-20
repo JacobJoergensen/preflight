@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -50,12 +49,7 @@ preflight hooks install --command "preflight check --with-env"`,
 
 		cmd := hooksInstallOpts.command
 
-		err = hooks.Install(path, cmd, hooksInstallOpts.force)
-		if err != nil {
-			if errors.Is(err, hooks.ErrHookExists) {
-				return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
-			}
-
+		if err := hooks.Install(path, cmd, hooksInstallOpts.force); err != nil {
 			return err
 		}
 

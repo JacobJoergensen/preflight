@@ -124,7 +124,7 @@ func TestExtractRunCommands(t *testing.T) {
 	}
 }
 
-func TestPluralS(t *testing.T) {
+func TestPluralSuffix(t *testing.T) {
 	tests := []struct {
 		count int
 		want  string
@@ -136,10 +136,10 @@ func TestPluralS(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := pluralS(tt.count)
+		got := pluralSuffix(tt.count)
 
 		if got != tt.want {
-			t.Errorf("pluralS(%d) = %q, want %q", tt.count, got, tt.want)
+			t.Errorf("pluralSuffix(%d) = %q, want %q", tt.count, got, tt.want)
 		}
 	}
 }

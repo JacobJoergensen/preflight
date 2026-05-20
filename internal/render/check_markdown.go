@@ -91,27 +91,17 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 }
 
 func markdownMonorepoCheckStatus(report result.CheckReport) (symbol, text string) {
-	projectsWithErrors := make(map[string]struct{})
-	projectsWithWarnings := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if len(item.Errors) > 0 {
-			projectsWithErrors[item.Project] = struct{}{}
-		}
-
-		if len(item.Warnings) > 0 {
-			projectsWithWarnings[item.Project] = struct{}{}
-		}
-	}
+	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors) > 0 })
+	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings) > 0 })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithErrors) > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s reported errors", len(projectsWithErrors), totalProjects, pluralSuffix(totalProjects))
+	if errorProjects > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s reported errors", errorProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	if len(projectsWithWarnings) > 0 {
-		return "⚠", fmt.Sprintf("%d of %d project%s reported warnings", len(projectsWithWarnings), totalProjects, pluralSuffix(totalProjects))
+	if warningProjects > 0 {
+		return "⚠", fmt.Sprintf("%d of %d project%s reported warnings", warningProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return "✓", fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))

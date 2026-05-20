@@ -50,3 +50,15 @@ func renderByProject[P any, T any](
 		rendered = true
 	}
 }
+
+func countProjects[T any](items []T, match func(T) (string, bool)) int {
+	seen := make(map[string]struct{})
+
+	for _, item := range items {
+		if project, ok := match(item); ok {
+			seen[project] = struct{}{}
+		}
+	}
+
+	return len(seen)
+}

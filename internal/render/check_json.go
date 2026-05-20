@@ -79,7 +79,7 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 	return encodeJSON(r.Out, payload, true)
 }
 
-func checkProjectsToJSON(projects []result.CheckProject) []checkProjectJSON {
+func checkProjectsToJSON(projects []result.Project) []checkProjectJSON {
 	if len(projects) == 0 {
 		return nil
 	}

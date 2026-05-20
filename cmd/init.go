@@ -37,7 +37,7 @@ Existing files are left untouched unless --force is set.`,
 		_, statErr := os.Stat(path)
 
 		if statErr == nil && !initOpts.force {
-			return fmt.Errorf("%spreflight.yml already exists (use --force to overwrite)%s", terminal.Red, terminal.Reset)
+			return errors.New("preflight.yml already exists (use --force to overwrite)")
 		}
 
 		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {

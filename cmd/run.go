@@ -13,7 +13,6 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
 	"github.com/JacobJoergensen/preflight/internal/run"
-	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type runOptions struct {
@@ -54,8 +53,8 @@ preflight run build --profile ci`,
 		}
 
 		if profile.Run == nil || len(profile.Run.Scripts) == 0 {
-			return fmt.Errorf("%sno run.scripts for profile %q in preflight.yml (configure profiles.%s.run.scripts)%s",
-				terminal.Red, profileName, profileName, terminal.Reset)
+			return fmt.Errorf("no run.scripts for profile %q in preflight.yml (configure profiles.%s.run.scripts)",
+				profileName, profileName)
 		}
 
 		targets, ok := profile.Run.Scripts[alias]
@@ -69,15 +68,15 @@ preflight run build --profile ci`,
 
 			slices.Sort(keys)
 
-			return fmt.Errorf("%sunknown script %q for profile %q, known: %s%s",
-				terminal.Red, alias, profileName, strings.Join(keys, ", "), terminal.Reset)
+			return fmt.Errorf("unknown script %q for profile %q, known: %s",
+				alias, profileName, strings.Join(keys, ", "))
 		}
 
 		loader := manifest.NewLoader(workDir)
 
 		scripts, err := run.ResolveScripts(loader, targets)
 		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
+			return err
 		}
 
 		if runOpts.dryRun {

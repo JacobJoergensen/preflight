@@ -68,7 +68,7 @@ func (r JSONAuditRenderer) Render(report result.AuditReport) error {
 	return encodeJSON(r.Out, payload, true)
 }
 
-func auditProjectsToJSON(projects []result.AuditProject) []auditProjectJSON {
+func auditProjectsToJSON(projects []result.Project) []auditProjectJSON {
 	if len(projects) == 0 {
 		return nil
 	}

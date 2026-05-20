@@ -37,14 +37,14 @@ func (r TTYAuditRenderer) Render(report result.AuditReport) error {
 
 func renderAuditItemsGroupedByProject(ow *terminal.OutputWriter, report result.AuditReport) {
 	renderByProject(ow, report.Projects, report.Items,
-		func(p result.AuditProject) string { return p.RelativePath },
+		func(p result.Project) string { return p.RelativePath },
 		func(i result.AuditItem) string { return i.Project },
 		renderAuditProjectHeader,
 		renderAuditCardTTY,
 	)
 }
 
-func renderAuditProjectHeader(ow *terminal.OutputWriter, project result.AuditProject) {
+func renderAuditProjectHeader(ow *terminal.OutputWriter, project result.Project) {
 	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
 
 	if project.Name != "" {
@@ -157,27 +157,17 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 }
 
 func monorepoAuditStatusFromReport(report result.AuditReport) (icon, color, text string) {
-	projectsWithErr := make(map[string]struct{})
-	projectsWithIssues := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			projectsWithErr[item.Project] = struct{}{}
-		}
-
-		if !item.OK {
-			projectsWithIssues[item.Project] = struct{}{}
-		}
-	}
+	failedProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, i.ErrText != "" })
+	issueProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, !i.OK })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithErr) > 0 {
-		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s failed to audit", len(projectsWithErr), totalProjects, pluralSuffix(totalProjects))
+	if failedProjects > 0 {
+		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s failed to audit", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	if len(projectsWithIssues) > 0 {
-		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported vulnerabilities", len(projectsWithIssues), totalProjects, pluralSuffix(totalProjects))
+	if issueProjects > 0 {
+		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported vulnerabilities", issueProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return terminal.CheckMark, terminal.Green, fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))

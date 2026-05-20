@@ -24,12 +24,7 @@ type FixReport struct {
 	Skipped      []SkippedFix
 	Diff         bool
 	LockDiffs    []lockdiff.FileDiff
-	Projects     []FixProject
-}
-
-type FixProject struct {
-	RelativePath string
-	Name         string
+	Projects     []Project
 }
 
 type PlannedFix struct {

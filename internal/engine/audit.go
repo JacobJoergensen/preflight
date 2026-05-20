@@ -3,7 +3,6 @@ package engine
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"slices"
 	"time"
 
@@ -12,46 +11,25 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-type AuditProgress interface {
-	Plan(total int)
-	Start(scopeID, displayName string)
-	Finish(scopeID string, included bool)
-	Close()
-}
-
-type NoopAuditProgress struct{}
-
-func (NoopAuditProgress) Plan(int)             {}
-func (NoopAuditProgress) Start(string, string) {}
-func (NoopAuditProgress) Finish(string, bool)  {}
-func (NoopAuditProgress) Close()               {}
-
 func (r Runner) Audit(
 	ctx context.Context,
 	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	progress ScanProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.AuditReport, error) {
 	if progress == nil {
-		progress = NoopAuditProgress{}
+		progress = NoopScanProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.AuditReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.AuditReport{}, err
+	}
 
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.AuditReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.auditMonorepo(ctx, projects, only, minSeverity, progress)
-		}
+	if len(projects) > 0 {
+		return r.auditMonorepo(ctx, projects, only, minSeverity, progress)
 	}
 
 	return r.auditProject(ctx, r.WorkDir, "", only, minSeverity, progress)
@@ -62,26 +40,16 @@ func (r Runner) auditMonorepo(
 	projects []monorepo.Project,
 	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	progress ScanProgress,
 ) (result.AuditReport, error) {
 	startedAt := time.Now()
 
-	var allItems []result.AuditItem
-
-	projectSummaries := make([]result.AuditProject, 0, len(projects))
-
-	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.AuditProject{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		})
-
+	allItems, projectSummaries, err := aggregateProjects(projects, func(project monorepo.Project) ([]result.AuditItem, error) {
 		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, only, minSeverity, progress)
-		if err != nil {
-			return result.AuditReport{}, err
-		}
-
-		allItems = append(allItems, projectReport.Items...)
+		return projectReport.Items, err
+	})
+	if err != nil {
+		return result.AuditReport{}, err
 	}
 
 	return result.AuditReport{
@@ -99,7 +67,7 @@ func (r Runner) auditProject(
 	projectPath string,
 	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	progress ScanProgress,
 ) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Only: only, Mode: ModeAudit})
 	if err != nil {
@@ -146,7 +114,7 @@ func filterAuditRunners(adapters []adapter.Adapter) []adapter.AuditRunner {
 	return runners
 }
 
-func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies, progress AuditProgress) result.AuditReport {
+func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies, progress ScanProgress) result.AuditReport {
 	startedAt := time.Now()
 
 	progress.Plan(len(runners))

@@ -3,7 +3,6 @@ package engine
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"slices"
 	"time"
 
@@ -12,47 +11,26 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-type CheckProgress interface {
-	Plan(total int)
-	Start(scopeID, displayName string)
-	Finish(scopeID string, included bool)
-	Close()
-}
-
-type NoopCheckProgress struct{}
-
-func (NoopCheckProgress) Plan(int)             {}
-func (NoopCheckProgress) Start(string, string) {}
-func (NoopCheckProgress) Finish(string, bool)  {}
-func (NoopCheckProgress) Close()               {}
-
 func (r Runner) Check(
 	ctx context.Context,
 	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.CheckReport, error) {
 	if progress == nil {
-		progress = NoopCheckProgress{}
+		progress = NoopScanProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.CheckReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.CheckReport{}, err
+	}
 
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.CheckReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.checkMonorepo(ctx, projects, only, withEnv, outdated, progress)
-		}
+	if len(projects) > 0 {
+		return r.checkMonorepo(ctx, projects, only, withEnv, outdated, progress)
 	}
 
 	return r.checkProject(ctx, r.WorkDir, "", only, withEnv, outdated, progress)
@@ -64,26 +42,16 @@ func (r Runner) checkMonorepo(
 	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 ) (result.CheckReport, error) {
 	startedAt := time.Now()
 
-	var allItems []result.CheckItem
-
-	projectSummaries := make([]result.CheckProject, 0, len(projects))
-
-	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.CheckProject{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		})
-
+	allItems, projectSummaries, err := aggregateProjects(projects, func(project monorepo.Project) ([]result.CheckItem, error) {
 		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, only, withEnv, outdated, progress)
-		if err != nil {
-			return result.CheckReport{}, err
-		}
-
-		allItems = append(allItems, projectReport.Items...)
+		return projectReport.Items, err
+	})
+	if err != nil {
+		return result.CheckReport{}, err
 	}
 
 	return result.CheckReport{
@@ -102,7 +70,7 @@ func (r Runner) checkProject(
 	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 ) (result.CheckReport, error) {
 	selection, err := Select(SelectInput{Only: only, Mode: ModeCheck})
 	if err != nil {
@@ -138,7 +106,7 @@ func (r Runner) checkProject(
 	return report, nil
 }
 
-func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies, progress CheckProgress) result.CheckReport {
+func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies, progress ScanProgress) result.CheckReport {
 	startedAt := time.Now()
 
 	progress.Plan(len(modules))

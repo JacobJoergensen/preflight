@@ -12,12 +12,7 @@ type CheckReport struct {
 	EndedAt   time.Time
 	Canceled  bool
 	Items     []CheckItem
-	Projects  []CheckProject
-}
-
-type CheckProject struct {
-	RelativePath string
-	Name         string
+	Projects  []Project
 }
 
 type CheckItem struct {

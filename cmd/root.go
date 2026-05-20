@@ -60,7 +60,7 @@ func Execute() int {
 	err := rootCmd.Execute()
 
 	if err != nil && !errors.Is(err, ErrSilentFailure) {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintf(os.Stderr, "%s%s%s\n", terminal.Red, err, terminal.Reset)
 	}
 
 	return exitCode(err)

@@ -9,10 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
-	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type auditOptions struct {
@@ -46,21 +44,9 @@ preflight audit --json`,
 		ctx, cancel := context.WithTimeout(cmd.Context(), auditOpts.timeout)
 		defer cancel()
 
-		workDir, err := os.Getwd()
+		runner, profile, err := commandSetup("audit failed")
 		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		runner := engine.NewRunner(workDir)
-
-		config, profileName, err := loadPreflightConfig(workDir)
-		if err != nil {
-			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		profile, err := config.ProfileFor(profileName)
-		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
+			return err
 		}
 
 		var profileOnly *[]string
@@ -76,14 +62,14 @@ preflight audit --json`,
 
 		only := resolveOnly(cmd, auditOpts.only, profileOnly)
 
-		progress := buildAuditProgress(auditOpts.json)
+		progress := buildScanProgress(auditOpts.json, "auditing…")
 
 		report, err := runner.Audit(ctx, only, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
 
 		progress.Close()
 
 		if err != nil {
-			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
+			return fmt.Errorf("audit failed: %w", err)
 		}
 
 		if err := renderAudit(report, auditOpts.json); err != nil {
@@ -108,18 +94,6 @@ func renderAudit(report result.AuditReport, jsonOutput bool) error {
 	}
 
 	return render.TTYAuditRenderer{}.Render(report)
-}
-
-func buildAuditProgress(jsonOutput bool) engine.AuditProgress {
-	if jsonOutput || terminal.Quiet {
-		return engine.NoopAuditProgress{}
-	}
-
-	if !terminal.IsInteractiveTTY(os.Stdout) {
-		return engine.NoopAuditProgress{}
-	}
-
-	return render.NewTTYProgress(os.Stdout, "auditing…")
 }
 
 func exitCodeFromAuditReport(report result.AuditReport) int {

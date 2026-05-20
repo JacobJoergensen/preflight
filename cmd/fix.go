@@ -40,21 +40,9 @@ var fixCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(cmd.Context(), fixOpts.timeout)
 		defer cancel()
 
-		workDir, err := os.Getwd()
+		runner, profile, err := commandSetup("fix failed")
 		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		runner := engine.NewRunner(workDir)
-
-		config, profName, err := loadPreflightConfig(workDir)
-		if err != nil {
-			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		profile, err := config.ProfileFor(profName)
-		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
+			return err
 		}
 
 		var profileOnly *[]string
@@ -74,7 +62,7 @@ var fixCmd = &cobra.Command{
 			DryRun:     fixOpts.dryRun,
 		}, !fixOpts.noDiff, approver, progress, fixOpts.noMonorepo, fixOpts.projectGlobs)
 		if err != nil {
-			return fmt.Errorf("%sfix failed: %w%s", terminal.Red, err, terminal.Reset)
+			return fmt.Errorf("fix failed: %w", err)
 		}
 
 		if err := renderFix(report, fixOpts.json, itemsRenderedLive); err != nil {

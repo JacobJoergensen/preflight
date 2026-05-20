@@ -100,27 +100,17 @@ func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
 }
 
 func markdownMonorepoAuditStatus(report result.AuditReport) (symbol, text string) {
-	projectsWithErr := make(map[string]struct{})
-	projectsWithIssues := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			projectsWithErr[item.Project] = struct{}{}
-		}
-
-		if !item.OK {
-			projectsWithIssues[item.Project] = struct{}{}
-		}
-	}
+	failedProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, i.ErrText != "" })
+	issueProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, !i.OK })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithErr) > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s failed to audit", len(projectsWithErr), totalProjects, pluralSuffix(totalProjects))
+	if failedProjects > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s failed to audit", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	if len(projectsWithIssues) > 0 {
-		return "⚠", fmt.Sprintf("%d of %d project%s reported vulnerabilities", len(projectsWithIssues), totalProjects, pluralSuffix(totalProjects))
+	if issueProjects > 0 {
+		return "⚠", fmt.Sprintf("%d of %d project%s reported vulnerabilities", issueProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return "✓", fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))

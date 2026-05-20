@@ -70,9 +70,9 @@ func renderFixItemLines(ow *terminal.OutputWriter, report result.FixReport) {
 	nameWidth, commandWidth := fixItemColumnWidths(report.Items)
 
 	renderByProject(ow, report.Projects, report.Items,
-		func(p result.FixProject) string { return p.RelativePath },
+		func(p result.Project) string { return p.RelativePath },
 		func(i result.FixItem) string { return i.Project },
-		func(ow *terminal.OutputWriter, p result.FixProject) {
+		func(ow *terminal.OutputWriter, p result.Project) {
 			ow.Println("  " + terminal.Bold + terminal.Cyan + p.RelativePath + terminal.Reset)
 		},
 		func(ow *terminal.OutputWriter, item result.FixItem) {
@@ -400,18 +400,12 @@ func monorepoFixStatusFromReport(report result.FixReport) (icon string, color st
 		return terminal.WarningSign, terminal.Yellow, "No package managers to fix"
 	}
 
-	projectsWithFailures := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if !item.Success {
-			projectsWithFailures[item.Project] = struct{}{}
-		}
-	}
+	failedProjects := countProjects(report.Items, func(i result.FixItem) (string, bool) { return i.Project, !i.Success })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithFailures) > 0 {
-		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s reported failures", len(projectsWithFailures), totalProjects, pluralSuffix(totalProjects))
+	if failedProjects > 0 {
+		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s reported failures", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return terminal.CheckMark, terminal.Green, fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))

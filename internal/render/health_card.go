@@ -178,7 +178,7 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 	}
 
 	if flatErr > 0 {
-		parts = append(parts, fmt.Sprintf("%d configuration or environment error%s", flatErr, pluralS(flatErr)))
+		parts = append(parts, fmt.Sprintf("%d configuration or environment error%s", flatErr, pluralSuffix(flatErr)))
 	}
 
 	if len(parts) == 0 {
@@ -194,14 +194,6 @@ func dependencySummaryPhrase(count int) string {
 	}
 
 	return fmt.Sprintf("%d missing or invalid dependencies", count)
-}
-
-func pluralS(count int) string {
-	if count == 1 {
-		return ""
-	}
-
-	return "s"
 }
 
 func toolchainMismatchHint(item result.CheckItem) bool {
@@ -279,45 +271,28 @@ func extractSuggestedActions(item result.CheckItem) []string {
 		actions = append(actions, cmd)
 	}
 
-	tryExtract := func(msg model.Message) {
-		for _, line := range extractRunCommands(msg.Text) {
-			add(line)
-		}
+	// Buckets are tried in priority order; add() dedups, so earlier buckets win.
+	buckets := []struct {
+		messages []model.Message
+		match    func(model.Message) bool
+	}{
+		{item.Errors, func(m model.Message) bool { return !m.Nested }},
+		{item.Errors, func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Errors, func(m model.Message) bool { return m.Nested && m.Dev }},
+		{item.Warnings, func(m model.Message) bool { return !m.Nested }},
+		{item.Warnings, func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Warnings, func(m model.Message) bool { return m.Nested && m.Dev }},
 	}
 
-	for _, msg := range item.Errors {
-		if !msg.Nested {
-			tryExtract(msg)
-		}
-	}
+	for _, bucket := range buckets {
+		for _, msg := range bucket.messages {
+			if !bucket.match(msg) {
+				continue
+			}
 
-	for _, msg := range item.Errors {
-		if msg.Nested && !msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Errors {
-		if msg.Nested && msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if !msg.Nested {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if msg.Nested && !msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if msg.Nested && msg.Dev {
-			tryExtract(msg)
+			for _, line := range extractRunCommands(msg.Text) {
+				add(line)
+			}
 		}
 	}
 

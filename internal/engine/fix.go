@@ -71,20 +71,13 @@ func (r Runner) Fix(
 		progress = NoopFixProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.FixReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.FixReport{}, err
+	}
 
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.FixReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.fixMonorepo(ctx, projects, only, opts, diff, approver, progress)
-		}
+	if len(projects) > 0 {
+		return r.fixMonorepo(ctx, projects, only, opts, diff, approver, progress)
 	}
 
 	return r.fixSingleProject(ctx, r.WorkDir, "", only, opts, diff, approver, progress)
@@ -111,10 +104,10 @@ func (r Runner) fixMonorepo(
 ) (result.FixReport, error) {
 	startedAt := time.Now()
 
-	projectSummaries := make([]result.FixProject, 0, len(projects))
+	projectSummaries := make([]result.Project, 0, len(projects))
 
 	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.FixProject{
+		projectSummaries = append(projectSummaries, result.Project{
 			RelativePath: project.RelativePath,
 			Name:         project.Name,
 		})

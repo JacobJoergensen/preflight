@@ -155,11 +155,3 @@ func summarizeDiffCounts(added, removed, upgraded, downgraded, majorUpgrades int
 
 	return strings.Join(parts, ", ")
 }
-
-func pluralSuffix(count int) string {
-	if count == 1 {
-		return ""
-	}
-
-	return "s"
-}
