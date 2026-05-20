@@ -16,8 +16,7 @@ import (
 )
 
 type checkOptions struct {
-	managers     []string
-	scopes       []string
+	only         []string
 	withEnv      bool
 	timeout      time.Duration
 	json         bool
@@ -53,27 +52,22 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		var profileScope, profilePM *[]string
+		var profileOnly *[]string
 		withEnv := checkOpts.withEnv
 
 		if profile.Check != nil {
-			profileScope = profile.Check.Scope
-			profilePM = profile.Check.PM
+			profileOnly = profile.Check.Only
 
 			if !cmd.Flags().Changed("with-env") && profile.Check.WithEnv != nil {
 				withEnv = *profile.Check.WithEnv
 			}
 		}
 
-		scopes, managers := resolveScopeAndPM(cmd, checkOpts.scopes, checkOpts.managers, profileScope, profilePM)
-
-		if err := validateScopeAndPM(scopes, managers); err != nil {
-			return err
-		}
+		only := resolveOnly(cmd, checkOpts.only, profileOnly)
 
 		progress := buildCheckProgress(checkOpts.json)
 
-		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
+		report, err := runner.Check(ctx, only, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
 
 		progress.Close()
 
@@ -132,19 +126,11 @@ func exitCodeFromReport(report result.CheckReport) int {
 }
 
 func init() {
-	checkCmd.Flags().StringSliceVarP(
-		&checkOpts.managers,
-		"pm",
-		"p",
-		[]string{},
-		"Tools or scopes to check (aliases: npm,yarn,pnpm,bun → js, use `env` for .env validation)",
-	)
-
 	checkCmd.Flags().StringSliceVar(
-		&checkOpts.scopes,
-		"scope",
+		&checkOpts.only,
+		"only",
 		[]string{},
-		"Scopes to check (comma-separated: js,php,composer,node,go,python,ruby,env)",
+		"Limit to these ecosystems or tools (comma-separated: js, npm, php, composer, node, go, rust, python, ruby, env)",
 	)
 
 	checkCmd.Flags().BoolVar(

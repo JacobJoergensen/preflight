@@ -55,8 +55,7 @@ func (NoopFixProgress) Finish(result.FixItem) {}
 
 func (r Runner) Fix(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
+	only []string,
 	opts adapter.FixOptions,
 	diff bool,
 	approver FixApprover,
@@ -84,11 +83,11 @@ func (r Runner) Fix(
 		}
 
 		if len(projects) > 0 {
-			return r.fixMonorepo(ctx, projects, scopes, selectors, opts, diff, approver, progress)
+			return r.fixMonorepo(ctx, projects, only, opts, diff, approver, progress)
 		}
 	}
 
-	return r.fixSingleProject(ctx, r.WorkDir, "", scopes, selectors, opts, diff, approver, progress)
+	return r.fixSingleProject(ctx, r.WorkDir, "", only, opts, diff, approver, progress)
 }
 
 type projectFixPrep struct {
@@ -104,8 +103,7 @@ type projectFixPrep struct {
 func (r Runner) fixMonorepo(
 	ctx context.Context,
 	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
+	only []string,
 	opts adapter.FixOptions,
 	diff bool,
 	approver FixApprover,
@@ -122,7 +120,7 @@ func (r Runner) fixMonorepo(
 		})
 	}
 
-	preps, fatalErr := r.prepareMonorepoProjects(projects, scopes, selectors)
+	preps, fatalErr := r.prepareMonorepoProjects(projects, only)
 
 	if fatalErr != nil {
 		return result.FixReport{}, fatalErr
@@ -227,13 +225,13 @@ func (r Runner) fixMonorepo(
 	}, nil
 }
 
-func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, selectors []string) ([]projectFixPrep, error) {
+func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, only []string) ([]projectFixPrep, error) {
 	preps := make([]projectFixPrep, 0, len(projects))
 
 	for _, project := range projects {
 		prep := projectFixPrep{project: project}
 
-		selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
+		selection, err := Select(SelectInput{Only: only, Mode: ModeFix})
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +241,7 @@ func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, sel
 		deps := r.depsForDir(project.AbsolutePath)
 		prep.deps = deps
 
-		if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+		if err := validateRequestedPackageManagers(only, deps); err != nil {
 			prep.prepError = err
 			prep.skippedOnPrepFail = result.SkippedFix{
 				Project: project.RelativePath,
@@ -253,7 +251,7 @@ func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, sel
 			continue
 		}
 
-		adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+		adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
 		prep.adapters = adapters
 
 		candidates := buildFixCandidates(adapters, deps)
@@ -274,25 +272,24 @@ func (r Runner) fixSingleProject(
 	ctx context.Context,
 	workDir string,
 	projectPath string,
-	scopes []string,
-	selectors []string,
+	only []string,
 	opts adapter.FixOptions,
 	diff bool,
 	approver FixApprover,
 	progress FixProgress,
 ) (result.FixReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
+	selection, err := Select(SelectInput{Only: only, Mode: ModeFix})
 	if err != nil {
 		return result.FixReport{}, err
 	}
 
 	deps := r.depsForDir(workDir)
 
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, deps); err != nil {
 		return result.FixReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
 	startedAt := time.Now()
 
 	candidates := buildFixCandidates(adapters, deps)

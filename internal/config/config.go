@@ -27,8 +27,7 @@ type Profile struct {
 }
 
 type AuditCommand struct {
-	Scope       *[]string `yaml:"scope,omitempty"`
-	PM          *[]string `yaml:"pm,omitempty"`
+	Only        *[]string `yaml:"only,omitempty"`
 	MinSeverity *string   `yaml:"minSeverity,omitempty"`
 }
 
@@ -37,8 +36,7 @@ type RunBlock struct {
 }
 
 type Command struct {
-	Scope   *[]string `yaml:"scope,omitempty"`
-	PM      *[]string `yaml:"pm,omitempty"`
+	Only    *[]string `yaml:"only,omitempty"`
 	WithEnv *bool     `yaml:"withEnv,omitempty"`
 }
 
@@ -93,20 +91,8 @@ func (f File) validate() error {
 }
 
 func (p Profile) validate(profileName string) error {
-	if p.Check != nil {
-		if err := p.Check.validate("check"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-	}
-
-	if p.Fix != nil {
-		if err := p.Fix.validate("fix"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-
-		if p.Fix.WithEnv != nil {
-			return fmt.Errorf("profiles.%s.fix: withEnv applies only to check", profileName)
-		}
+	if p.Fix != nil && p.Fix.WithEnv != nil {
+		return fmt.Errorf("profiles.%s.fix: withEnv applies only to check", profileName)
 	}
 
 	if p.Audit != nil {
@@ -181,23 +167,9 @@ func (s ScriptTarget) Validate() error {
 	}
 }
 
-func (c Command) validate(command string) error {
-	if c.Scope != nil && c.PM != nil {
-		return fmt.Errorf("%s: set only one of scope or pm", command)
-	}
-
-	return nil
-}
-
 func (a AuditCommand) validate() error {
-	if a.Scope != nil && a.PM != nil {
-		return errors.New("set only one of scope or pm")
-	}
-
-	if a.MinSeverity != nil {
-		if !isValidSeverity(*a.MinSeverity) {
-			return fmt.Errorf("invalid minSeverity %q (use: info, low, moderate, medium, high, critical)", *a.MinSeverity)
-		}
+	if a.MinSeverity != nil && !isValidSeverity(*a.MinSeverity) {
+		return fmt.Errorf("invalid minSeverity %q (use: info, low, moderate, medium, high, critical)", *a.MinSeverity)
 	}
 
 	return nil

@@ -169,49 +169,6 @@ func TestFileProfileFor(t *testing.T) {
 	}
 }
 
-func TestCommandValidate(t *testing.T) {
-	tests := []struct {
-		name      string
-		command   Command
-		wantError bool
-	}{
-		{
-			name:      "empty command passes",
-			command:   Command{},
-			wantError: false,
-		},
-		{
-			name:      "scope only passes",
-			command:   Command{Scope: &[]string{"js"}},
-			wantError: false,
-		},
-		{
-			name:      "pm only passes",
-			command:   Command{PM: &[]string{"npm"}},
-			wantError: false,
-		},
-		{
-			name:      "both scope and pm fails",
-			command:   Command{Scope: &[]string{"js"}, PM: &[]string{"npm"}},
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.command.validate("test")
-
-			if tt.wantError && err == nil {
-				t.Fatal("expected error, got nil")
-			}
-
-			if !tt.wantError && err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
 func TestFileValidate(t *testing.T) {
 	tests := []struct {
 		name       string

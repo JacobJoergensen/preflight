@@ -29,7 +29,7 @@ var rootCmd = &cobra.Command{
 
 Supports npm, yarn, pnpm, bun, Composer, Go, pip, Poetry, uv, and Bundler.
 Configure with preflight.yml for profiles, scripts, and CI integration.`,
-	Example:       "preflight check --pm=npm,composer",
+	Example:       "preflight check --only npm,composer",
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {

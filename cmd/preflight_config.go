@@ -3,6 +3,8 @@ package cmd
 import (
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/JacobJoergensen/preflight/internal/config"
 	"github.com/JacobJoergensen/preflight/internal/fs"
 )
@@ -16,4 +18,16 @@ func loadPreflightConfig(workDir string) (config.File, string, error) {
 	name := config.ResolveProfileName(rootOpts.profile, os.Getenv("PREFLIGHT_PROFILE"), cfg.Profile)
 
 	return cfg, name, nil
+}
+
+func resolveOnly(cmd *cobra.Command, cliOnly []string, profileOnly *[]string) []string {
+	if cmd.Flags().Changed("only") {
+		return cliOnly
+	}
+
+	if profileOnly != nil {
+		return *profileOnly
+	}
+
+	return cliOnly
 }

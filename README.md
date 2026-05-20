@@ -39,15 +39,14 @@ Validates that all required dependencies are installed.
 
 ```sh
 preflight check
-preflight check --pm=npm,composer
-preflight check --scope=js,go
+preflight check --only npm,composer
+preflight check --only js,go
 preflight check --with-env
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to check (npm, yarn, pnpm, bun, composer, go, cargo, pip, bundle) |
-| `--scope` | Scopes to check (js, php, composer, node, go, rust, python, ruby, env) |
+| `--only` | Limit to ecosystems or tools (js, npm, php, composer, node, go, rust, python, ruby, env) |
 | `--with-env` | Also validate `.env` against `.env.example` |
 | `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
@@ -61,15 +60,14 @@ Installs missing dependencies. Prompts per ecosystem by default and prints a loc
 
 ```sh
 preflight fix
-preflight fix --pm=npm
+preflight fix --only npm
 preflight fix --dry-run
 preflight fix --yes --no-diff
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to fix |
-| `--scope` | Scopes to fix |
+| `--only` | Limit to ecosystems or tools |
 | `--force`, `-f` | Force reinstall |
 | `--dry-run` | Show what would run without executing |
 | `--yes`, `-y` | Apply every ecosystem without prompting |
@@ -86,7 +84,7 @@ Runs native security scanners for each ecosystem.
 
 ```sh
 preflight audit
-preflight audit --scope=js,composer
+preflight audit --only js,composer
 preflight audit --json
 ```
 
@@ -101,8 +99,7 @@ preflight audit --json
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to audit |
-| `--scope` | Scopes to audit |
+| `--only` | Limit to ecosystems or tools |
 | `--min-severity` | Minimum severity to report (info, low, moderate, high, critical) |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only audit the current directory |
@@ -180,10 +177,10 @@ profile: default
 profiles:
   default:
     check:
-      pm: [npm, composer]
+      only: [npm, composer]
       withEnv: true
     fix:
-      pm: [npm, composer]
+      only: [npm, composer]
     audit:
       minSeverity: high  # ignore info, low, moderate
     run:
@@ -195,7 +192,7 @@ profiles:
 
   ci:
     check:
-      scope: [js, composer, go]
+      only: [js, composer, go]
     audit:
       minSeverity: critical  # only fail on critical
 ```
@@ -229,23 +226,21 @@ run:
       rust: "test --all"       # runs: cargo test --all
 ```
 
-## Scopes vs Package Managers
+## Selecting ecosystems and tools
 
-Use `--scope` for categories, `--pm` for specific tools.
+By default preflight auto-detects every ecosystem present in the project. Use `--only` to narrow to specific ones. Each value is either an ecosystem or a specific tool; naming a tool also asserts the project uses it.
 
-| Scope | Package Managers |
-|-------|------------------|
-| js | npm, yarn, pnpm, bun |
-| composer | composer |
-| go | go |
-| rust | cargo |
-| python | pip, poetry, uv |
-| ruby | bundle |
-| php | (runtime check only) |
-| node | (runtime check only) |
-| env | (.env validation) |
-
-You can use either `--scope` or `--pm`, not both.
+| Value | Selects |
+|-------|---------|
+| js | JavaScript (npm, yarn, pnpm, bun) |
+| npm, yarn, pnpm, bun | JavaScript, pinned to that tool |
+| composer | PHP Composer |
+| go | Go modules |
+| rust, cargo | Rust |
+| python, pip, poetry, uv, pdm, pipenv | Python |
+| ruby, bundle | Ruby |
+| php, node | runtime check only |
+| env | .env validation |
 
 ## Supported Ecosystems
 

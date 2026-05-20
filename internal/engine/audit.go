@@ -28,8 +28,7 @@ func (NoopAuditProgress) Close()               {}
 
 func (r Runner) Audit(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
 	progress AuditProgress,
 	disableMonorepo bool,
@@ -51,18 +50,17 @@ func (r Runner) Audit(
 		}
 
 		if len(projects) > 0 {
-			return r.auditMonorepo(ctx, projects, scopes, selectors, minSeverity, progress)
+			return r.auditMonorepo(ctx, projects, only, minSeverity, progress)
 		}
 	}
 
-	return r.auditProject(ctx, r.WorkDir, "", scopes, selectors, minSeverity, progress)
+	return r.auditProject(ctx, r.WorkDir, "", only, minSeverity, progress)
 }
 
 func (r Runner) auditMonorepo(
 	ctx context.Context,
 	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
 	progress AuditProgress,
 ) (result.AuditReport, error) {
@@ -78,7 +76,7 @@ func (r Runner) auditMonorepo(
 			Name:         project.Name,
 		})
 
-		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity, progress)
+		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, only, minSeverity, progress)
 		if err != nil {
 			return result.AuditReport{}, err
 		}
@@ -99,25 +97,24 @@ func (r Runner) auditProject(
 	ctx context.Context,
 	workDir string,
 	projectPath string,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
 	progress AuditProgress,
 ) (result.AuditReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
+	selection, err := Select(SelectInput{Only: only, Mode: ModeAudit})
 	if err != nil {
 		return result.AuditReport{}, err
 	}
 
 	deps := r.depsForDir(workDir)
 
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, deps); err != nil {
 		return result.AuditReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
 
-	if isImplicitFullSelection(scopes, selectors) {
+	if isImplicitFullSelection(only) {
 		adapters = withoutAdapter(adapters, "env")
 	}
 

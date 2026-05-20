@@ -28,8 +28,7 @@ func (NoopCheckProgress) Close()               {}
 
 func (r Runner) Check(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
 	progress CheckProgress,
@@ -52,18 +51,17 @@ func (r Runner) Check(
 		}
 
 		if len(projects) > 0 {
-			return r.checkMonorepo(ctx, projects, scopes, selectors, withEnv, outdated, progress)
+			return r.checkMonorepo(ctx, projects, only, withEnv, outdated, progress)
 		}
 	}
 
-	return r.checkProject(ctx, r.WorkDir, "", scopes, selectors, withEnv, outdated, progress)
+	return r.checkProject(ctx, r.WorkDir, "", only, withEnv, outdated, progress)
 }
 
 func (r Runner) checkMonorepo(
 	ctx context.Context,
 	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
 	progress CheckProgress,
@@ -80,7 +78,7 @@ func (r Runner) checkMonorepo(
 			Name:         project.Name,
 		})
 
-		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, withEnv, outdated, progress)
+		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, only, withEnv, outdated, progress)
 		if err != nil {
 			return result.CheckReport{}, err
 		}
@@ -101,30 +99,29 @@ func (r Runner) checkProject(
 	ctx context.Context,
 	workDir string,
 	projectPath string,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
 	progress CheckProgress,
 ) (result.CheckReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeCheck})
+	selection, err := Select(SelectInput{Only: only, Mode: ModeCheck})
 	if err != nil {
 		return result.CheckReport{}, err
 	}
 
 	deps := r.depsForDir(workDir)
 
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, deps); err != nil {
 		return result.CheckReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
 
-	if isImplicitFullSelection(scopes, selectors) {
+	if isImplicitFullSelection(only) {
 		adapters = withoutAdapter(adapters, "env")
 	}
 
-	adapters = appendEnvIfRequested(adapters, withEnv, scopes, selectors)
+	adapters = appendEnvIfRequested(adapters, withEnv, only)
 
 	report := runChecks(ctx, adapters, deps, progress)
 

@@ -42,8 +42,8 @@ func (r Runner) depsForDir(workDir string) adapter.Dependencies {
 	}
 }
 
-func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, scopes, selectors []string) []adapter.Adapter {
-	if !withEnv || selectionIncludesEnv(scopes, selectors) {
+func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, only []string) []adapter.Adapter {
+	if !withEnv || selectionIncludesEnv(only) {
 		return adapters
 	}
 
@@ -56,14 +56,8 @@ func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, scopes, sele
 	return append(adapters, envAdapters[0])
 }
 
-func selectionIncludesEnv(scopes, selectors []string) bool {
-	for _, s := range scopes {
-		if strings.EqualFold(strings.TrimSpace(s), "env") {
-			return true
-		}
-	}
-
-	for _, s := range selectors {
+func selectionIncludesEnv(only []string) bool {
+	for _, s := range only {
 		if strings.EqualFold(strings.TrimSpace(s), "env") {
 			return true
 		}
@@ -72,8 +66,8 @@ func selectionIncludesEnv(scopes, selectors []string) bool {
 	return false
 }
 
-func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Dependencies, scopes, selectors []string) []adapter.Adapter {
-	if !isImplicitFullSelection(scopes, selectors) {
+func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Dependencies, only []string) []adapter.Adapter {
+	if !isImplicitFullSelection(only) {
 		return adapters
 	}
 
@@ -84,8 +78,8 @@ func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Depen
 	return withoutAdapter(adapters, "composer")
 }
 
-func isImplicitFullSelection(scopes, selectors []string) bool {
-	return len(nonEmptyStrings(scopes)) == 0 && len(nonEmptyStrings(selectors)) == 0
+func isImplicitFullSelection(only []string) bool {
+	return len(nonEmptyStrings(only)) == 0
 }
 
 func nonEmptyStrings(ss []string) []string {
@@ -106,8 +100,8 @@ func withoutAdapter(adapters []adapter.Adapter, name string) []adapter.Adapter {
 	})
 }
 
-func validateRequestedPackageManagers(selectors []string, deps adapter.Dependencies) error {
-	for _, selector := range selectors {
+func validateRequestedPackageManagers(only []string, deps adapter.Dependencies) error {
+	for _, selector := range only {
 		selector = strings.ToLower(strings.TrimSpace(selector))
 
 		if selector == "" {

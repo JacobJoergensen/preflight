@@ -19,8 +19,7 @@ import (
 type fixOptions struct {
 	force        bool
 	timeout      time.Duration
-	managers     []string
-	scopes       []string
+	only         []string
 	skipBackup   bool
 	dryRun       bool
 	noDiff       bool
@@ -58,23 +57,18 @@ var fixCmd = &cobra.Command{
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		var profileScope, profilePM *[]string
+		var profileOnly *[]string
 
 		if profile.Fix != nil {
-			profileScope = profile.Fix.Scope
-			profilePM = profile.Fix.PM
+			profileOnly = profile.Fix.Only
 		}
 
-		scopes, managers := resolveScopeAndPM(cmd, fixOpts.scopes, fixOpts.managers, profileScope, profilePM)
-
-		if err := validateScopeAndPM(scopes, managers); err != nil {
-			return err
-		}
+		only := resolveOnly(cmd, fixOpts.only, profileOnly)
 
 		approver := buildFixApprover(fixOpts)
 		progress, itemsRenderedLive := buildFixProgress(fixOpts)
 
-		report, err := runner.Fix(ctx, scopes, managers, adapter.FixOptions{
+		report, err := runner.Fix(ctx, only, adapter.FixOptions{
 			Force:      fixOpts.force,
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
@@ -148,8 +142,7 @@ func exitCodeFromFixReport(report result.FixReport) int {
 func init() {
 	fixCmd.Flags().BoolVarP(&fixOpts.force, "force", "f", false, "Force reinstall dependencies")
 	fixCmd.Flags().DurationVarP(&fixOpts.timeout, "timeout", "t", 30*time.Minute, "Timeout for fix operation")
-	fixCmd.Flags().StringSliceVarP(&fixOpts.managers, "pm", "p", []string{}, "Tools or scopes to fix (aliases: npm,yarn,pnpm,bun)")
-	fixCmd.Flags().StringSliceVar(&fixOpts.scopes, "scope", []string{}, "Scopes to fix (comma-separated: js,composer,go,python,ruby)")
+	fixCmd.Flags().StringSliceVar(&fixOpts.only, "only", []string{}, "Limit to these ecosystems or tools (comma-separated: js, npm, composer, go, rust, python, ruby)")
 	fixCmd.Flags().BoolVar(&fixOpts.skipBackup, "skip-backup", false, "Skip creating backup of lock files")
 	fixCmd.Flags().BoolVar(&fixOpts.dryRun, "dry-run", false, "Show what would be done without making changes")
 	fixCmd.Flags().BoolVar(&fixOpts.noDiff, "no-diff", false, "Hide per-package version changes from lock files")

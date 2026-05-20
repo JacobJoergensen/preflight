@@ -16,8 +16,7 @@ import (
 )
 
 type auditOptions struct {
-	managers     []string
-	scopes       []string
+	only         []string
 	json         bool
 	timeout      time.Duration
 	minSeverity  string
@@ -64,27 +63,22 @@ preflight audit --json`,
 			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
 		}
 
-		var profileScope, profilePM *[]string
+		var profileOnly *[]string
 		minSeverity := auditOpts.minSeverity
 
 		if profile.Audit != nil {
-			profileScope = profile.Audit.Scope
-			profilePM = profile.Audit.PM
+			profileOnly = profile.Audit.Only
 
 			if minSeverity == "" && profile.Audit.MinSeverity != nil {
 				minSeverity = *profile.Audit.MinSeverity
 			}
 		}
 
-		scopes, managers := resolveScopeAndPM(cmd, auditOpts.scopes, auditOpts.managers, profileScope, profilePM)
-
-		if err := validateScopeAndPM(scopes, managers); err != nil {
-			return err
-		}
+		only := resolveOnly(cmd, auditOpts.only, profileOnly)
 
 		progress := buildAuditProgress(auditOpts.json)
 
-		report, err := runner.Audit(ctx, scopes, managers, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
+		report, err := runner.Audit(ctx, only, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
 
 		progress.Close()
 
@@ -147,19 +141,11 @@ func exitCodeFromAuditReport(report result.AuditReport) int {
 }
 
 func init() {
-	auditCmd.Flags().StringSliceVarP(
-		&auditOpts.managers,
-		"pm",
-		"p",
-		[]string{},
-		"Tools or scopes to audit (aliases: npm,yarn,pnpm,bun → js)",
-	)
-
 	auditCmd.Flags().StringSliceVar(
-		&auditOpts.scopes,
-		"scope",
+		&auditOpts.only,
+		"only",
 		[]string{},
-		"Scopes to audit (comma-separated: js,composer,go,python,ruby)",
+		"Limit to these ecosystems or tools (comma-separated: js, npm, composer, go, rust, python, ruby)",
 	)
 
 	auditCmd.Flags().DurationVarP(

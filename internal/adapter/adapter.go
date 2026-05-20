@@ -190,14 +190,6 @@ func GetPriority(name string) int {
 	return priority
 }
 
-func IsRegistered(name string) bool {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	_, exists := available[strings.ToLower(strings.TrimSpace(name))]
-	return exists
-}
-
 func Names(adapters []Adapter) []string {
 	names := make([]string, 0, len(adapters))
 
