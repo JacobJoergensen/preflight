@@ -19,7 +19,7 @@ type rootOptions struct {
 var rootOpts rootOptions
 
 var rootCmd = &cobra.Command{
-	Use:   "PreFlight",
+	Use:   "preflight",
 	Short: "PreFlight is a CLI tool for checking project dependencies.",
 	Long: `A CLI tool that validates your project dependencies before you run into problems. Checks if everything is installed, fixes what's missing, and runs security audits across package managers.
 
