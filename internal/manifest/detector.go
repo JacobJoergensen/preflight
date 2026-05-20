@@ -6,7 +6,6 @@ type PackageManager struct {
 	Tool             Tool
 	ConfigFileExists bool
 	LockFileExists   bool
-	LockFileName     string
 }
 
 func (pm PackageManager) Name() string {
@@ -18,10 +17,6 @@ func (pm PackageManager) Command() string {
 }
 
 func (pm PackageManager) LockFile() string {
-	if pm.LockFileName != "" {
-		return pm.LockFileName
-	}
-
 	return pm.Tool.LockFile
 }
 
@@ -72,24 +67,6 @@ func (l Loader) detectJSPackageManager(tools []Tool) (PackageManager, bool) {
 		if tool.Command == "npm" {
 			npmTool = tool
 			npmConfigExists = l.FileExists(tool.ConfigFile)
-			continue
-		}
-
-		if tool.Command == "bun" {
-			lockFile := ""
-
-			if l.FileExists("bun.lock") {
-				lockFile = "bun.lock"
-			} else if l.FileExists("bun.lockb") {
-				lockFile = "bun.lockb"
-			}
-
-			if lockFile != "" {
-				pm := l.createPackageManager(tool, l.FileExists(tool.ConfigFile), true)
-				pm.LockFileName = lockFile
-				return pm, true
-			}
-
 			continue
 		}
 

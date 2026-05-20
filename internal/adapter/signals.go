@@ -73,7 +73,6 @@ func jsProjectSignals(l manifest.Loader) []string {
 		"pnpm-lock.yaml",
 		"yarn.lock",
 		"bun.lock",
-		"bun.lockb",
 	}
 
 	lockToTool := map[string]string{
@@ -81,7 +80,6 @@ func jsProjectSignals(l manifest.Loader) []string {
 		"pnpm-lock.yaml":    "pnpm",
 		"yarn.lock":         "yarn",
 		"bun.lock":          "bun",
-		"bun.lockb":         "bun",
 	}
 
 	var lockfiles []string
