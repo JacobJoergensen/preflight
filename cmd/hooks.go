@@ -21,15 +21,16 @@ var hooksInstallOpts hooksInstallOptions
 var hooksCmd = &cobra.Command{
 	Use:   "hooks",
 	Short: "Manage Git hooks that run PreFlight",
-	Long: `Install or remove a marked block in .git/hooks/pre-commit so PreFlight can coexist
-with Husky, Lefthook, or other hand-written hooks. The block is delimited by
-# BEGIN PREFLIGHT and # END PREFLIGHT comments.`,
+	Long: `Install or remove a marked block in the repository's pre-commit hook (honoring
+core.hooksPath) so PreFlight can coexist with Husky, Lefthook, or other hand-written
+hooks. The block is delimited by # BEGIN PREFLIGHT and # END PREFLIGHT comments.`,
 }
 
 var hooksInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Add a PreFlight block to the Git pre-commit hook",
-	Long: `Creates or updates .git/hooks/pre-commit with a shell block that runs PreFlight.
+	Long: `Creates or updates the repository's pre-commit hook with a shell block that runs
+PreFlight, writing to the directory configured by core.hooksPath when it is set.
 
 If pre-commit already exists and has no PreFlight markers, the command fails unless
 --force is set (append block at the end).`,

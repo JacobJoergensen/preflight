@@ -19,8 +19,8 @@ const (
 
 var ErrHookExists = errors.New("pre-commit hook already exists without a PreFlight block (use --force to append)")
 
-func GitRoot(workDir string) (string, error) {
-	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
+func HooksDir(workDir string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--path-format=absolute", "--git-path", "hooks")
 	cmd.Dir = workDir
 
 	output, err := cmd.Output()
@@ -41,22 +41,14 @@ func validatePreCommitPath(path string) error {
 		return fmt.Errorf("pre-commit hook path must end with %q", "pre-commit")
 	}
 
-	hooksDir := filepath.Dir(abs)
-
-	if filepath.Base(hooksDir) != "hooks" {
-		return fmt.Errorf("pre-commit must live under %q", filepath.Join(".git", "hooks"))
-	}
-
-	gitDir := filepath.Dir(hooksDir)
-
-	if filepath.Base(gitDir) != ".git" {
-		return fmt.Errorf("pre-commit must live under %q", filepath.Join(".git", "hooks"))
-	}
-
 	return nil
 }
 
 func writeHookFile(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return err
 	}
@@ -69,12 +61,12 @@ func writeHookFile(path string, data []byte) error {
 }
 
 func PreCommitPath(workDir string) (string, error) {
-	root, err := GitRoot(workDir)
+	hooksDir, err := HooksDir(workDir)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(root, ".git", "hooks", "pre-commit"), nil
+	return filepath.Join(hooksDir, "pre-commit"), nil
 }
 
 func RemovePreflightBlock(content string) string {
