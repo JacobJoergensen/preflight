@@ -145,28 +145,6 @@ func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	return errs, warns, succs
 }
 
-func (r RubyModule) ListDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadRubyConfig()
-
-	if config.PackageManager.Tool.Command == "" {
-		return nil, nil
-	}
-
-	if config.Error != nil {
-		return nil, config.Error
-	}
-
-	if !config.HasConfig {
-		return nil, nil
-	}
-
-	return slices.Clone(config.Dependencies), nil
-}
-
 func (r RubyModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

@@ -70,11 +70,9 @@ func buildProfile(scopes []string, withEnv bool) Profile {
 	if len(scopes) > 0 {
 		profile.Check = &Command{Scope: new(append([]string(nil), scopes...))}
 		profile.Fix = &Command{Scope: new(append([]string(nil), scopes...))}
-		profile.List = &Command{Scope: new(append([]string(nil), scopes...))}
 	} else {
 		profile.Check = &Command{}
 		profile.Fix = &Command{}
-		profile.List = &Command{}
 	}
 
 	if withEnv {

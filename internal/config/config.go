@@ -22,7 +22,6 @@ type File struct {
 type Profile struct {
 	Check *Command      `yaml:"check,omitempty"`
 	Fix   *Command      `yaml:"fix,omitempty"`
-	List  *Command      `yaml:"list,omitempty"`
 	Audit *AuditCommand `yaml:"audit,omitempty"`
 	Run   *RunBlock     `yaml:"run,omitempty"`
 }
@@ -107,16 +106,6 @@ func (p Profile) validate(profileName string) error {
 
 		if p.Fix.WithEnv != nil {
 			return fmt.Errorf("profiles.%s.fix: withEnv applies only to check", profileName)
-		}
-	}
-
-	if p.List != nil {
-		if err := p.List.validate("list"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-
-		if p.List.WithEnv != nil {
-			return fmt.Errorf("profiles.%s.list: withEnv applies only to check", profileName)
 		}
 	}
 

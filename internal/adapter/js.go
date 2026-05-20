@@ -178,48 +178,6 @@ func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message,
 	return errs, warns, succs
 }
 
-func (p PackageModule) ListDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadPackageConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.Dependencies), nil
-}
-
-func (p PackageModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadPackageConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.DevDependencies), nil
-}
-
-func (p PackageModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadPackageConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.OptionalDependencies), nil
-}
-
 func (p PackageModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

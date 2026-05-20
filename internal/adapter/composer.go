@@ -77,48 +77,6 @@ func (c ComposerModule) Check(ctx context.Context, deps Dependencies) ([]Message
 	return errs, warns, succs
 }
 
-func (c ComposerModule) ListDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadComposerConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.Dependencies), nil
-}
-
-func (c ComposerModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadComposerConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.DevDependencies), nil
-}
-
-func (c ComposerModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadComposerConfig()
-
-	if !config.HasConfig || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.OptionalDependencies), nil
-}
-
 func (c ComposerModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

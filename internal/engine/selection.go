@@ -13,7 +13,6 @@ type Mode string
 
 const (
 	ModeCheck Mode = "check"
-	ModeList  Mode = "list"
 	ModeFix   Mode = "fix"
 	ModeAudit Mode = "audit"
 )
@@ -60,7 +59,7 @@ func Select(input SelectInput) (Selection, error) {
 	}
 
 	switch input.Mode {
-	case ModeCheck, ModeList, ModeAudit:
+	case ModeCheck, ModeAudit:
 		ids := make([]string, 0, len(normalized))
 
 		for _, name := range normalized {

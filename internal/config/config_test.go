@@ -246,17 +246,6 @@ func TestFileValidate(t *testing.T) {
 			wantError:  true,
 			errContain: "withEnv applies only to check",
 		},
-		{
-			name: "withEnv on list fails",
-			file: File{
-				Version: 1,
-				Profiles: map[string]Profile{
-					"default": {List: &Command{WithEnv: new(true)}},
-				},
-			},
-			wantError:  true,
-			errContain: "withEnv applies only to check",
-		},
 	}
 
 	for _, tt := range tests {

@@ -95,48 +95,6 @@ func (r RustModule) Check(ctx context.Context, deps Dependencies) ([]Message, []
 	return errs, warns, succs
 }
 
-func (r RustModule) ListDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadCargoConfig()
-
-	if !config.HasManifest || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.Dependencies), nil
-}
-
-func (r RustModule) ListDevDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadCargoConfig()
-
-	if !config.HasManifest || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.DevDependencies), nil
-}
-
-func (r RustModule) ListOptionalDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadCargoConfig()
-
-	if !config.HasManifest || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.OptionalDependencies), nil
-}
-
 func (r RustModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

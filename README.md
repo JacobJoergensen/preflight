@@ -109,24 +109,6 @@ preflight audit --json
 | `--project` | Restrict to sub-projects matching path globs |
 | `--json` | Output as JSON |
 
-### list
-
-Lists all dependencies for the project.
-
-```sh
-preflight list
-preflight list --pm=composer,go
-```
-
-| Flag | Description |
-|------|-------------|
-| `--pm`, `-p` | Package managers to list |
-| `--scope` | Scopes to list |
-| `--outdated` | Show outdated packages with version info |
-| `--no-monorepo` | Only list the current directory |
-| `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
-
 ### run
 
 Runs a named script from `preflight.yml`.
@@ -183,7 +165,7 @@ These work with any command:
 
 ## Monorepo
 
-`check`, `audit`, `list`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
+`check`, `audit`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
 
 Disable with `--no-monorepo`. Narrow the scope with `--project packages/*`.
 

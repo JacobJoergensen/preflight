@@ -3,6 +3,7 @@
 ## Unreleased
 - Replaced the `version` command with a `--version` flag
 - Removed the GitHub update check
+- Removed the `list` command
 
 ## Version 1.5.0 (2026-05-19)
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)

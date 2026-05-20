@@ -79,20 +79,6 @@ func (g GoModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Me
 	return errs, warns, succs
 }
 
-func (g GoModule) ListDependencies(ctx context.Context, deps Dependencies) ([]string, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-
-	config := deps.Loader.LoadGoConfig()
-
-	if !config.HasMod || config.Error != nil {
-		return nil, config.Error
-	}
-
-	return slices.Clone(config.Modules), nil
-}
-
 func (g GoModule) ListOutdated(ctx context.Context, deps Dependencies) ([]OutdatedPackage, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
