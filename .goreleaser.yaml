@@ -50,28 +50,6 @@ npms:
     bugs: https://github.com/JacobJoergensen/preflight/issues
     access: public
 
-winget:
-  - name: preflight
-    publisher: JacobJoergensen
-    short_description: "CLI tool that validates project dependencies before you run into problems"
-    license: "mit"
-    publisher_url: https://github.com/JacobJoergensen
-    publisher_support_url: https://github.com/JacobJoergensen/preflight/issues
-    package_identifier: JacobJoergensen.preflight
-    homepage: https://github.com/JacobJoergensen/preflight
-    description: "Checks if everything is installed, fixes what's missing, and runs security audits across package managers. Supports JavaScript, PHP, Go, Python, and Ruby ecosystems."
-    tags:
-      - cli
-      - devtools
-      - dependencies
-      - security
-      - audit
-    skip_upload: true
-    repository:
-      owner: JacobJoergensen
-      name: winget-pkgs
-      branch: main
-
 release:
   github:
     owner: JacobJoergensen
