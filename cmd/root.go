@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"errors"
+	"runtime"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/release"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
@@ -14,6 +17,7 @@ type rootOptions struct {
 	quiet   bool
 	noColor bool
 	profile string
+	version bool
 }
 
 var rootOpts rootOptions
@@ -37,14 +41,62 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 
 		return nil
 	},
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		if rootOpts.version {
+			printVersion(terminal.NewOutputWriter())
+			return nil
+		}
+
+		return cmd.Help()
+	},
 }
 
 func Execute() error {
 	return rootCmd.Execute()
 }
 
+func printVersion(out *terminal.OutputWriter) {
+	version, commit, date := release.BuildInfo()
+
+	if version == "" {
+		version = "dev"
+	}
+
+	if terminal.Quiet {
+		out.Println(version)
+		return
+	}
+
+	out.Printf("%spreflight%s %s\n", terminal.Bold, terminal.Reset, version)
+
+	if commit != "" {
+		out.Printf("  %scommit%s    %s\n", terminal.Dim, terminal.Reset, commit)
+	}
+
+	if built := formatBuildDate(date); built != "" {
+		out.Printf("  %sbuilt%s     %s\n", terminal.Dim, terminal.Reset, built)
+	}
+
+	out.Printf("  %splatform%s  %s/%s\n", terminal.Dim, terminal.Reset, runtime.GOOS, runtime.GOARCH)
+}
+
+func formatBuildDate(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return raw
+	}
+
+	return parsed.UTC().Format("2006-01-02 15:04 UTC")
+}
+
 func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = false
+
+	rootCmd.Flags().BoolVarP(&rootOpts.version, "version", "v", false, "Print version, commit, build date, and platform")
 
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.quiet, "quiet", false, "Suppress non-essential output")
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.noColor, "no-color", false, "Disable colored output")

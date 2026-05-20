@@ -170,19 +170,6 @@ preflight init --force
 |------|-------------|
 | `--force` | Overwrite existing file |
 
-### version
-
-Prints the installed version and checks for updates.
-
-```sh
-preflight version
-preflight version --json
-```
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Output as JSON |
-
 ### Global Flags
 
 These work with any command:
@@ -192,6 +179,7 @@ These work with any command:
 | `--profile` | Use specific profile from `preflight.yml` |
 | `--quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
+| `--version`, `-v` | Print version, commit, build date, and platform |
 
 ## Monorepo
 
