@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"os"
 	"runtime"
 	"time"
 
@@ -34,10 +35,7 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 	SilenceUsage:  true,
 	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 		terminal.SetQuiet(rootOpts.quiet)
-
-		if rootOpts.noColor {
-			terminal.DisableColor()
-		}
+		terminal.ConfigureColor(rootOpts.noColor, os.Stdout)
 
 		return nil
 	},

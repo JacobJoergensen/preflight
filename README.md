@@ -160,6 +160,8 @@ These work with any command:
 | `--no-color` | Disable colored output |
 | `--version`, `-v` | Print version, commit, build date, and platform |
 
+Color also turns off automatically when output is not a terminal (piped or redirected), and respects the `NO_COLOR` and `FORCE_COLOR` environment variables.
+
 ## Monorepo
 
 `check`, `audit`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
