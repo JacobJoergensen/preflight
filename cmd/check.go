@@ -105,7 +105,7 @@ func exitCodeFromReport(report result.CheckReport) int {
 	}
 
 	for _, item := range report.Items {
-		if len(item.Errors) > 0 {
+		if len(item.Errors()) > 0 {
 			return 1
 		}
 	}

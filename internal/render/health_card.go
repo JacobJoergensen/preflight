@@ -58,7 +58,7 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 
 	card.Signals = append(card.Signals, item.ProjectSignals...)
 
-	for _, msg := range item.Successes {
+	for _, msg := range item.Successes() {
 		switch {
 		case msg.Nested:
 			switch {
@@ -83,7 +83,7 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 		}
 	}
 
-	for _, msg := range item.Warnings {
+	for _, msg := range item.Warnings() {
 		if msg.Nested {
 			switch {
 			case msg.Optional:
@@ -98,7 +98,7 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 		}
 	}
 
-	for _, msg := range item.Errors {
+	for _, msg := range item.Errors() {
 		if msg.Nested {
 			if msg.Dev {
 				card.DepDevErrors = append(card.DepDevErrors, msg)
@@ -119,13 +119,13 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 }
 
 func deriveBlockers(item result.CheckItem) []string {
-	if len(item.Errors) == 0 {
+	if len(item.Errors()) == 0 {
 		return nil
 	}
 
-	blockers := make([]string, 0, len(item.Errors))
+	blockers := make([]string, 0, len(item.Errors()))
 
-	for _, msg := range item.Errors {
+	for _, msg := range item.Errors() {
 		text := strings.TrimSpace(msg.Text)
 
 		if text != "" {
@@ -197,7 +197,7 @@ func dependencySummaryPhrase(count int) string {
 }
 
 func toolchainMismatchHint(item result.CheckItem) bool {
-	for _, msg := range item.Warnings {
+	for _, msg := range item.Warnings() {
 		if msg.Nested {
 			continue
 		}
@@ -229,11 +229,11 @@ func buildPrimaryNextStep(item result.CheckItem, card *HealthCard) string {
 }
 
 func healthStatusFromItem(item result.CheckItem) HealthStatus {
-	if len(item.Errors) > 0 {
+	if len(item.Errors()) > 0 {
 		return HealthFail
 	}
 
-	if len(item.Warnings) > 0 {
+	if len(item.Warnings()) > 0 {
 		return HealthWarn
 	}
 
@@ -276,12 +276,12 @@ func extractSuggestedActions(item result.CheckItem) []string {
 		messages []model.Message
 		match    func(model.Message) bool
 	}{
-		{item.Errors, func(m model.Message) bool { return !m.Nested }},
-		{item.Errors, func(m model.Message) bool { return m.Nested && !m.Dev }},
-		{item.Errors, func(m model.Message) bool { return m.Nested && m.Dev }},
-		{item.Warnings, func(m model.Message) bool { return !m.Nested }},
-		{item.Warnings, func(m model.Message) bool { return m.Nested && !m.Dev }},
-		{item.Warnings, func(m model.Message) bool { return m.Nested && m.Dev }},
+		{item.Errors(), func(m model.Message) bool { return !m.Nested }},
+		{item.Errors(), func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Errors(), func(m model.Message) bool { return m.Nested && m.Dev }},
+		{item.Warnings(), func(m model.Message) bool { return !m.Nested }},
+		{item.Warnings(), func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Warnings(), func(m model.Message) bool { return m.Nested && m.Dev }},
 	}
 
 	for _, bucket := range buckets {

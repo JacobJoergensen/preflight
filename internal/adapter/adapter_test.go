@@ -23,16 +23,16 @@ func (m mockAdapter) DisplayName() string {
 	return m.displayName
 }
 
-func (m mockAdapter) Check(_ context.Context, _ Dependencies) ([]Message, []Message, []Message) {
-	return nil, nil, nil
+func (m mockAdapter) Check(_ context.Context, _ Dependencies) []Message {
+	return nil
 }
 
 func (m mockAdapterNoDisplay) Name() string {
 	return m.name
 }
 
-func (m mockAdapterNoDisplay) Check(_ context.Context, _ Dependencies) ([]Message, []Message, []Message) {
-	return nil, nil, nil
+func (m mockAdapterNoDisplay) Check(_ context.Context, _ Dependencies) []Message {
+	return nil
 }
 
 func TestGetPriority(t *testing.T) {

@@ -8,11 +8,11 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/parallel"
 	"github.com/JacobJoergensen/preflight/internal/semver"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
@@ -31,7 +31,11 @@ func (p PackageModule) DisplayName() string {
 	return "JavaScript"
 }
 
-func (p PackageModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (p PackageModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(p.check(ctx, deps))
+}
+
+func (p PackageModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}
@@ -310,38 +314,31 @@ func getInstalledPackages(ctx context.Context, fsys fs.FS, workDir string, depen
 		candidates[optionalDep] = struct{}{}
 	}
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
+	candidateList := make([]string, 0, len(candidates))
 
 	for dep := range candidates {
-		wg.Add(1)
-
-		go func(dep string) {
-			defer wg.Done()
-
-			if ctx.Err() != nil {
-				return
-			}
-
-			path, valid := buildPackagePath(dep)
-
-			if !valid {
-				return
-			}
-
-			version := readPackageVersion(fsys, filepath.Join(workDir, path))
-
-			if version == "" {
-				return
-			}
-
-			mu.Lock()
-			installedPackages[dep] = version
-			mu.Unlock()
-		}(dep)
+		candidateList = append(candidateList, dep)
 	}
 
-	wg.Wait()
+	found := parallel.Collect(ctx, candidateList, func(_ context.Context, dep string) (depVersion, bool) {
+		path, valid := buildPackagePath(dep)
+
+		if !valid {
+			return depVersion{}, false
+		}
+
+		version := readPackageVersion(fsys, filepath.Join(workDir, path))
+
+		if version == "" {
+			return depVersion{}, false
+		}
+
+		return depVersion{name: dep, version: version}, true
+	})
+
+	for _, pkg := range found {
+		installedPackages[pkg.name] = pkg.version
+	}
 
 	return installedPackages
 }

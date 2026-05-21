@@ -28,7 +28,11 @@ func (p PythonModule) DisplayName() string {
 	return "Python"
 }
 
-func (p PythonModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (p PythonModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(p.check(ctx, deps))
+}
+
+func (p PythonModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}

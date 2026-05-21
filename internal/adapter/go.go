@@ -27,7 +27,11 @@ func (g GoModule) DisplayName() string {
 	return "Go"
 }
 
-func (g GoModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (g GoModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(g.check(ctx, deps))
+}
+
+func (g GoModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}

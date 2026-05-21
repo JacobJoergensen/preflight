@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/parallel"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
@@ -27,7 +27,11 @@ func (c ComposerModule) DisplayName() string {
 	return "Composer"
 }
 
-func (c ComposerModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (c ComposerModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(c.check(ctx, deps))
+}
+
+func (c ComposerModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}
@@ -210,8 +214,7 @@ func composerInstalledFromJSON(ctx context.Context, runner exec.Runner) map[stri
 }
 
 func fillMissingComposerDeps(ctx context.Context, runner exec.Runner, installed map[string]string, required []string) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
+	var missing []string
 
 	for _, dep := range required {
 		if dep == "" {
@@ -222,24 +225,22 @@ func fillMissingComposerDeps(ctx context.Context, runner exec.Runner, installed 
 			continue
 		}
 
-		wg.Add(1)
-
-		go func(dep string) {
-			defer wg.Done()
-
-			version := composerDepVersion(ctx, runner, dep)
-
-			if version == "" {
-				return
-			}
-
-			mu.Lock()
-			installed[dep] = version
-			mu.Unlock()
-		}(dep)
+		missing = append(missing, dep)
 	}
 
-	wg.Wait()
+	found := parallel.Collect(ctx, missing, func(ctx context.Context, dep string) (depVersion, bool) {
+		version := composerDepVersion(ctx, runner, dep)
+
+		if version == "" {
+			return depVersion{}, false
+		}
+
+		return depVersion{name: dep, version: version}, true
+	})
+
+	for _, pkg := range found {
+		installed[pkg.name] = pkg.version
+	}
 }
 
 func composerDepVersion(ctx context.Context, runner exec.Runner, dep string) string {

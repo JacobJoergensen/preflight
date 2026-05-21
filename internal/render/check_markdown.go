@@ -76,8 +76,8 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 	var totalErrors, totalWarnings int
 
 	for _, item := range report.Items {
-		totalErrors += len(item.Errors)
-		totalWarnings += len(item.Warnings)
+		totalErrors += len(item.Errors())
+		totalWarnings += len(item.Warnings())
 	}
 
 	switch {
@@ -91,8 +91,8 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 }
 
 func markdownMonorepoCheckStatus(report result.CheckReport) (symbol, text string) {
-	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors) > 0 })
-	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings) > 0 })
+	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors()) > 0 })
+	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings()) > 0 })
 
 	totalProjects := len(report.Projects)
 
@@ -119,8 +119,8 @@ func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
 		fmt.Fprintf(doc, "| %s | %s | %d | %d | %d |\n",
 			escapeMarkdownCell(item.ScopeDisplay),
 			checkItemStatus(item),
-			len(item.Errors),
-			len(item.Warnings),
+			len(item.Errors()),
+			len(item.Warnings()),
 			len(item.Outdated),
 		)
 	}
@@ -130,9 +130,9 @@ func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
 
 func checkItemStatus(item result.CheckItem) string {
 	switch {
-	case len(item.Errors) > 0:
+	case len(item.Errors()) > 0:
 		return "✗ FAIL"
-	case len(item.Warnings) > 0:
+	case len(item.Warnings()) > 0:
 		return "⚠ WARN"
 	}
 
@@ -143,7 +143,7 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 	hasIssues := false
 
 	for _, item := range items {
-		if len(item.Errors) > 0 || len(item.Warnings) > 0 {
+		if len(item.Errors()) > 0 || len(item.Warnings()) > 0 {
 			hasIssues = true
 			break
 		}
@@ -156,14 +156,14 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 	doc.WriteString("#### Issues\n\n")
 
 	for _, item := range items {
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 {
 			continue
 		}
 
 		fmt.Fprintf(doc, "**%s**\n\n", escapeMarkdownCell(item.ScopeDisplay))
 
-		writeMarkdownMessageList(doc, item.Errors, "✗")
-		writeMarkdownMessageList(doc, item.Warnings, "⚠")
+		writeMarkdownMessageList(doc, item.Errors(), "✗")
+		writeMarkdownMessageList(doc, item.Warnings(), "⚠")
 
 		doc.WriteString("\n")
 	}

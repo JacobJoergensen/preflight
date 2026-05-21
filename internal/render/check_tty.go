@@ -173,7 +173,7 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 	for _, item := range report.Items {
 		outdated := item.Outdated
 
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -375,8 +375,8 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 	var totalErrors, totalWarnings int
 
 	for _, item := range report.Items {
-		totalErrors += len(item.Errors)
-		totalWarnings += len(item.Warnings)
+		totalErrors += len(item.Errors())
+		totalWarnings += len(item.Warnings())
 	}
 
 	if totalErrors > 0 {
@@ -391,8 +391,8 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 }
 
 func monorepoStatusFromReport(report result.CheckReport) (icon string, color string, text string) {
-	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors) > 0 })
-	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings) > 0 })
+	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors()) > 0 })
+	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings()) > 0 })
 
 	totalProjects := len(report.Projects)
 

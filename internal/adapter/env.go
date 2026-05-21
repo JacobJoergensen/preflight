@@ -25,7 +25,11 @@ func (EnvModule) DisplayName() string {
 	return "Environment"
 }
 
-func (e EnvModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (e EnvModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(e.check(ctx, deps))
+}
+
+func (e EnvModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := make([]Message, 0, 1)

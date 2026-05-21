@@ -30,7 +30,35 @@ type Dependencies struct {
 
 type Adapter interface {
 	Name() string
-	Check(ctx context.Context, deps Dependencies) (errors []Message, warnings []Message, successes []Message)
+	Check(ctx context.Context, deps Dependencies) []Message
+}
+
+// combineMessages tags each group with its severity into one slice, bridging the
+// per-severity construction inside adapters to the single-slice Check contract.
+func combineMessages(errors, warnings, successes []Message) []Message {
+	combined := make([]Message, 0, len(errors)+len(warnings)+len(successes))
+
+	for _, message := range errors {
+		message.Severity = model.SeverityError
+		combined = append(combined, message)
+	}
+
+	for _, message := range warnings {
+		message.Severity = model.SeverityWarning
+		combined = append(combined, message)
+	}
+
+	for _, message := range successes {
+		message.Severity = model.SeveritySuccess
+		combined = append(combined, message)
+	}
+
+	return combined
+}
+
+type depVersion struct {
+	name    string
+	version string
 }
 
 type OutdatedPackage struct {

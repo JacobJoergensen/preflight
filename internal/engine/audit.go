@@ -9,6 +9,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
+	"github.com/JacobJoergensen/preflight/internal/parallel"
 )
 
 func (r Runner) Audit(
@@ -119,7 +120,7 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 
 	progress.Plan(len(runners))
 
-	items := runParallel(ctx, runners, func(ctx context.Context, runner adapter.AuditRunner) (result.AuditItem, bool) {
+	items := parallel.Collect(ctx, runners, func(ctx context.Context, runner adapter.AuditRunner) (result.AuditItem, bool) {
 		scopeID := runner.Name()
 
 		progress.Start(scopeID, adapter.DisplayName(runner))

@@ -16,12 +16,12 @@ func TestHealthStatusFromItem(t *testing.T) {
 	}{
 		{
 			name: "errors returns fail",
-			item: result.CheckItem{Errors: []model.Message{{Text: "error"}}},
+			item: result.CheckItem{Messages: []model.Message{{Severity: model.SeverityError, Text: "error"}}},
 			want: HealthFail,
 		},
 		{
 			name: "warnings only returns warn",
-			item: result.CheckItem{Warnings: []model.Message{{Text: "warning"}}},
+			item: result.CheckItem{Messages: []model.Message{{Severity: model.SeverityWarning, Text: "warning"}}},
 			want: HealthWarn,
 		},
 		{
@@ -32,8 +32,10 @@ func TestHealthStatusFromItem(t *testing.T) {
 		{
 			name: "errors take precedence over warnings",
 			item: result.CheckItem{
-				Errors:   []model.Message{{Text: "error"}},
-				Warnings: []model.Message{{Text: "warning"}},
+				Messages: []model.Message{
+					{Severity: model.SeverityError, Text: "error"},
+					{Severity: model.SeverityWarning, Text: "warning"},
+				},
 			},
 			want: HealthFail,
 		},

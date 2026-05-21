@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `check --json` now reports one `messages` array per scope with a `severity` field instead of separate `errors`/`warnings`/`successes` arrays
 - Replaced the `version` command with a `--version` flag
 - Removed the GitHub update check
 - Removed the `list` command

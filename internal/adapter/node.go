@@ -23,7 +23,11 @@ func (n NodeModule) DisplayName() string {
 	return "Node.js"
 }
 
-func (n NodeModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (n NodeModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(n.check(ctx, deps))
+}
+
+func (n NodeModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}

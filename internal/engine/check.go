@@ -9,6 +9,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/adapter"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
+	"github.com/JacobJoergensen/preflight/internal/parallel"
 )
 
 func (r Runner) Check(
@@ -111,7 +112,7 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 
 	progress.Plan(len(modules))
 
-	items := runParallel(ctx, modules, func(ctx context.Context, m adapter.Adapter) (result.CheckItem, bool) {
+	items := parallel.Collect(ctx, modules, func(ctx context.Context, m adapter.Adapter) (result.CheckItem, bool) {
 		scopeID := m.Name()
 
 		progress.Start(scopeID, adapter.DisplayName(m))
@@ -120,10 +121,10 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 		defer func() { progress.Finish(scopeID, included) }()
 
 		itemStartedAt := time.Now()
-		errors, warnings, successes := m.Check(ctx, deps)
+		messages := m.Check(ctx, deps)
 		itemEndedAt := time.Now()
 
-		if len(errors) == 0 && len(warnings) == 0 && len(successes) == 0 {
+		if len(messages) == 0 {
 			return result.CheckItem{}, false
 		}
 
@@ -133,9 +134,7 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 			ScopeID:        m.Name(),
 			ScopeDisplay:   adapter.DisplayName(m),
 			Priority:       adapter.GetPriority(m.Name()),
-			Errors:         errors,
-			Warnings:       warnings,
-			Successes:      successes,
+			Messages:       messages,
 			StartedAt:      itemStartedAt,
 			EndedAt:        itemEndedAt,
 			ElapsedMillis:  itemEndedAt.Sub(itemStartedAt).Milliseconds(),

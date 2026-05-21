@@ -11,7 +11,7 @@ import (
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 10
+const CheckJSONSchemaVersion = 11
 
 type JSONCheckRenderer struct {
 	Out io.Writer
@@ -42,9 +42,7 @@ type checkItemJSON struct {
 	ScopeID        string                `json:"scopeId"`
 	ScopeDisplay   string                `json:"scopeDisplay"`
 	Priority       int                   `json:"priority"`
-	Errors         []model.Message       `json:"errors,omitempty"`
-	Warnings       []model.Message       `json:"warnings,omitempty"`
-	Successes      []model.Message       `json:"successes,omitempty"`
+	Messages       []model.Message       `json:"messages,omitempty"`
 	StartedAt      *time.Time            `json:"startedAt,omitempty"`
 	EndedAt        *time.Time            `json:"endedAt,omitempty"`
 	ElapsedMillis  int64                 `json:"elapsedMillis,omitempty"`
@@ -102,9 +100,7 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 		ScopeID:        item.ScopeID,
 		ScopeDisplay:   item.ScopeDisplay,
 		Priority:       item.Priority,
-		Errors:         cloneMessages(item.Errors),
-		Warnings:       cloneMessages(item.Warnings),
-		Successes:      cloneMessages(item.Successes),
+		Messages:       cloneMessages(item.Messages),
 		ElapsedMillis:  item.ElapsedMillis,
 		ProjectSignals: append([]string(nil), item.ProjectSignals...),
 		FixPMHint:      item.FixPMHint,
@@ -175,7 +171,7 @@ func quietCheckPayload(report result.CheckReport) any {
 	for _, item := range report.Items {
 		outdated := item.Outdated
 
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -189,8 +185,8 @@ func quietCheckPayload(report result.CheckReport) any {
 			Summary:         card.Summary,
 			ProjectSignals:  append([]string(nil), item.ProjectSignals...),
 			PrimaryNextStep: card.PrimaryNextStep,
-			Errors:          cloneMessages(item.Errors),
-			Warnings:        cloneMessages(item.Warnings),
+			Errors:          cloneMessages(item.Errors()),
+			Warnings:        cloneMessages(item.Warnings()),
 			Outdated:        outdatedPackagesToJSON(outdated),
 		})
 	}

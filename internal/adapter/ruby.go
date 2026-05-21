@@ -27,7 +27,11 @@ func (RubyModule) DisplayName() string {
 	return "Ruby"
 }
 
-func (r RubyModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (r RubyModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(r.check(ctx, deps))
+}
+
+func (r RubyModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}

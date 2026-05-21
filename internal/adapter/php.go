@@ -44,7 +44,11 @@ var experimentalExtensions = map[string]struct{}{
 	"svm": {}, "svn": {}, "ui": {}, "omq": {},
 }
 
-func (p PhpModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (p PhpModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(p.check(ctx, deps))
+}
+
+func (p PhpModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}

@@ -30,7 +30,11 @@ func (RustModule) DisplayName() string {
 	return "Rust"
 }
 
-func (r RustModule) Check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
+func (r RustModule) Check(ctx context.Context, deps Dependencies) []Message {
+	return combineMessages(r.check(ctx, deps))
+}
+
+func (r RustModule) check(ctx context.Context, deps Dependencies) ([]Message, []Message, []Message) {
 	errs := []Message{}
 	warns := []Message{}
 	succs := []Message{}
