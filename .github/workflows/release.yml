@@ -56,8 +56,6 @@ jobs:
               npm publish "$dir"
             fi
           done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish main package
         run: |
@@ -68,5 +66,3 @@ jobs:
           else
             npm publish npm/dist/preflight
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
