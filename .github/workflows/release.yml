@@ -47,13 +47,26 @@ jobs:
 
       - name: Publish platform packages
         run: |
+          version="${GITHUB_REF_NAME#v}"
           for dir in npm/dist/preflight-*; do
-            npm publish "$dir"
+            name="@jacobjoergensen/$(basename "$dir")"
+            if [ -n "$(npm view "$name@$version" version 2>/dev/null || true)" ]; then
+              echo "$name@$version already published, skipping"
+            else
+              npm publish "$dir"
+            fi
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish main package
-        run: npm publish npm/dist/preflight
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          name="@jacobjoergensen/preflight"
+          if [ -n "$(npm view "$name@$version" version 2>/dev/null || true)" ]; then
+            echo "$name@$version already published, skipping"
+          else
+            npm publish npm/dist/preflight
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
