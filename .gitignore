@@ -4,3 +4,7 @@
 dist/
 go.work
 go.work.sum
+
+!npm/dist/
+npm/dist/*
+!npm/dist/.gitkeep
