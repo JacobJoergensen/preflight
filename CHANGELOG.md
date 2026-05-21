@@ -10,6 +10,10 @@
 - Dropped support for the legacy `bun.lockb` lockfile; bun projects are detected via `bun.lock`
 - `hooks install` now writes to the directory from `core.hooksPath` and supports git worktrees, so it works alongside Husky and custom hook setups
 
+## Version 1.6.0 (2026-05-21)
+- npm package now installs without a postinstall script, fixing installation under pnpm
+- Removed winget packaging, which was never published
+
 ## Version 1.5.0 (2026-05-19)
 - `audit` now uses native `uv audit` for uv projects, removing the need to install `pip-audit` separately (requires uv 0.11.15 or newer)
 - `audit` now uses native `yarn npm audit` for yarn 4 (Berry) projects; yarn 1 is skipped (incompatible JSON output)

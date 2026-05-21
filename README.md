@@ -10,10 +10,14 @@ Go Install:
 go install github.com/JacobJoergensen/preflight@latest
 ```
 
-NPM Install:
+Npm / pnpm Install:
 
 ```sh
+# npm
 npm install -g @jacobjoergensen/preflight
+
+# pnpm
+pnpm add -g @jacobjoergensen/preflight
 ```
 
 Or download it from [releases](https://github.com/JacobJoergensen/preflight/releases).

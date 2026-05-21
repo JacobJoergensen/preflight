@@ -1,0 +1,22 @@
+{
+  "name": "@jacobjoergensen/preflight",
+  "version": "{{VERSION}}",
+  "description": "CLI tool that validates project dependencies before you run into problems",
+  "homepage": "https://github.com/JacobJoergensen/preflight",
+  "repository": { "type": "git", "url": "git+https://github.com/JacobJoergensen/preflight.git" },
+  "bugs": "https://github.com/JacobJoergensen/preflight/issues",
+  "license": "MIT",
+  "author": "JacobJoergensen",
+  "keywords": ["cli", "devtools", "dependencies", "security", "audit", "preflight"],
+  "bin": { "preflight": "bin/preflight.js" },
+  "files": ["bin/preflight.js"],
+  "optionalDependencies": {
+    "@jacobjoergensen/preflight-win32-x64": "{{VERSION}}",
+    "@jacobjoergensen/preflight-darwin-arm64": "{{VERSION}}",
+    "@jacobjoergensen/preflight-darwin-x64": "{{VERSION}}",
+    "@jacobjoergensen/preflight-linux-x64": "{{VERSION}}",
+    "@jacobjoergensen/preflight-linux-arm64": "{{VERSION}}"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=22" }
+}
