@@ -4,7 +4,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -118,7 +118,7 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 	return jsonItem
 }
 
-func outdatedPackagesToJSON(pkgs []adapter.OutdatedPackage) []outdatedPackageJSON {
+func outdatedPackagesToJSON(pkgs []ecosystem.OutdatedPackage) []outdatedPackageJSON {
 	if len(pkgs) == 0 {
 		return nil
 	}

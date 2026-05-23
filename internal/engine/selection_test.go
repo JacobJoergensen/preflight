@@ -24,7 +24,7 @@ func TestSelect(t *testing.T) {
 			name:       "unknown token returns error",
 			input:      SelectInput{Only: []string{"invalid"}, Mode: ModeCheck},
 			wantError:  true,
-			errContain: "unknown adapter",
+			errContain: "unknown ecosystem",
 		},
 		{
 			name:     "ecosystem token selects adapter",
@@ -87,8 +87,8 @@ func TestSelect(t *testing.T) {
 				t.Errorf("mode = %q, want %q", result.RequestedMode, tt.wantMode)
 			}
 
-			if tt.wantIDs != nil && !slices.Equal(result.AdapterIDs, tt.wantIDs) {
-				t.Errorf("adapterIDs = %v, want %v", result.AdapterIDs, tt.wantIDs)
+			if tt.wantIDs != nil && !slices.Equal(result.SpecIDs, tt.wantIDs) {
+				t.Errorf("specIDs = %v, want %v", result.SpecIDs, tt.wantIDs)
 			}
 		})
 	}

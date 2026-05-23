@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 )
 
@@ -58,7 +58,7 @@ type FixItem struct {
 	EndedAt        time.Time
 }
 
-func FromAdapterFix(item adapter.FixItem, startedAt, endedAt time.Time) FixItem {
+func FromFixItem(item ecosystem.FixItem, startedAt, endedAt time.Time) FixItem {
 	return FixItem{
 		ScopeID:        item.ScopeID,
 		ManagerCommand: item.ManagerCommand,

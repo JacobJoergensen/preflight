@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
@@ -206,7 +206,7 @@ func writeMarkdownCheckOutdated(doc *strings.Builder, items []result.CheckItem) 
 	}
 }
 
-func writeMarkdownOutdatedLine(doc *strings.Builder, pkg adapter.OutdatedPackage) {
+func writeMarkdownOutdatedLine(doc *strings.Builder, pkg ecosystem.OutdatedPackage) {
 	fmt.Fprintf(doc, "- `%s` `%s` → `%s`\n",
 		escapeMarkdownCell(pkg.Name),
 		pkg.Current,

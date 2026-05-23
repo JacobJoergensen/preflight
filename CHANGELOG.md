@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Added a global `--debug` flag that logs each command run, its exit code, and duration (plus stderr on failure) to stderr
+- `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<manifest> exists` lines that are implied by the scope appearing
 - `check --json` now reports one `messages` array per scope with a `severity` field instead of separate `errors`/`warnings`/`successes` arrays
 - Replaced the `version` command with a `--version` flag
 - Removed the GitHub update check

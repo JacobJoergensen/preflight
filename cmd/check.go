@@ -88,7 +88,7 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 }
 
 func buildScanProgress(jsonOutput bool, label string) engine.ScanProgress {
-	if jsonOutput || terminal.Quiet {
+	if jsonOutput || terminal.Quiet || rootOpts.debug {
 		return engine.NoopScanProgress{}
 	}
 

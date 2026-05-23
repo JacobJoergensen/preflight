@@ -5,58 +5,110 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
-
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"time"
 )
 
-var ErrCommandNotAllowed = errors.New("command not in tool registry")
+var ErrCommandNotAllowed = errors.New("command not allowed")
+
+type Result struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
+	Duration time.Duration
+}
 
 type CommandError struct {
-	Command string
-	Args    []string
-	Err     error
-	Stderr  string
+	Command  string
+	Args     []string
+	ExitCode int
+	Stderr   string
 }
 
 func (e *CommandError) Error() string {
 	if e.Stderr != "" {
-		return fmt.Sprintf("command '%s %s' failed: %v — %s", e.Command, strings.Join(e.Args, " "), e.Err, e.Stderr)
+		return fmt.Sprintf("command '%s %s' exited with code %d: %s", e.Command, strings.Join(e.Args, " "), e.ExitCode, e.Stderr)
 	}
 
-	return fmt.Sprintf("command '%s %s' failed: %v", e.Command, strings.Join(e.Args, " "), e.Err)
+	return fmt.Sprintf("command '%s %s' exited with code %d", e.Command, strings.Join(e.Args, " "), e.ExitCode)
 }
 
-func (e *CommandError) Unwrap() error {
-	return e.Err
+type Gate func(name string) bool
+
+var activeGate Gate = denyAll
+
+func denyAll(string) bool { return false }
+
+func SetGate(gate Gate) {
+	if gate != nil {
+		activeGate = gate
+	}
 }
 
-func Run(ctx context.Context, name string, args ...string) (string, error) {
-	if _, known := manifest.GetTool(name); !known {
-		return "", fmt.Errorf("%w: %s", ErrCommandNotAllowed, name)
+func Capture(ctx context.Context, gate Gate, dir, name string, args ...string) (Result, error) {
+	if gate == nil || !gate(name) {
+		return Result{ExitCode: -1}, fmt.Errorf("%w: %s", ErrCommandNotAllowed, name)
 	}
 
 	path, err := exec.LookPath(name)
 	if err != nil {
-		return "", fmt.Errorf("command not found: %s", name)
+		return Result{ExitCode: -1}, fmt.Errorf("command not found: %s", name)
 	}
 
 	var stdout, stderr bytes.Buffer
 
-	// #nosec G204 - command validated against manifest.Tools registry
+	// #nosec G204 - command authorized by the provided gate
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		return strings.TrimSpace(stdout.String()), &CommandError{
-			Command: name,
-			Args:    args,
-			Err:     err,
-			Stderr:  strings.TrimSpace(stderr.String()),
+	if dir != "" {
+		cmd.Dir = dir
+	}
+
+	start := time.Now()
+	runErr := cmd.Run()
+
+	result := Result{
+		Stdout:   strings.TrimSpace(stdout.String()),
+		Stderr:   strings.TrimSpace(stderr.String()),
+		ExitCode: cmd.ProcessState.ExitCode(),
+		Duration: time.Since(start),
+	}
+
+	attrs := []any{"command", name, "args", args, "exit", result.ExitCode, "duration", result.Duration}
+
+	if result.ExitCode != 0 && result.Stderr != "" {
+		attrs = append(attrs, "stderr", result.Stderr)
+	}
+
+	slog.DebugContext(ctx, "command finished", attrs...)
+
+	if runErr != nil {
+		if _, exited := errors.AsType[*exec.ExitError](runErr); !exited {
+			return result, runErr
 		}
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	return result, nil
+}
+
+func Run(ctx context.Context, name string, args ...string) (Result, error) {
+	result, err := Capture(ctx, activeGate, "", name, args...)
+	if err != nil {
+		return result, err
+	}
+
+	if result.ExitCode != 0 {
+		return result, &CommandError{
+			Command:  name,
+			Args:     args,
+			ExitCode: result.ExitCode,
+			Stderr:   result.Stderr,
+		}
+	}
+
+	return result, nil
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/config"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 )
 
 type fakeFileInfo struct{}
@@ -163,12 +163,12 @@ func TestResolveScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			loader := manifest.Loader{
+			rc := ecosystem.RunContext{
 				WorkDir: "",
 				FS:      fakeFS{files: tt.files},
 			}
 
-			bin, args, err := ResolveScript(loader, tt.target)
+			bin, args, err := ResolveScript(rc, tt.target)
 
 			if tt.wantError {
 				if err == nil {

@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/config"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem/js"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem/python"
 )
 
 type ResolvedScript struct {
@@ -13,11 +15,11 @@ type ResolvedScript struct {
 	Args []string
 }
 
-func ResolveScripts(l manifest.Loader, targets config.ScriptTargets) ([]ResolvedScript, error) {
+func ResolveScripts(rc ecosystem.RunContext, targets config.ScriptTargets) ([]ResolvedScript, error) {
 	resolved := make([]ResolvedScript, 0, len(targets))
 
 	for _, target := range targets {
-		bin, args, err := ResolveScript(l, target)
+		bin, args, err := ResolveScript(rc, target)
 		if err != nil {
 			return nil, err
 		}
@@ -28,20 +30,20 @@ func ResolveScripts(l manifest.Loader, targets config.ScriptTargets) ([]Resolved
 	return resolved, nil
 }
 
-func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, args []string, err error) {
+func ResolveScript(rc ecosystem.RunContext, target config.ScriptTarget) (bin string, args []string, err error) {
 	if err := target.Validate(); err != nil {
 		return "", nil, err
 	}
 
 	switch {
 	case target.JS != "":
-		packageManager, ok := l.DetectPackageManager(manifest.PackageTypeJS)
+		detection, ok := js.Spec().Resolve(rc)
 
 		if !ok {
 			return "", nil, errors.New("no JavaScript package manager detected for js script")
 		}
 
-		return packageManager.Command(), []string{"run", target.JS}, nil
+		return detection.Active.Command, []string{"run", target.JS}, nil
 
 	case target.Composer != "":
 		return "composer", []string{"run-script", target.Composer}, nil
@@ -69,7 +71,7 @@ func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, a
 		return "bundle", append([]string{"exec"}, parts...), nil
 
 	case target.Python != "":
-		packageManager, ok := l.DetectPackageManager(manifest.PackageTypePython)
+		detection, ok := python.Spec().Resolve(rc)
 
 		if !ok {
 			return "", nil, errors.New("no Python project detected for python script")
@@ -81,11 +83,9 @@ func ResolveScript(l manifest.Loader, target config.ScriptTarget) (bin string, a
 			return "", nil, errors.New("python script value is empty")
 		}
 
-		cmd := packageManager.Command()
-
-		switch cmd {
+		switch detection.Active.Command {
 		case "poetry", "uv", "pipenv", "pdm":
-			return cmd, append([]string{"run"}, parts...), nil
+			return detection.Active.Command, append([]string{"run"}, parts...), nil
 		default:
 			return "python", parts, nil
 		}

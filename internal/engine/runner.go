@@ -5,11 +5,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/fs"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
@@ -69,30 +68,27 @@ func aggregateProjects[T any](projects []monorepo.Project, perProject func(monor
 	return items, summaries, nil
 }
 
-func (r Runner) depsForDir(workDir string) adapter.Dependencies {
-	loader := manifest.NewLoader(workDir)
-	loader.FS = r.FS
-
-	return adapter.Dependencies{
-		Loader: loader,
-		FS:     r.FS,
-		Runner: r.Command,
-		Stream: r.CommandStream,
+func (r Runner) runContextForDir(workDir string) ecosystem.RunContext {
+	return ecosystem.RunContext{
+		WorkDir: workDir,
+		FS:      r.FS,
+		Runner:  r.Command,
+		Stream:  r.CommandStream,
 	}
 }
 
-func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, only []string) []adapter.Adapter {
+func appendEnvIfRequested(specs []*ecosystem.Spec, withEnv bool, only []string) []*ecosystem.Spec {
 	if !withEnv || selectionIncludesEnv(only) {
-		return adapters
+		return specs
 	}
 
-	envAdapters, err := adapter.Select("env")
+	envSpec, ok := ecosystem.Lookup("env")
 
-	if err != nil || len(envAdapters) == 0 {
-		return adapters
+	if !ok {
+		return specs
 	}
 
-	return append(adapters, envAdapters[0])
+	return append(specs, envSpec)
 }
 
 func selectionIncludesEnv(only []string) bool {
@@ -105,16 +101,16 @@ func selectionIncludesEnv(only []string) bool {
 	return false
 }
 
-func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Dependencies, only []string) []adapter.Adapter {
+func filterComposerUnlessExplicit(specs []*ecosystem.Spec, rc ecosystem.RunContext, only []string) []*ecosystem.Spec {
 	if !isImplicitFullSelection(only) {
-		return adapters
+		return specs
 	}
 
-	if deps.Loader.HasComposerJSON() {
-		return adapters
+	if rc.FileExists("composer.json") {
+		return specs
 	}
 
-	return withoutAdapter(adapters, "composer")
+	return withoutSpec(specs, "composer")
 }
 
 func isImplicitFullSelection(only []string) bool {
@@ -133,44 +129,40 @@ func nonEmptyStrings(ss []string) []string {
 	return output
 }
 
-func withoutAdapter(adapters []adapter.Adapter, name string) []adapter.Adapter {
-	return slices.DeleteFunc(slices.Clone(adapters), func(a adapter.Adapter) bool {
-		return a.Name() == name
+func withoutSpec(specs []*ecosystem.Spec, name string) []*ecosystem.Spec {
+	return slices.DeleteFunc(slices.Clone(specs), func(spec *ecosystem.Spec) bool {
+		return spec.Name == name
 	})
 }
 
-func validateRequestedPackageManagers(only []string, deps adapter.Dependencies) error {
+func validateRequestedPackageManagers(only []string, rc ecosystem.RunContext) error {
 	for _, selector := range only {
 		selector = strings.ToLower(strings.TrimSpace(selector))
 
-		if selector == "" {
+		if selector == "" || ecosystem.IsScope(selector) {
 			continue
 		}
 
-		// Skip if it's a scope (js, python, etc.) rather than a specific PM
-		if manifest.IsPackageType(selector) {
-			continue
-		}
-
-		packageType, isPackageManager := manifest.GetPackageType(selector)
-
-		if !isPackageManager {
-			continue
-		}
-
-		// Only validate for package types with multiple managers (js, python)
-		if packageType != manifest.PackageTypeJS && packageType != manifest.PackageTypePython {
-			continue
-		}
-
-		detected, ok := deps.Loader.DetectPackageManager(packageType)
+		scope, ok := ecosystem.ScopeForManager(selector)
 
 		if !ok {
-			return fmt.Errorf("requested %s but no %s project detected", selector, packageType)
+			continue
 		}
 
-		if !strings.EqualFold(detected.Command(), selector) {
-			return fmt.Errorf("requested %s but project uses %s", selector, detected.Command())
+		spec, ok := ecosystem.Lookup(scope)
+
+		if !ok || len(spec.Managers) < 2 {
+			continue
+		}
+
+		detection, ok := spec.Resolve(rc)
+
+		if !ok {
+			return fmt.Errorf("requested %s but no %s project detected", selector, scope)
+		}
+
+		if !strings.EqualFold(detection.Active.Command, selector) {
+			return fmt.Errorf("requested %s but project uses %s", selector, detection.Active.Command)
 		}
 	}
 

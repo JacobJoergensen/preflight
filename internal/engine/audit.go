@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 	"github.com/JacobJoergensen/preflight/internal/parallel"
@@ -75,20 +75,19 @@ func (r Runner) auditProject(
 		return result.AuditReport{}, err
 	}
 
-	deps := r.depsForDir(workDir)
+	rc := r.runContextForDir(workDir)
 
-	if err := validateRequestedPackageManagers(only, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, rc); err != nil {
 		return result.AuditReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
+	specs := filterComposerUnlessExplicit(selection.Specs, rc, only)
 
 	if isImplicitFullSelection(only) {
-		adapters = withoutAdapter(adapters, "env")
+		specs = withoutSpec(specs, "env")
 	}
 
-	runners := filterAuditRunners(adapters)
-	report := runAudits(ctx, runners, deps, progress)
+	report := runAudits(ctx, specs, rc, progress)
 
 	if minSeverity != "" {
 		report = filterAuditReportBySeverity(report, minSeverity)
@@ -103,33 +102,27 @@ func (r Runner) auditProject(
 	return report, nil
 }
 
-func filterAuditRunners(adapters []adapter.Adapter) []adapter.AuditRunner {
-	runners := make([]adapter.AuditRunner, 0, len(adapters))
-
-	for _, adp := range adapters {
-		if runner, ok := adp.(adapter.AuditRunner); ok {
-			runners = append(runners, runner)
-		}
-	}
-
-	return runners
-}
-
-func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies, progress ScanProgress) result.AuditReport {
+func runAudits(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.AuditReport {
 	startedAt := time.Now()
 
-	progress.Plan(len(runners))
+	progress.Plan(len(specs))
 
-	items := parallel.Collect(ctx, runners, func(ctx context.Context, runner adapter.AuditRunner) (result.AuditItem, bool) {
-		scopeID := runner.Name()
+	items := parallel.Collect(ctx, specs, func(ctx context.Context, spec *ecosystem.Spec) (result.AuditItem, bool) {
+		scopeID := spec.Name
 
-		progress.Start(scopeID, adapter.DisplayName(runner))
+		progress.Start(scopeID, spec.Title())
 
 		var included bool
 		defer func() { progress.Finish(scopeID, included) }()
 
+		detection, ok := spec.Resolve(rc)
+
+		if !ok {
+			return result.AuditItem{}, false
+		}
+
 		itemStartedAt := time.Now()
-		auditResult := runner.Audit(ctx, deps)
+		auditResult := spec.RunAudit(ctx, rc, detection)
 		itemEndedAt := time.Now()
 
 		if auditResult.Skipped {
@@ -138,10 +131,10 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 
 		included = true
 
-		return result.FromAdapterAudit(
-			runner.Name(),
-			adapter.DisplayName(runner),
-			adapter.GetPriority(runner.Name()),
+		return result.FromAuditResult(
+			spec.Name,
+			spec.Title(),
+			spec.Priority,
 			auditResult,
 			itemStartedAt,
 			itemEndedAt,
@@ -169,7 +162,7 @@ func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.
 }
 
 func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
-	threshold := adapter.SeverityLevel(minSeverity)
+	threshold := ecosystem.SeverityLevel(minSeverity)
 	filtered := make([]result.AuditItem, 0, len(report.Items))
 
 	for _, item := range report.Items {
@@ -216,7 +209,7 @@ func filterCountsBySeverity(counts map[string]int, threshold int) map[string]int
 			continue
 		}
 
-		if adapter.SeverityLevel(name) >= threshold {
+		if ecosystem.SeverityLevel(name) >= threshold {
 			filtered[name] = count
 		}
 	}
@@ -236,7 +229,7 @@ func recalculateSeverityRank(counts map[string]int) int {
 			continue
 		}
 
-		switch adapter.SeverityLevel(name) {
+		switch ecosystem.SeverityLevel(name) {
 		case 4:
 			rank += 1000 * count
 		case 3:

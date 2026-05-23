@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"time"
@@ -26,6 +27,7 @@ type rootOptions struct {
 	noColor bool
 	profile string
 	version bool
+	debug   bool
 }
 
 var rootOpts rootOptions
@@ -43,6 +45,7 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 		terminal.SetQuiet(rootOpts.quiet)
 		terminal.ConfigureColor(rootOpts.noColor, os.Stdout)
+		configureLogging(rootOpts.debug)
 
 		return nil
 	},
@@ -75,6 +78,30 @@ func exitCode(err error) int {
 	default:
 		return exitError
 	}
+}
+
+// configureLogging routes debug logs to stderr when --debug is set. When it is not,
+// the default Info-level logger leaves the tool's debug output suppressed.
+func configureLogging(debug bool) {
+	if !debug {
+		return
+	}
+
+	options := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+
+		// Drop slog's time, level, and msg so each line is just the command's fields.
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case slog.TimeKey, slog.LevelKey, slog.MessageKey:
+				return slog.Attr{}
+			default:
+				return a
+			}
+		},
+	}
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, options)))
 }
 
 func printVersion(out *terminal.OutputWriter) {
@@ -123,4 +150,5 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.quiet, "quiet", false, "Suppress non-essential output")
 	rootCmd.PersistentFlags().BoolVar(&rootOpts.noColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().StringVar(&rootOpts.profile, "profile", "", "Active profile in preflight.yml (overrides PREFLIGHT_PROFILE)")
+	rootCmd.PersistentFlags().BoolVar(&rootOpts.debug, "debug", false, "Log each command run, its exit code, and duration to stderr")
 }

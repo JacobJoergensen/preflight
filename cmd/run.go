@@ -10,8 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/exec"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/run"
 )
 
@@ -72,9 +73,9 @@ preflight run build --profile ci`,
 				alias, profileName, strings.Join(keys, ", "))
 		}
 
-		loader := manifest.NewLoader(workDir)
+		rc := ecosystem.RunContext{WorkDir: workDir, FS: fs.OSFS{}}
 
-		scripts, err := run.ResolveScripts(loader, targets)
+		scripts, err := run.ResolveScripts(rc, targets)
 		if err != nil {
 			return err
 		}
@@ -99,7 +100,7 @@ preflight run build --profile ci`,
 				return err
 			}
 
-			if err := exec.RunStreamingInDir(ctx, workDir, s.Bin, s.Args, os.Stdout, os.Stderr); err != nil {
+			if _, err := exec.RunStreamingInDir(ctx, workDir, s.Bin, s.Args, os.Stdout, os.Stderr); err != nil {
 				return err
 			}
 		}

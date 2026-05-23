@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 	"github.com/JacobJoergensen/preflight/internal/parallel"
@@ -78,24 +78,24 @@ func (r Runner) checkProject(
 		return result.CheckReport{}, err
 	}
 
-	deps := r.depsForDir(workDir)
+	rc := r.runContextForDir(workDir)
 
-	if err := validateRequestedPackageManagers(only, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, rc); err != nil {
 		return result.CheckReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, only)
+	specs := filterComposerUnlessExplicit(selection.Specs, rc, only)
 
 	if isImplicitFullSelection(only) {
-		adapters = withoutAdapter(adapters, "env")
+		specs = withoutSpec(specs, "env")
 	}
 
-	adapters = appendEnvIfRequested(adapters, withEnv, only)
+	specs = appendEnvIfRequested(specs, withEnv, only)
 
-	report := runChecks(ctx, adapters, deps, progress)
+	report := runChecks(ctx, specs, rc, progress)
 
 	if outdated {
-		attachOutdatedPackages(ctx, adapters, deps, report.Items)
+		attachOutdatedPackages(ctx, specs, rc, report.Items)
 	}
 
 	if projectPath != "" {
@@ -107,21 +107,27 @@ func (r Runner) checkProject(
 	return report, nil
 }
 
-func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies, progress ScanProgress) result.CheckReport {
+func runChecks(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.CheckReport {
 	startedAt := time.Now()
 
-	progress.Plan(len(modules))
+	progress.Plan(len(specs))
 
-	items := parallel.Collect(ctx, modules, func(ctx context.Context, m adapter.Adapter) (result.CheckItem, bool) {
-		scopeID := m.Name()
+	items := parallel.Collect(ctx, specs, func(ctx context.Context, spec *ecosystem.Spec) (result.CheckItem, bool) {
+		scopeID := spec.Name
 
-		progress.Start(scopeID, adapter.DisplayName(m))
+		progress.Start(scopeID, spec.Title())
 
 		var included bool
 		defer func() { progress.Finish(scopeID, included) }()
 
+		detection, ok := spec.Resolve(rc)
+
+		if !ok {
+			return result.CheckItem{}, false
+		}
+
 		itemStartedAt := time.Now()
-		messages := m.Check(ctx, deps)
+		messages := spec.RunCheck(ctx, rc, detection)
 		itemEndedAt := time.Now()
 
 		if len(messages) == 0 {
@@ -131,15 +137,15 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 		included = true
 
 		return result.CheckItem{
-			ScopeID:        m.Name(),
-			ScopeDisplay:   adapter.DisplayName(m),
-			Priority:       adapter.GetPriority(m.Name()),
+			ScopeID:        spec.Name,
+			ScopeDisplay:   spec.Title(),
+			Priority:       spec.Priority,
 			Messages:       messages,
 			StartedAt:      itemStartedAt,
 			EndedAt:        itemEndedAt,
 			ElapsedMillis:  itemEndedAt.Sub(itemStartedAt).Milliseconds(),
-			ProjectSignals: adapter.ProjectSignals(m.Name(), deps.Loader),
-			FixPMHint:      adapter.FixPMHint(m.Name(), deps.Loader),
+			ProjectSignals: spec.Signals(rc, detection),
+			FixPMHint:      spec.FixPMHint(detection),
 		}, true
 	})
 
@@ -155,27 +161,31 @@ func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Depe
 	}
 }
 
-func attachOutdatedPackages(ctx context.Context, adapters []adapter.Adapter, deps adapter.Dependencies, items []result.CheckItem) {
+func attachOutdatedPackages(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, items []result.CheckItem) {
 	itemByScopeID := make(map[string]int, len(items))
 
 	for i, item := range items {
 		itemByScopeID[item.ScopeID] = i
 	}
 
-	for _, a := range adapters {
-		outdatedLister, ok := a.(adapter.OutdatedLister)
+	for _, spec := range specs {
+		if !spec.CanOutdated() {
+			continue
+		}
+
+		detection, ok := spec.Resolve(rc)
 
 		if !ok {
 			continue
 		}
 
-		packages, err := outdatedLister.ListOutdated(ctx, deps)
+		packages, err := spec.RunOutdated(ctx, rc, detection)
 
 		if err != nil || len(packages) == 0 {
 			continue
 		}
 
-		if idx, ok := itemByScopeID[a.Name()]; ok {
+		if idx, ok := itemByScopeID[spec.Name]; ok {
 			items[idx].Outdated = packages
 		}
 	}

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
@@ -56,7 +56,7 @@ var fixCmd = &cobra.Command{
 		approver := buildFixApprover(fixOpts)
 		progress, itemsRenderedLive := buildFixProgress(fixOpts)
 
-		report, err := runner.Fix(ctx, only, adapter.FixOptions{
+		report, err := runner.Fix(ctx, only, ecosystem.FixOptions{
 			Force:      fixOpts.force,
 			SkipBackup: fixOpts.skipBackup,
 			DryRun:     fixOpts.dryRun,
@@ -94,7 +94,7 @@ func buildFixApprover(opts fixOptions) engine.FixApprover {
 }
 
 func buildFixProgress(opts fixOptions) (engine.FixProgress, bool) {
-	if opts.dryRun || opts.json || terminal.Quiet {
+	if opts.dryRun || opts.json || terminal.Quiet || rootOpts.debug {
 		return engine.NoopFixProgress{}, false
 	}
 

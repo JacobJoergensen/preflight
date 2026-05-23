@@ -3,7 +3,7 @@ package result
 import (
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -21,12 +21,12 @@ type CheckItem struct {
 	ScopeDisplay  string
 	Priority      int
 	Messages      []model.Message
-	Outdated      []adapter.OutdatedPackage
+	Outdated      []ecosystem.OutdatedPackage
 	StartedAt     time.Time
 	EndedAt       time.Time
 	ElapsedMillis int64
 
-	// ProjectSignals are filesystem / manifest facts (paths that exist) for the scope, not adapter messages.
+	// ProjectSignals are filesystem facts (paths that exist) for the scope, not check messages.
 	ProjectSignals []string
 	// FixPMHint is the package-manager id for `preflight fix --pm=…` when applicable (empty if unknown or N/A).
 	FixPMHint string

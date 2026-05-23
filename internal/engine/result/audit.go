@@ -3,7 +3,7 @@ package result
 import (
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 )
 
 type AuditReport struct {
@@ -31,7 +31,7 @@ type AuditItem struct {
 	ElapsedMillis int64
 }
 
-func FromAdapterAudit(scopeID, scopeDisplay string, priority int, ar adapter.AuditResult, startedAt, endedAt time.Time) AuditItem {
+func FromAuditResult(scopeID, scopeDisplay string, priority int, ar ecosystem.AuditResult, startedAt, endedAt time.Time) AuditItem {
 	item := AuditItem{
 		ScopeID:       scopeID,
 		ScopeDisplay:  scopeDisplay,

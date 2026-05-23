@@ -1,0 +1,42 @@
+package ecosystem
+
+import (
+	"context"
+	"testing"
+)
+
+func TestRunAudit(t *testing.T) {
+	spec := &Spec{Name: "go"}
+
+	t.Run("manager without an audit probe is skipped", func(t *testing.T) {
+		result := spec.RunAudit(context.Background(), RunContext{}, Detection{Active: Manager{Command: "go"}})
+
+		if !result.Skipped {
+			t.Fatalf("expected skipped, got %+v", result)
+		}
+	})
+
+	t.Run("missing companion tool is skipped with its hint", func(t *testing.T) {
+		manager := Manager{
+			Command: "go",
+			Audit: &AuditProbe{
+				// A fabricated name guaranteed to be absent from PATH, so this exercises the
+				// missing-tool branch without depending on any host-installed tool.
+				Tool:            "preflight-nonexistent-audit-binary",
+				Args:            []string{"-json"},
+				ToolMissingHint: "install the audit tool",
+				Parse:           func(string) map[string]int { return nil },
+			},
+		}
+
+		result := spec.RunAudit(context.Background(), RunContext{}, Detection{Active: manager})
+
+		if !result.Skipped {
+			t.Fatalf("expected skipped, got %+v", result)
+		}
+
+		if result.SkipReason != "install the audit tool" {
+			t.Errorf("skip reason = %q, want the tool-missing hint", result.SkipReason)
+		}
+	})
+}

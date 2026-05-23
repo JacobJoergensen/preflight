@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -62,7 +62,7 @@ func renderProjectHeader(ow *terminal.OutputWriter, project result.Project) {
 	ow.Println(line)
 }
 
-func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []adapter.OutdatedPackage) {
+func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []ecosystem.OutdatedPackage) {
 	ow.PrintNewLines(1)
 
 	badge := healthBadgeTTY(card.Status)
@@ -232,7 +232,7 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 	return nil
 }
 
-func printOutdatedLinesQuietTTY(ow *terminal.OutputWriter, outdated []adapter.OutdatedPackage) {
+func printOutdatedLinesQuietTTY(ow *terminal.OutputWriter, outdated []ecosystem.OutdatedPackage) {
 	for _, pkg := range outdated {
 		ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
 			terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
@@ -269,12 +269,12 @@ func printMessagesUniform(ow *terminal.OutputWriter, messages []model.Message, c
 	}
 }
 
-func buildOutdatedMap(packages []adapter.OutdatedPackage) map[string]adapter.OutdatedPackage {
+func buildOutdatedMap(packages []ecosystem.OutdatedPackage) map[string]ecosystem.OutdatedPackage {
 	if len(packages) == 0 {
 		return nil
 	}
 
-	m := make(map[string]adapter.OutdatedPackage, len(packages))
+	m := make(map[string]ecosystem.OutdatedPackage, len(packages))
 
 	for _, pkg := range packages {
 		m[strings.ToLower(pkg.Name)] = pkg
@@ -283,7 +283,7 @@ func buildOutdatedMap(packages []adapter.OutdatedPackage) map[string]adapter.Out
 	return m
 }
 
-func printDepsWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+func printDepsWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]ecosystem.OutdatedPackage) {
 	if len(deps) == 0 {
 		return
 	}
@@ -299,7 +299,7 @@ func printDepsWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outd
 	ow.Printf("%s%s … %s%s\n", terminal.Dim, strings.Repeat(" ", ttyProjectBodySpaces), overflowMoreDepsLine(overflow, "dependencies"), terminal.Reset)
 }
 
-func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]ecosystem.OutdatedPackage) {
 	for _, msg := range deps {
 		name := extractDepName(msg.Text)
 		pkg, isOutdated := outdated[strings.ToLower(name)]
