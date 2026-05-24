@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func TestSpecResolveDetection(t *testing.T) {
@@ -67,7 +67,7 @@ func TestSpecResolveDetection(t *testing.T) {
 				t.Fatalf("no spec registered for scope %q", tt.scope)
 			}
 
-			rc := ecosystem.RunContext{FS: memfs.New(tt.files)}
+			rc := ecosystem.RunContext{FS: fs.NewMemFS(tt.files)}
 			detection, present := spec.Resolve(rc)
 
 			if present != tt.wantPresent {

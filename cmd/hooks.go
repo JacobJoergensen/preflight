@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -52,7 +53,26 @@ preflight hooks install --command "preflight check --with-env"`,
 				return err
 			}
 
-			if err := hooks.Install(path, command, force); err != nil {
+			err = hooks.Install(path, command, force)
+
+			if errors.Is(err, hooks.ErrHookExists) && !terminal.Quiet && terminal.IsInteractive() {
+				confirmed, askErr := terminal.Ask(os.Stdin, os.Stdout, "A pre-commit hook already exists. Append PreFlight to it?")
+				if askErr != nil {
+					return askErr
+				}
+
+				if !confirmed {
+					if _, writeErr := fmt.Fprintln(os.Stdout, "Left the pre-commit hook unchanged."); writeErr != nil {
+						return fmt.Errorf("write stdout: %w", writeErr)
+					}
+
+					return nil
+				}
+
+				err = hooks.Install(path, command, true)
+			}
+
+			if err != nil {
 				return err
 			}
 

@@ -16,7 +16,6 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-// scanFlags are the flags shared by every report-producing command (check, audit, fix).
 type scanFlags struct {
 	only         []string
 	format       string
@@ -44,9 +43,6 @@ func parseFormat(format string) (jsonOutput bool, err error) {
 	}
 }
 
-// scanCommand is the per-command behavior the generic pipeline drives: produce a
-// report, render it, write the CI summary, and decide the exit code. The pipeline
-// itself (timeout, setup, error wrapping, ErrSilentFailure) lives in runScan.
 type scanCommand[R any] struct {
 	failMsg  string
 	timeout  time.Duration
@@ -54,6 +50,9 @@ type scanCommand[R any] struct {
 	render   func(R) error
 	markdown func(R, io.Writer) error
 	exitCode func(R) int
+	// afterRender runs after the report is rendered, before the exit code is
+	// applied. When it reports handled, the command exits successfully. Optional.
+	afterRender func(R) (handled bool, err error)
 }
 
 func runScan[R any](cmd *cobra.Command, sc scanCommand[R]) error {
@@ -78,6 +77,17 @@ func runScan[R any](cmd *cobra.Command, sc scanCommand[R]) error {
 		return sc.markdown(report, w)
 	})
 
+	if sc.afterRender != nil {
+		handled, err := sc.afterRender(report)
+		if err != nil {
+			return fmt.Errorf("%s: %w", sc.failMsg, err)
+		}
+
+		if handled {
+			return nil
+		}
+	}
+
 	if sc.exitCode(report) != exitSuccess {
 		return ErrSilentFailure
 	}
@@ -85,8 +95,6 @@ func runScan[R any](cmd *cobra.Command, sc scanCommand[R]) error {
 	return nil
 }
 
-// flagOrProfile resolves a setting from the CLI flag when set, else the profile
-// value, else the flag's default.
 func flagOrProfile[T any](cmd *cobra.Command, flagName string, cliVal T, profileVal *T) T {
 	if cmd.Flags().Changed(flagName) || profileVal == nil {
 		return cliVal

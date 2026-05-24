@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func TestLoad(t *testing.T) {
@@ -75,7 +75,7 @@ profiles:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config, err := Load("", memfs.New(tt.files))
+			config, err := Load("", fs.NewMemFS(tt.files))
 
 			if tt.wantError {
 				if err == nil {

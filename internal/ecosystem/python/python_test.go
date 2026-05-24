@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func pyprojectContext(content string) ecosystem.RunContext {
-	return ecosystem.RunContext{FS: memfs.New(map[string][]byte{"pyproject.toml": []byte(content)})}
+	return ecosystem.RunContext{FS: fs.NewMemFS(map[string][]byte{"pyproject.toml": []byte(content)})}
 }
 
 func TestParsePipAuditFindings(t *testing.T) {
@@ -134,7 +134,7 @@ func TestLoadPEP621PyprojectMissingProject(t *testing.T) {
 }
 
 func TestLoadPipfileDeps(t *testing.T) {
-	rc := ecosystem.RunContext{FS: memfs.New(map[string][]byte{"Pipfile": []byte(`[packages]
+	rc := ecosystem.RunContext{FS: fs.NewMemFS(map[string][]byte{"Pipfile": []byte(`[packages]
 requests = "*"
 flask = ">=2"
 

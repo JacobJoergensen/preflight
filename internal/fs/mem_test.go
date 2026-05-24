@@ -1,18 +1,18 @@
-package memfs
+package fs
 
 import (
 	"path/filepath"
 	"testing"
 )
 
-func TestReadDir(t *testing.T) {
-	fs := New(map[string][]byte{
+func TestMemFSReadDir(t *testing.T) {
+	memFS := NewMemFS(map[string][]byte{
 		filepath.Join("root", "a.txt"):        []byte("a"),
 		filepath.Join("root", "c.csproj"):     nil,
 		filepath.Join("root", "sub", "b.txt"): []byte("b"),
 	})
 
-	entries, err := fs.ReadDir("root")
+	entries, err := memFS.ReadDir("root")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

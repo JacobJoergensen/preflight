@@ -6,7 +6,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/config"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func TestResolveScript(t *testing.T) {
@@ -102,7 +102,7 @@ func TestResolveScript(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rc := ecosystem.RunContext{
 				WorkDir: "",
-				FS:      memfs.New(tt.files),
+				FS:      fs.NewMemFS(tt.files),
 			}
 
 			bin, args, err := ResolveScript(rc, tt.target)

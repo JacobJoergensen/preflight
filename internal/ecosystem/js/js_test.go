@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func TestScanLicenses(t *testing.T) {
@@ -16,7 +16,7 @@ func TestScanLicenses(t *testing.T) {
 		filepath.Join("node_modules", ".bin", "ignored"):               []byte("x"),
 	}
 
-	rc := ecosystem.RunContext{FS: memfs.New(files)}
+	rc := ecosystem.RunContext{FS: fs.NewMemFS(files)}
 
 	result := scanLicenses(context.Background(), rc, ecosystem.Detection{})
 	if result.Skipped {

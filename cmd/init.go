@@ -34,7 +34,22 @@ Existing files are left untouched unless --force is set.`,
 			_, statErr := os.Stat(path)
 
 			if statErr == nil && !force {
-				return errors.New("preflight.yml already exists (use --force to overwrite)")
+				if terminal.Quiet || !terminal.IsInteractive() {
+					return errors.New("preflight.yml already exists (use --force to overwrite)")
+				}
+
+				overwrite, err := terminal.Ask(os.Stdin, os.Stdout, "preflight.yml already exists. Overwrite?")
+				if err != nil {
+					return err
+				}
+
+				if !overwrite {
+					if _, err := fmt.Fprintln(os.Stdout, "Left preflight.yml unchanged."); err != nil {
+						return fmt.Errorf("write stdout: %w", err)
+					}
+
+					return nil
+				}
 			}
 
 			if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {

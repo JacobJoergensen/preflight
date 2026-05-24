@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
 func TestResolveGlobMarker(t *testing.T) {
@@ -19,7 +19,7 @@ func TestResolveGlobMarker(t *testing.T) {
 	}
 
 	t.Run("detects when a file matches the glob", func(t *testing.T) {
-		rc := RunContext{FS: memfs.New(map[string][]byte{"App.csproj": nil})}
+		rc := RunContext{FS: fs.NewMemFS(map[string][]byte{"App.csproj": nil})}
 
 		detection, ok := spec.Resolve(rc)
 		if !ok {
@@ -32,7 +32,7 @@ func TestResolveGlobMarker(t *testing.T) {
 	})
 
 	t.Run("no detection without a matching file", func(t *testing.T) {
-		rc := RunContext{FS: memfs.New(map[string][]byte{"README.md": nil})}
+		rc := RunContext{FS: fs.NewMemFS(map[string][]byte{"README.md": nil})}
 
 		if _, ok := spec.Resolve(rc); ok {
 			t.Error("expected no detection without a .csproj")

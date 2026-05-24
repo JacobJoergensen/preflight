@@ -7,7 +7,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/exec"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
@@ -19,7 +19,7 @@ func (fixRunner) Run(context.Context, string, ...string) (exec.Result, error) {
 
 func TestFixSingleProjectDryRun(t *testing.T) {
 	r := Runner{
-		FS:      memfs.New(map[string][]byte{"composer.json": nil}),
+		FS:      fs.NewMemFS(map[string][]byte{"composer.json": nil}),
 		Command: fixRunner{},
 	}
 
@@ -49,7 +49,7 @@ func TestFixSingleProjectDryRun(t *testing.T) {
 
 func TestFixMonorepoDryRun(t *testing.T) {
 	r := Runner{
-		FS: memfs.New(map[string][]byte{
+		FS: fs.NewMemFS(map[string][]byte{
 			filepath.Join("a", "composer.json"): nil,
 			filepath.Join("b", "composer.json"): nil,
 		}),

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -51,7 +51,7 @@ func TestCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := ecosystem.RunContext{FS: memfs.New(tt.files)}
+			rc := ecosystem.RunContext{FS: fs.NewMemFS(tt.files)}
 			messages := check(context.Background(), rc, ecosystem.Detection{})
 
 			got := make([]model.Severity, len(messages))

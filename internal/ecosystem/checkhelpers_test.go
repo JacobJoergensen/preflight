@@ -3,7 +3,7 @@ package ecosystem
 import (
 	"testing"
 
-	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -54,7 +54,7 @@ func TestMissingLockfileWarning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := RunContext{FS: memfs.New(tt.present)}
+			rc := RunContext{FS: fs.NewMemFS(tt.present)}
 			got := MissingLockfileWarning(rc, tt.manager, tt.hasDeps)
 
 			if tt.wantWarn {

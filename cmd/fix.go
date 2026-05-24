@@ -88,7 +88,7 @@ func buildFixApprover(flags *fixFlags, jsonOutput bool) engine.FixApprover {
 		return engine.AutoFixApprover{}
 	}
 
-	if !terminal.IsInteractiveTTY(os.Stdin) || !terminal.IsInteractiveTTY(os.Stdout) {
+	if !terminal.IsInteractive() {
 		return engine.AutoFixApprover{}
 	}
 
