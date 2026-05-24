@@ -2,32 +2,30 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/config"
+	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
 )
 
-type auditOptions struct {
-	only         []string
-	json         bool
-	timeout      time.Duration
-	minSeverity  string
-	noMonorepo   bool
-	projectGlobs []string
+type auditFlags struct {
+	scanFlags
+	minSeverity string
 }
 
-var auditOpts auditOptions
+func newAuditCommand() *cobra.Command {
+	flags := &auditFlags{}
 
-var auditCmd = &cobra.Command{
-	Use:   "audit",
-	Short: "Run native security audits (npm audit, composer audit, govulncheck, …)",
-	Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
+	cmd := &cobra.Command{
+		Use:   "audit",
+		Short: "Run native security audits (npm audit, composer audit, govulncheck, …)",
+		Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
 
 Tools used by scope:
   • js — npm/pnpm/yarn/bun audit --json
@@ -37,55 +35,52 @@ Tools used by scope:
   • ruby — bundle-audit check (bundler-audit gem)
 
 This does not replace dedicated security pipelines, it unifies invocation and reporting.`,
-	Example: `preflight audit
-preflight audit --scope js,composer
-preflight audit --json`,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		ctx, cancel := context.WithTimeout(cmd.Context(), auditOpts.timeout)
-		defer cancel()
-
-		runner, profile, err := commandSetup("audit failed")
-		if err != nil {
-			return err
-		}
-
-		var profileOnly *[]string
-		minSeverity := auditOpts.minSeverity
-
-		if profile.Audit != nil {
-			profileOnly = profile.Audit.Only
-
-			if minSeverity == "" && profile.Audit.MinSeverity != nil {
-				minSeverity = *profile.Audit.MinSeverity
+		Example: `preflight audit
+preflight audit --only js,composer
+preflight audit -o json`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, err := parseFormat(flags.format)
+			if err != nil {
+				return err
 			}
-		}
 
-		only := resolveOnly(cmd, auditOpts.only, profileOnly)
+			return runScan(cmd, scanCommand[result.AuditReport]{
+				failMsg: "audit failed",
+				timeout: flags.timeout,
+				run: func(ctx context.Context, runner engine.Runner, profile config.Profile) (result.AuditReport, error) {
+					var onlyProfile *[]string
+					var minSeverityProfile *string
 
-		progress := buildScanProgress(auditOpts.json, "auditing…")
+					if profile.Audit != nil {
+						onlyProfile = profile.Audit.Only
+						minSeverityProfile = profile.Audit.MinSeverity
+					}
 
-		report, err := runner.Audit(ctx, only, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
+					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
+					minSeverity := flagOrProfile(cmd, "min-severity", flags.minSeverity, minSeverityProfile)
 
-		progress.Close()
+					progress := buildScanProgress(jsonOut, "auditing…")
+					defer progress.Close()
 
-		if err != nil {
-			return fmt.Errorf("audit failed: %w", err)
-		}
+					return runner.Audit(ctx, only, minSeverity, progress, flags.noMonorepo, flags.projectGlobs)
+				},
+				render: func(report result.AuditReport) error { return renderAudit(report, jsonOut) },
+				markdown: func(report result.AuditReport, w io.Writer) error {
+					return render.MarkdownAuditRenderer{Out: w}.Render(report)
+				},
+				exitCode: func(report result.AuditReport) int {
+					return reportExitCode(report.Canceled, report.Items, func(item result.AuditItem) bool {
+						return item.ErrText != "" || !item.OK
+					})
+				},
+			})
+		},
+	}
 
-		if err := renderAudit(report, auditOpts.json); err != nil {
-			return err
-		}
+	registerScanFlags(cmd, &flags.scanFlags, 30*time.Minute, "audit processes")
+	cmd.Flags().StringVar(&flags.minSeverity, "min-severity", "", "Minimum severity to report (info, low, moderate, high, critical)")
 
-		writeGitHubSummary(func(w io.Writer) error {
-			return render.MarkdownAuditRenderer{Out: w}.Render(report)
-		})
-
-		if exitCodeFromAuditReport(report) != 0 {
-			return ErrSilentFailure
-		}
-
-		return nil
-	},
+	return cmd
 }
 
 func renderAudit(report result.AuditReport, jsonOutput bool) error {
@@ -94,69 +89,4 @@ func renderAudit(report result.AuditReport, jsonOutput bool) error {
 	}
 
 	return render.TTYAuditRenderer{}.Render(report)
-}
-
-func exitCodeFromAuditReport(report result.AuditReport) int {
-	if report.Canceled {
-		return 1
-	}
-
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			return 1
-		}
-
-		if !item.OK {
-			return 1
-		}
-	}
-
-	return 0
-}
-
-func init() {
-	auditCmd.Flags().StringSliceVar(
-		&auditOpts.only,
-		"only",
-		[]string{},
-		"Limit to these ecosystems or tools (comma-separated: js, npm, composer, go, rust, python, ruby)",
-	)
-
-	auditCmd.Flags().DurationVarP(
-		&auditOpts.timeout,
-		"timeout",
-		"t",
-		30*time.Minute,
-		"Timeout for all audit processes",
-	)
-
-	auditCmd.Flags().BoolVar(
-		&auditOpts.json,
-		"json",
-		false,
-		"Output results as JSON",
-	)
-
-	auditCmd.Flags().StringVar(
-		&auditOpts.minSeverity,
-		"min-severity",
-		"",
-		"Minimum severity to report (info, low, moderate, high, critical)",
-	)
-
-	auditCmd.Flags().BoolVar(
-		&auditOpts.noMonorepo,
-		"no-monorepo",
-		false,
-		"Disable monorepo traversal, audit only the current directory",
-	)
-
-	auditCmd.Flags().StringSliceVar(
-		&auditOpts.projectGlobs,
-		"project",
-		[]string{},
-		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
-	)
-
-	rootCmd.AddCommand(auditCmd)
 }

@@ -6,13 +6,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 )
 
-type AuditReport struct {
-	StartedAt time.Time
-	EndedAt   time.Time
-	Canceled  bool
-	Items     []AuditItem
-	Projects  []Project
-}
+type AuditReport = Report[AuditItem]
 
 type AuditItem struct {
 	Project       string

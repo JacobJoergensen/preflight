@@ -1,6 +1,21 @@
 package php
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/exec"
+)
+
+type fakeRunner struct {
+	stdout string
+}
+
+func (f fakeRunner) Run(context.Context, string, ...string) (exec.Result, error) {
+	return exec.Result{Stdout: f.stdout}, nil
+}
 
 func TestFindPdoAlternative(t *testing.T) {
 	tests := []struct {
@@ -35,5 +50,50 @@ func TestFindPdoAlternative(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPhpRuntimeVersionSkipsStartupWarnings(t *testing.T) {
+	stdout := "Warning: PHP Startup: Unable to load dynamic library 'openssl' (tried: C:\\php\\ext\\openssl) in Unknown on line 0\n" +
+		"PHP 8.5.1 (cli) (built: Dec 16 2025 16:25:44) (ZTS Visual C++ 2022 x64)\n" +
+		"Copyright (c) The PHP Group"
+
+	rc := ecosystem.RunContext{Runner: fakeRunner{stdout: stdout}}
+
+	version, err := phpRuntimeVersion(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if version != "8.5.1" {
+		t.Errorf("version: got %q, want %q", version, "8.5.1")
+	}
+}
+
+func TestPhpExtensionsSkipsStartupWarnings(t *testing.T) {
+	stdout := "[PHP Modules]\n" +
+		"Warning: PHP Startup: Unable to load dynamic library 'openssl' (tried: C:\\php\\ext\\openssl) in Unknown on line 0\n" +
+		"curl\n" +
+		"Zend OPcache\n"
+
+	rc := ecosystem.RunContext{Runner: fakeRunner{stdout: stdout}}
+
+	extensions, err := phpExtensions(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := extensions["curl"]; !ok {
+		t.Errorf("expected curl to be detected")
+	}
+
+	if _, ok := extensions["Zend OPcache"]; !ok {
+		t.Errorf("expected Zend OPcache to be detected")
+	}
+
+	for name := range extensions {
+		if strings.Contains(name, "Warning") {
+			t.Errorf("warning line registered as extension: %q", name)
+		}
 	}
 }

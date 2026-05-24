@@ -170,16 +170,12 @@ func (s *Spec) RunOutdated(ctx context.Context, rc RunContext, detection Detecti
 	return probe.Parse(rc, result.Stdout)
 }
 
-func (s *Spec) Signals(rc RunContext, detection Detection) []string {
+func (s *Spec) Signals(rc RunContext, _ Detection) []string {
 	if s.ExtraSignals != nil {
 		return s.ExtraSignals(rc)
 	}
 
 	var lines []string
-
-	if detection.Active.LockFile != "" && rc.FileExists(detection.Active.LockFile) {
-		lines = append(lines, detection.Active.LockFile+" exists")
-	}
 
 	for _, pin := range s.VersionPins {
 		if value := ReadVersionPin(rc, pin); value != "" {
@@ -249,6 +245,12 @@ func managerName(manager Manager) string {
 	}
 
 	return manager.Command
+}
+
+func SortOutdated(packages []OutdatedPackage) {
+	slices.SortFunc(packages, func(a, b OutdatedPackage) int {
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 }
 
 func FilterDirect(packages []OutdatedPackage, direct map[string]struct{}) []OutdatedPackage {

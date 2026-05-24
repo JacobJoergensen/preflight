@@ -159,6 +159,9 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 		messages = append(messages, model.Message{Severity: model.SeveritySuccess, Text: fmt.Sprintf("Installed %s%s (%s)", terminal.Reset, manager.DisplayName, version)})
 	}
 
+	hasDependencies := len(config.Dependencies)+len(config.DevDependencies)+len(config.OptionalDependencies) > 0
+	messages = append(messages, ecosystem.MissingLockfileWarning(rc, manager, hasDependencies)...)
+
 	if err := runPipCheck(ctx, rc, manager.Command); err != nil {
 		messages = append(messages, model.Message{Severity: model.SeverityError, Text: ecosystem.FormatExecFailure("pip check failed", err)})
 	}
@@ -757,9 +760,7 @@ func parsePDMOutdated(output string) ([]ecosystem.OutdatedPackage, error) {
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }
@@ -789,9 +790,7 @@ func parsePipOutdated(output string) ([]ecosystem.OutdatedPackage, error) {
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }

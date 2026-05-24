@@ -3,13 +3,11 @@ package engine
 import (
 	"cmp"
 	"context"
-	"slices"
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
-	"github.com/JacobJoergensen/preflight/internal/parallel"
 )
 
 func (r Runner) Audit(
@@ -103,61 +101,36 @@ func (r Runner) auditProject(
 }
 
 func runAudits(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.AuditReport {
-	startedAt := time.Now()
+	run := runScopes(ctx, specs, rc, progress,
+		func(ctx context.Context, spec *ecosystem.Spec, detection ecosystem.Detection) (result.AuditItem, bool) {
+			startedAt := time.Now()
+			auditResult := spec.RunAudit(ctx, rc, detection)
+			endedAt := time.Now()
 
-	progress.Plan(len(specs))
+			if auditResult.Skipped {
+				return result.AuditItem{}, false
+			}
 
-	items := parallel.Collect(ctx, specs, func(ctx context.Context, spec *ecosystem.Spec) (result.AuditItem, bool) {
-		scopeID := spec.Name
+			return result.FromAuditResult(spec.Name, spec.Title(), spec.Priority, auditResult, startedAt, endedAt), true
+		},
+		func(left, right result.AuditItem) int {
+			if diff := cmp.Compare(right.SeverityRank, left.SeverityRank); diff != 0 {
+				return diff
+			}
 
-		progress.Start(scopeID, spec.Title())
+			if diff := cmp.Compare(left.Priority, right.Priority); diff != 0 {
+				return diff
+			}
 
-		var included bool
-		defer func() { progress.Finish(scopeID, included) }()
-
-		detection, ok := spec.Resolve(rc)
-
-		if !ok {
-			return result.AuditItem{}, false
-		}
-
-		itemStartedAt := time.Now()
-		auditResult := spec.RunAudit(ctx, rc, detection)
-		itemEndedAt := time.Now()
-
-		if auditResult.Skipped {
-			return result.AuditItem{}, false
-		}
-
-		included = true
-
-		return result.FromAuditResult(
-			spec.Name,
-			spec.Title(),
-			spec.Priority,
-			auditResult,
-			itemStartedAt,
-			itemEndedAt,
-		), true
-	})
-
-	slices.SortFunc(items, func(left, right result.AuditItem) int {
-		if diff := cmp.Compare(right.SeverityRank, left.SeverityRank); diff != 0 {
-			return diff
-		}
-
-		if diff := cmp.Compare(left.Priority, right.Priority); diff != 0 {
-			return diff
-		}
-
-		return cmp.Compare(left.ScopeID, right.ScopeID)
-	})
+			return cmp.Compare(left.ScopeID, right.ScopeID)
+		},
+	)
 
 	return result.AuditReport{
-		StartedAt: startedAt,
-		EndedAt:   time.Now(),
-		Canceled:  ctx.Err() != nil,
-		Items:     items,
+		StartedAt: run.StartedAt,
+		EndedAt:   run.EndedAt,
+		Canceled:  run.Canceled,
+		Items:     run.Items,
 	}
 }
 

@@ -63,7 +63,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 
 	if requiredVersion != "" {
 		satisfied := semver.MatchMinimumVersion(installedVersion, requiredVersion)
-		feedback := ecosystem.VersionFeedback("go", "Go", installedVersion, requiredVersion, majorMinor(installedVersion), satisfied)
+		feedback := ecosystem.VersionFeedback("go", "Go", installedVersion, requiredVersion, semver.MajorMinor(installedVersion), satisfied)
 		messages = append(messages, feedback...)
 	} else {
 		messages = append(messages, model.Message{
@@ -210,9 +210,7 @@ func parseOutdated(_ ecosystem.RunContext, output string) ([]ecosystem.OutdatedP
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(a.Name, b.Name)
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }
@@ -251,14 +249,4 @@ func parseGovulncheckCounts(jsonText string) map[string]int {
 	}
 
 	return map[string]int{"high": vulnCount}
-}
-
-func majorMinor(version string) string {
-	parts := strings.Split(version, ".")
-
-	if len(parts) < 2 {
-		return version
-	}
-
-	return parts[0] + "." + parts[1]
 }

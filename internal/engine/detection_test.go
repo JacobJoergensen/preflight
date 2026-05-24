@@ -104,7 +104,6 @@ func (f detectFS) Stat(name string) (fs.FileInfo, error) {
 
 func (detectFS) WriteFile(string, []byte, fs.FileMode) error { return nil }
 func (detectFS) MkdirAll(string, fs.FileMode) error          { return nil }
-func (detectFS) RemoveAll(string) error                      { return nil }
 func (detectFS) ReadDir(string) ([]fs.DirEntry, error)       { return nil, nil }
 
 type detectFileInfo struct{}

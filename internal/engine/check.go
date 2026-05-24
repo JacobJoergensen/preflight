@@ -3,13 +3,11 @@ package engine
 import (
 	"cmp"
 	"context"
-	"slices"
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
-	"github.com/JacobJoergensen/preflight/internal/parallel"
 )
 
 func (r Runner) Check(
@@ -108,56 +106,38 @@ func (r Runner) checkProject(
 }
 
 func runChecks(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.CheckReport {
-	startedAt := time.Now()
+	run := runScopes(ctx, specs, rc, progress,
+		func(ctx context.Context, spec *ecosystem.Spec, detection ecosystem.Detection) (result.CheckItem, bool) {
+			startedAt := time.Now()
+			messages := spec.RunCheck(ctx, rc, detection)
+			endedAt := time.Now()
 
-	progress.Plan(len(specs))
+			if len(messages) == 0 {
+				return result.CheckItem{}, false
+			}
 
-	items := parallel.Collect(ctx, specs, func(ctx context.Context, spec *ecosystem.Spec) (result.CheckItem, bool) {
-		scopeID := spec.Name
-
-		progress.Start(scopeID, spec.Title())
-
-		var included bool
-		defer func() { progress.Finish(scopeID, included) }()
-
-		detection, ok := spec.Resolve(rc)
-
-		if !ok {
-			return result.CheckItem{}, false
-		}
-
-		itemStartedAt := time.Now()
-		messages := spec.RunCheck(ctx, rc, detection)
-		itemEndedAt := time.Now()
-
-		if len(messages) == 0 {
-			return result.CheckItem{}, false
-		}
-
-		included = true
-
-		return result.CheckItem{
-			ScopeID:        spec.Name,
-			ScopeDisplay:   spec.Title(),
-			Priority:       spec.Priority,
-			Messages:       messages,
-			StartedAt:      itemStartedAt,
-			EndedAt:        itemEndedAt,
-			ElapsedMillis:  itemEndedAt.Sub(itemStartedAt).Milliseconds(),
-			ProjectSignals: spec.Signals(rc, detection),
-			FixPMHint:      spec.FixPMHint(detection),
-		}, true
-	})
-
-	slices.SortFunc(items, func(a, b result.CheckItem) int {
-		return cmp.Compare(a.Priority, b.Priority)
-	})
+			return result.CheckItem{
+				ScopeID:        spec.Name,
+				ScopeDisplay:   spec.Title(),
+				Priority:       spec.Priority,
+				Messages:       messages,
+				StartedAt:      startedAt,
+				EndedAt:        endedAt,
+				ElapsedMillis:  endedAt.Sub(startedAt).Milliseconds(),
+				ProjectSignals: spec.Signals(rc, detection),
+				FixPMHint:      spec.FixPMHint(detection),
+			}, true
+		},
+		func(a, b result.CheckItem) int {
+			return cmp.Compare(a.Priority, b.Priority)
+		},
+	)
 
 	return result.CheckReport{
-		StartedAt: startedAt,
-		EndedAt:   time.Now(),
-		Canceled:  ctx.Err() != nil,
-		Items:     items,
+		StartedAt: run.StartedAt,
+		EndedAt:   run.EndedAt,
+		Canceled:  run.Canceled,
+		Items:     run.Items,
 	}
 }
 

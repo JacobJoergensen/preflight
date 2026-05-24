@@ -24,43 +24,70 @@ const (
 
 type rootOptions struct {
 	quiet   bool
+	verbose bool
 	noColor bool
 	profile string
+	cwd     string
 	version bool
 	debug   bool
 }
 
 var rootOpts rootOptions
 
-var rootCmd = &cobra.Command{
-	Use:   "preflight",
-	Short: "PreFlight is a CLI tool for checking project dependencies.",
-	Long: `A CLI tool that validates your project dependencies before you run into problems. Checks if everything is installed, fixes what's missing, and runs security audits across package managers.
+func newRootCommand() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "preflight",
+		Short: "PreFlight is a CLI tool for checking project dependencies.",
+		Long: `A CLI tool that validates your project dependencies before you run into problems. Checks if everything is installed, fixes what's missing, and runs security audits across package managers.
 
 Supports npm, yarn, pnpm, bun, Composer, Go, pip, Poetry, uv, and Bundler.
 Configure with preflight.yml for profiles, scripts, and CI integration.`,
-	Example:       "preflight check --only npm,composer",
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-		terminal.SetQuiet(rootOpts.quiet)
-		terminal.ConfigureColor(rootOpts.noColor, os.Stdout)
-		configureLogging(rootOpts.debug)
+		Example:       "preflight check --only npm,composer",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			terminal.SetQuiet(rootOpts.quiet)
+			terminal.SetVerbose(rootOpts.verbose)
+			terminal.ConfigureColor(rootOpts.noColor, os.Stdout)
+			configureLogging(rootOpts.debug)
 
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		if rootOpts.version {
-			printVersion(terminal.NewOutputWriter())
 			return nil
-		}
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if rootOpts.version {
+				printVersion(terminal.NewOutputWriter())
+				return nil
+			}
 
-		return cmd.Help()
-	},
+			return cmd.Help()
+		},
+	}
+
+	root.CompletionOptions.DisableDefaultCmd = false
+
+	root.Flags().BoolVar(&rootOpts.version, "version", false, "Print version, commit, build date, and platform")
+
+	root.PersistentFlags().BoolVar(&rootOpts.quiet, "quiet", false, "Suppress non-essential output")
+	root.PersistentFlags().BoolVarP(&rootOpts.verbose, "verbose", "v", false, "List every checked dependency instead of summary counts")
+	root.PersistentFlags().BoolVar(&rootOpts.noColor, "no-color", false, "Disable colored output")
+	root.PersistentFlags().StringVar(&rootOpts.profile, "profile", "", "Active profile in preflight.yml (overrides PREFLIGHT_PROFILE)")
+	root.PersistentFlags().StringVarP(&rootOpts.cwd, "cwd", "C", "", "Run as if PreFlight were started in this directory")
+	root.PersistentFlags().BoolVar(&rootOpts.debug, "debug", false, "Log each command run, its exit code, and duration to stderr")
+
+	root.AddCommand(
+		newCheckCommand(),
+		newAuditCommand(),
+		newFixCommand(),
+		newRunCommand(),
+		newHooksCommand(),
+		newInitCommand(),
+	)
+
+	return root
 }
 
 func Execute() int {
-	err := rootCmd.Execute()
+	err := newRootCommand().Execute()
 
 	if err != nil && !errors.Is(err, ErrSilentFailure) {
 		_, _ = fmt.Fprintf(os.Stderr, "%s%s%s\n", terminal.Red, err, terminal.Reset)
@@ -80,8 +107,6 @@ func exitCode(err error) int {
 	}
 }
 
-// configureLogging routes debug logs to stderr when --debug is set. When it is not,
-// the default Info-level logger leaves the tool's debug output suppressed.
 func configureLogging(debug bool) {
 	if !debug {
 		return
@@ -140,15 +165,4 @@ func formatBuildDate(raw string) string {
 	}
 
 	return parsed.UTC().Format("2006-01-02 15:04 UTC")
-}
-
-func init() {
-	rootCmd.CompletionOptions.DisableDefaultCmd = false
-
-	rootCmd.Flags().BoolVarP(&rootOpts.version, "version", "v", false, "Print version, commit, build date, and platform")
-
-	rootCmd.PersistentFlags().BoolVar(&rootOpts.quiet, "quiet", false, "Suppress non-essential output")
-	rootCmd.PersistentFlags().BoolVar(&rootOpts.noColor, "no-color", false, "Disable colored output")
-	rootCmd.PersistentFlags().StringVar(&rootOpts.profile, "profile", "", "Active profile in preflight.yml (overrides PREFLIGHT_PROFILE)")
-	rootCmd.PersistentFlags().BoolVar(&rootOpts.debug, "debug", false, "Log each command run, its exit code, and duration to stderr")
 }

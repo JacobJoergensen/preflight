@@ -53,10 +53,6 @@ func (f fakeFS) MkdirAll(string, fs.FileMode) error {
 	return nil
 }
 
-func (f fakeFS) RemoveAll(string) error {
-	return nil
-}
-
 func (f fakeFS) Stat(name string) (fs.FileInfo, error) {
 	if _, ok := f.files[name]; ok {
 		return fakeFileInfo{}, nil

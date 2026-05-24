@@ -14,20 +14,6 @@ type JSONAuditRenderer struct {
 	Out io.Writer
 }
 
-type auditReportJSON struct {
-	Canceled      bool               `json:"canceled"`
-	EndedAt       time.Time          `json:"endedAt"`
-	Items         []auditItemJSON    `json:"items"`
-	Projects      []auditProjectJSON `json:"projects,omitempty"`
-	SchemaVersion int                `json:"schemaVersion"`
-	StartedAt     time.Time          `json:"startedAt"`
-}
-
-type auditProjectJSON struct {
-	Name         string `json:"name,omitempty"`
-	RelativePath string `json:"relativePath"`
-}
-
 type auditItemJSON struct {
 	CommandLine   string         `json:"commandLine,omitempty"`
 	Counts        map[string]int `json:"counts,omitempty"`
@@ -56,33 +42,16 @@ func (r JSONAuditRenderer) Render(report result.AuditReport) error {
 		items = append(items, auditItemToJSON(item))
 	}
 
-	payload := auditReportJSON{
-		Canceled:      report.Canceled,
-		EndedAt:       report.EndedAt,
-		Items:         items,
-		Projects:      auditProjectsToJSON(report.Projects),
+	payload := reportJSON[auditItemJSON]{
 		SchemaVersion: AuditJSONSchemaVersion,
 		StartedAt:     report.StartedAt,
+		EndedAt:       report.EndedAt,
+		Canceled:      report.Canceled,
+		Items:         items,
+		Projects:      projectsToJSON(report.Projects),
 	}
 
 	return encodeJSON(r.Out, payload, true)
-}
-
-func auditProjectsToJSON(projects []result.Project) []auditProjectJSON {
-	if len(projects) == 0 {
-		return nil
-	}
-
-	jsonProjects := make([]auditProjectJSON, len(projects))
-
-	for i, project := range projects {
-		jsonProjects[i] = auditProjectJSON{
-			Name:         project.Name,
-			RelativePath: project.RelativePath,
-		}
-	}
-
-	return jsonProjects
 }
 
 func auditItemToJSON(item result.AuditItem) auditItemJSON {

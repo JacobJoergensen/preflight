@@ -2,7 +2,6 @@ package render
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
@@ -59,27 +58,20 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 	card.Signals = append(card.Signals, item.ProjectSignals...)
 
 	for _, msg := range item.Successes() {
-		switch {
-		case msg.Nested:
-			switch {
-			case msg.Optional && msg.Info:
-				card.DepOptionalInfo = append(card.DepOptionalInfo, msg)
-			case msg.Optional:
-				card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
-			case msg.Dev:
-				card.DepDevSuccess = append(card.DepDevSuccess, msg)
-			default:
-				card.DepSuccess = append(card.DepSuccess, msg)
-			}
-		case isProjectSignalLine(msg.Text):
-			// Structured ProjectSignals from the engine supersede legacy adapter "*found:" echoes
-			if len(item.ProjectSignals) > 0 {
-				continue
-			}
-
-			card.Signals = appendUniqueSignal(card.Signals, msg.Text)
-		default:
+		if !msg.Nested {
 			card.Toolchain = append(card.Toolchain, msg.Text)
+			continue
+		}
+
+		switch {
+		case msg.Optional && msg.Info:
+			card.DepOptionalInfo = append(card.DepOptionalInfo, msg)
+		case msg.Optional:
+			card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
+		case msg.Dev:
+			card.DepDevSuccess = append(card.DepDevSuccess, msg)
+		default:
+			card.DepSuccess = append(card.DepSuccess, msg)
 		}
 	}
 
@@ -134,14 +126,6 @@ func deriveBlockers(item result.CheckItem) []string {
 	}
 
 	return blockers
-}
-
-func appendUniqueSignal(signals []string, line string) []string {
-	if slices.Contains(signals, line) {
-		return signals
-	}
-
-	return append(signals, line)
 }
 
 func buildSummary(item result.CheckItem, card *HealthCard) string {
@@ -238,20 +222,6 @@ func healthStatusFromItem(item result.CheckItem) HealthStatus {
 	}
 
 	return HealthOK
-}
-
-func isProjectSignalLine(text string) bool {
-	trimmed := strings.TrimSpace(text)
-
-	if trimmed == "" {
-		return false
-	}
-
-	if strings.HasSuffix(trimmed, "found:") {
-		return true
-	}
-
-	return strings.Contains(trimmed, ".json found") || strings.Contains(trimmed, "go.mod found")
 }
 
 func extractSuggestedActions(item result.CheckItem) []string {

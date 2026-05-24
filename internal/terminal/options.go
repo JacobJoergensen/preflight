@@ -8,6 +8,12 @@ func SetQuiet(enabled bool) {
 	Quiet = enabled
 }
 
+var Verbose bool
+
+func SetVerbose(enabled bool) {
+	Verbose = enabled
+}
+
 func ConfigureColor(disabled bool, out *os.File) {
 	if !colorEnabled(disabled, out) {
 		disableColor()

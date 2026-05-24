@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -19,7 +18,7 @@ import (
 
 var (
 	phpVersionRegex = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
-	phpBuildRegex   = regexp.MustCompile(`\(built: ([^)]+)\) \((.*?)\)`)
+	moduleNameRegex = regexp.MustCompile(`^[A-Za-z0-9_ ]+$`)
 
 	deprecatedExtensions = map[string]struct{}{
 		"imap": {}, "mysql": {}, "recode": {}, "statistics": {}, "wddx": {}, "xml-rpc": {},
@@ -59,7 +58,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 		return []model.Message{{Severity: model.SeverityError, Text: fmt.Sprintf("Failed to read composer.json: %v", err)}}
 	}
 
-	phpVersion, buildDate, vcVersion, err := phpRuntimeVersion(ctx, rc)
+	phpVersion, err := phpRuntimeVersion(ctx, rc)
 	if err != nil {
 		return []model.Message{{Severity: model.SeverityError, Text: fmt.Sprintf("PHP is not installed or not on PATH: %v", err)}}
 	}
@@ -67,7 +66,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	var messages []model.Message
 
 	if requiredVersion != "" {
-		messages = append(messages, validatePhpVersion(phpVersion, buildDate, vcVersion, requiredVersion)...)
+		messages = append(messages, validatePhpVersion(phpVersion, requiredVersion)...)
 	}
 
 	installedExtensions, err := phpExtensions(ctx, rc)
@@ -137,9 +136,9 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	return messages
 }
 
-func validatePhpVersion(phpVersion, buildDate, vcVersion, requiredVersion string) []model.Message {
-	feedback := fmt.Sprintf("Installed %sPHP (%s ⟶ required %s), Built: (%s, %s)", terminal.Reset, phpVersion, requiredVersion, buildDate, vcVersion)
-	versionPrefix := majorMinor(phpVersion)
+func validatePhpVersion(phpVersion, requiredVersion string) []model.Message {
+	feedback := fmt.Sprintf("Installed %sPHP (%s ⟶ required %s)", terminal.Reset, phpVersion, requiredVersion)
+	versionPrefix := semver.MajorMinor(phpVersion)
 	satisfied, _ := semver.ValidateVersion(phpVersion, requiredVersion)
 
 	if ecosystem.IsEOL("php", versionPrefix) {
@@ -244,31 +243,19 @@ func phpContextFromComposer(rc ecosystem.RunContext) (requiredVersion string, ex
 	return requiredVersion, extensions, nil
 }
 
-func phpRuntimeVersion(ctx context.Context, rc ecosystem.RunContext) (phpVersion, buildDate, vcVersion string, err error) {
+func phpRuntimeVersion(ctx context.Context, rc ecosystem.RunContext) (string, error) {
 	result, err := rc.Runner.Run(ctx, "php", "--version")
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to run php --version: %w", err)
+		return "", fmt.Errorf("failed to run php --version: %w", err)
 	}
 
-	lines := strings.Split(result.Stdout, "\n")
-
-	if len(lines) == 0 {
-		return "", "", "", errors.New("unexpected output from php --version")
+	for line := range strings.SplitSeq(result.Stdout, "\n") {
+		if matches := phpVersionRegex.FindStringSubmatch(line); len(matches) >= 2 {
+			return matches[1], nil
+		}
 	}
 
-	if matches := phpVersionRegex.FindStringSubmatch(lines[0]); len(matches) >= 2 {
-		phpVersion = matches[1]
-	} else {
-		return "", "", "", fmt.Errorf("could not parse PHP version from: %s", lines[0])
-	}
-
-	if matches := phpBuildRegex.FindStringSubmatch(lines[0]); len(matches) >= 3 {
-		buildDate, vcVersion = matches[1], matches[2]
-	} else {
-		buildDate, vcVersion = "unknown", "unknown"
-	}
-
-	return phpVersion, buildDate, vcVersion, nil
+	return "", fmt.Errorf("could not parse PHP version from: %s", result.Stdout)
 }
 
 func phpExtensions(ctx context.Context, rc ecosystem.RunContext) (map[string]struct{}, error) {
@@ -279,23 +266,17 @@ func phpExtensions(ctx context.Context, rc ecosystem.RunContext) (map[string]str
 
 	extensions := make(map[string]struct{})
 
-	for ext := range strings.SplitSeq(result.Stdout, "\n") {
-		if trimmed := strings.TrimSpace(ext); trimmed != "" {
-			extensions[trimmed] = struct{}{}
+	for line := range strings.SplitSeq(result.Stdout, "\n") {
+		name := strings.TrimSpace(line)
+
+		if name == "" || !moduleNameRegex.MatchString(name) {
+			continue
 		}
+
+		extensions[name] = struct{}{}
 	}
 
 	return extensions, nil
-}
-
-func majorMinor(version string) string {
-	parts := strings.Split(version, ".")
-
-	if len(parts) < 2 {
-		return version
-	}
-
-	return parts[0] + "." + parts[1]
 }
 
 type pieConfig struct {

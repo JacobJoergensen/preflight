@@ -117,6 +117,8 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 		}
 	}
 
+	messages = append(messages, ecosystem.MissingLockfileWarning(rc, manager, len(config.Dependencies) > 0)...)
+
 	installed := installedGems(ctx, rc)
 
 	seen := make(map[string]struct{})
@@ -381,9 +383,7 @@ func parseOutdated(rc ecosystem.RunContext, output string) ([]ecosystem.Outdated
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
-	})
+	ecosystem.SortOutdated(packages)
 
 	config := loadConfig(rc)
 

@@ -23,20 +23,6 @@ type outdatedPackageJSON struct {
 	Latest  string `json:"latest"`
 }
 
-type checkReportJSON struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	StartedAt     time.Time          `json:"startedAt"`
-	EndedAt       time.Time          `json:"endedAt"`
-	Canceled      bool               `json:"canceled"`
-	Items         []checkItemJSON    `json:"items"`
-	Projects      []checkProjectJSON `json:"projects,omitempty"`
-}
-
-type checkProjectJSON struct {
-	RelativePath string `json:"relativePath"`
-	Name         string `json:"name,omitempty"`
-}
-
 type checkItemJSON struct {
 	Project        string                `json:"project,omitempty"`
 	ScopeID        string                `json:"scopeId"`
@@ -65,33 +51,16 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 		items = append(items, jsonItem)
 	}
 
-	payload := checkReportJSON{
+	payload := reportJSON[checkItemJSON]{
 		SchemaVersion: CheckJSONSchemaVersion,
 		StartedAt:     report.StartedAt,
 		EndedAt:       report.EndedAt,
 		Canceled:      report.Canceled,
 		Items:         items,
-		Projects:      checkProjectsToJSON(report.Projects),
+		Projects:      projectsToJSON(report.Projects),
 	}
 
 	return encodeJSON(r.Out, payload, true)
-}
-
-func checkProjectsToJSON(projects []result.Project) []checkProjectJSON {
-	if len(projects) == 0 {
-		return nil
-	}
-
-	jsonProjects := make([]checkProjectJSON, len(projects))
-
-	for i, project := range projects {
-		jsonProjects[i] = checkProjectJSON{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		}
-	}
-
-	return jsonProjects
 }
 
 func checkItemToJSON(item result.CheckItem) checkItemJSON {

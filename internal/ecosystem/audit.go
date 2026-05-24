@@ -29,7 +29,7 @@ func (s *Spec) RunAudit(ctx context.Context, rc RunContext, detection Detection)
 
 	commandLine := strings.TrimSpace(tool + " " + strings.Join(probe.Args, " "))
 
-	result, err := exec.Capture(ctx, Gate, rc.WorkDir, tool, probe.Args...)
+	result, err := exec.Capture(ctx, rc.WorkDir, tool, probe.Args...)
 	if err != nil {
 		return AuditResult{
 			CommandLine: commandLine,

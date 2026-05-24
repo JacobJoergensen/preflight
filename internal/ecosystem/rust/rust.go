@@ -51,7 +51,7 @@ type cargoConfig struct {
 	OptionalDependencies []string
 }
 
-func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) []model.Message {
+func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Detection) []model.Message {
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -81,7 +81,8 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 		messages = append(messages, model.Message{Severity: model.SeveritySuccess, Text: fmt.Sprintf("Installed %sCargo (%s)", terminal.Reset, cargoVersion)})
 	}
 
-	messages = append(messages, model.Message{Severity: model.SeveritySuccess, Text: "Cargo.toml found:"})
+	hasDependencies := len(config.Dependencies)+len(config.DevDependencies)+len(config.OptionalDependencies) > 0
+	messages = append(messages, ecosystem.MissingLockfileWarning(rc, detection.Active, hasDependencies)...)
 
 	installed := installedFromCargoLock(rc)
 
@@ -164,9 +165,7 @@ func parseCargoOutdated(output string) ([]ecosystem.OutdatedPackage, error) {
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(a.Name, b.Name)
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }

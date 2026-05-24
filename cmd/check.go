@@ -2,81 +2,75 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/config"
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
-	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-type checkOptions struct {
-	only         []string
-	withEnv      bool
-	timeout      time.Duration
-	json         bool
-	outdated     bool
-	noMonorepo   bool
-	projectGlobs []string
+type checkFlags struct {
+	scanFlags
+	withEnv  bool
+	outdated bool
 }
 
-var checkOpts checkOptions
+func newCheckCommand() *cobra.Command {
+	flags := &checkFlags{}
 
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Checks if all required dependencies are installed",
-	Long:  `Validates installed dependencies for the selected scopes. Supports monorepo traversal, .env validation (--with-env), and outdated package reporting (--outdated).`,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		ctx, cancel := context.WithTimeout(cmd.Context(), checkOpts.timeout)
-		defer cancel()
-
-		runner, profile, err := commandSetup("check failed")
-		if err != nil {
-			return err
-		}
-
-		var profileOnly *[]string
-		withEnv := checkOpts.withEnv
-
-		if profile.Check != nil {
-			profileOnly = profile.Check.Only
-
-			if !cmd.Flags().Changed("with-env") && profile.Check.WithEnv != nil {
-				withEnv = *profile.Check.WithEnv
+	cmd := &cobra.Command{
+		Use:   "check",
+		Short: "Checks if all required dependencies are installed",
+		Long:  `Validates installed dependencies for the selected scopes. Supports monorepo traversal, .env validation (--with-env), and outdated package reporting (--outdated).`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, err := parseFormat(flags.format)
+			if err != nil {
+				return err
 			}
-		}
 
-		only := resolveOnly(cmd, checkOpts.only, profileOnly)
+			return runScan(cmd, scanCommand[result.CheckReport]{
+				failMsg: "check failed",
+				timeout: flags.timeout,
+				run: func(ctx context.Context, runner engine.Runner, profile config.Profile) (result.CheckReport, error) {
+					var onlyProfile *[]string
+					var withEnvProfile *bool
 
-		progress := buildScanProgress(checkOpts.json, "checking…")
+					if profile.Check != nil {
+						onlyProfile = profile.Check.Only
+						withEnvProfile = profile.Check.WithEnv
+					}
 
-		report, err := runner.Check(ctx, only, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
+					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
+					withEnv := flagOrProfile(cmd, "with-env", flags.withEnv, withEnvProfile)
 
-		progress.Close()
+					progress := buildScanProgress(jsonOut, "checking…")
+					defer progress.Close()
 
-		if err != nil {
-			return fmt.Errorf("check failed: %w", err)
-		}
+					return runner.Check(ctx, only, withEnv, flags.outdated, progress, flags.noMonorepo, flags.projectGlobs)
+				},
+				render: func(report result.CheckReport) error { return renderCheck(report, jsonOut) },
+				markdown: func(report result.CheckReport, w io.Writer) error {
+					return render.MarkdownCheckRenderer{Out: w}.Render(report)
+				},
+				exitCode: func(report result.CheckReport) int {
+					return reportExitCode(report.Canceled, report.Items, func(item result.CheckItem) bool {
+						return len(item.Errors()) > 0
+					})
+				},
+			})
+		},
+	}
 
-		if err := renderCheck(report, checkOpts.json); err != nil {
-			return err
-		}
+	registerScanFlags(cmd, &flags.scanFlags, 5*time.Minute, "checks")
+	cmd.Flags().BoolVar(&flags.withEnv, "with-env", false, "Also validate `.env` against `.env.example` (in addition to selected dependency checks)")
+	cmd.Flags().BoolVar(&flags.outdated, "outdated", false, "Also check for outdated packages")
 
-		writeGitHubSummary(func(w io.Writer) error {
-			return render.MarkdownCheckRenderer{Out: w}.Render(report)
-		})
-
-		if exitCodeFromReport(report) != 0 {
-			return ErrSilentFailure
-		}
-
-		return nil
-	},
+	return cmd
 }
 
 func renderCheck(report result.CheckReport, jsonOutput bool) error {
@@ -85,84 +79,4 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 	}
 
 	return render.TTYCheckRenderer{}.Render(report)
-}
-
-func buildScanProgress(jsonOutput bool, label string) engine.ScanProgress {
-	if jsonOutput || terminal.Quiet || rootOpts.debug {
-		return engine.NoopScanProgress{}
-	}
-
-	if !terminal.IsInteractiveTTY(os.Stdout) {
-		return engine.NoopScanProgress{}
-	}
-
-	return render.NewTTYProgress(os.Stdout, label)
-}
-
-func exitCodeFromReport(report result.CheckReport) int {
-	if report.Canceled {
-		return 1
-	}
-
-	for _, item := range report.Items {
-		if len(item.Errors()) > 0 {
-			return 1
-		}
-	}
-
-	return 0
-}
-
-func init() {
-	checkCmd.Flags().StringSliceVar(
-		&checkOpts.only,
-		"only",
-		[]string{},
-		"Limit to these ecosystems or tools (comma-separated: js, npm, php, composer, node, go, rust, python, ruby, env)",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.withEnv,
-		"with-env",
-		false,
-		"Also validate `.env` against `.env.example` (in addition to selected dependency checks)",
-	)
-
-	checkCmd.Flags().DurationVarP(
-		&checkOpts.timeout,
-		"timeout",
-		"t",
-		5*time.Minute,
-		"Timeout for all checks to complete",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.json,
-		"json",
-		false,
-		"Output results as JSON",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.outdated,
-		"outdated",
-		false,
-		"Also check for outdated packages",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.noMonorepo,
-		"no-monorepo",
-		false,
-		"Disable monorepo traversal, check only the current directory",
-	)
-
-	checkCmd.Flags().StringSliceVar(
-		&checkOpts.projectGlobs,
-		"project",
-		[]string{},
-		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
-	)
-
-	rootCmd.AddCommand(checkCmd)
 }

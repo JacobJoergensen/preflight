@@ -73,17 +73,12 @@ func projectSignals(rc ecosystem.RunContext) []string {
 		{"bun.lock", "bun"},
 	}
 
-	var lockfiles []string
-
 	tools := make(map[string]struct{})
 
 	for _, entry := range lockToTool {
-		if !rc.FileExists(entry.lockFile) {
-			continue
+		if rc.FileExists(entry.lockFile) {
+			tools[entry.tool] = struct{}{}
 		}
-
-		lockfiles = append(lockfiles, entry.lockFile)
-		tools[entry.tool] = struct{}{}
 	}
 
 	var lines []string
@@ -95,15 +90,7 @@ func projectSignals(rc ecosystem.RunContext) []string {
 	}
 
 	if rc.FileExists("pnpm-workspace.yaml") {
-		lines = append(lines, "pnpm-workspace.yaml exists")
-	}
-
-	if rc.FileExists("bunfig.toml") {
-		lines = append(lines, "bunfig.toml exists")
-	}
-
-	for _, lockfile := range lockfiles {
-		lines = append(lines, lockfile+" exists")
+		lines = append(lines, "pnpm workspace configured")
 	}
 
 	if len(tools) > 1 {
@@ -244,7 +231,8 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 		}
 	}
 
-	messages = append(messages, model.Message{Severity: model.SeveritySuccess, Text: "package.json found:"})
+	hasDependencies := len(config.Dependencies)+len(config.DevDependencies)+len(config.OptionalDependencies) > 0
+	messages = append(messages, ecosystem.MissingLockfileWarning(rc, manager, hasDependencies)...)
 
 	var installed map[string]string
 
@@ -365,9 +353,7 @@ func parseNPMOutdated(output string) ([]ecosystem.OutdatedPackage, error) {
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(a.Name, b.Name)
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }

@@ -7,13 +7,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
-type CheckReport struct {
-	StartedAt time.Time
-	EndedAt   time.Time
-	Canceled  bool
-	Items     []CheckItem
-	Projects  []Project
-}
+type CheckReport = Report[CheckItem]
 
 type CheckItem struct {
 	Project       string

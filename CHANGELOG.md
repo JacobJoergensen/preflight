@@ -1,8 +1,18 @@
 # Changelog
 
 ## Unreleased
+- `check` no longer falsely reports PHP as not installed, or lists a startup warning as an extension, when PHP prints warnings (such as a failed extension load) before its version banner
 - Added a global `--debug` flag that logs each command run, its exit code, and duration (plus stderr on failure) to stderr
-- `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<manifest> exists` lines that are implied by the scope appearing
+- `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<file> exists` and `<manifest> found:` confirmations
+- `check` now warns when a project that declares dependencies has no lockfile, since installs are not reproducible without one
+- `check` Toolchain line for PHP no longer includes the build date and compiler, only the installed version and required range
+- `check` lists installed dependencies by default and collapses large sections to a count; pass `--verbose` to list every dependency
+- `fix` failures now report the command and exit code instead of a bare `exit status N`
+- `check`, `fix`, and `audit` no longer hang after a timeout or Ctrl-C when a package manager leaves a child process running
+- `fix --json` now emits camelCase keys and a `schemaVersion`, matching `check --json` and `audit --json`
+- Replaced the per-command `--json` flag with `-o`/`--format text|json`
+- `-v` is now the shorthand for `--verbose`; print the version with the long `--version` flag
+- Added a global `--cwd`/`-C` flag to run PreFlight as if started in another directory
 - `check --json` now reports one `messages` array per scope with a `severity` field instead of separate `errors`/`warnings`/`successes` arrays
 - Replaced the `version` command with a `--version` flag
 - Removed the GitHub update check

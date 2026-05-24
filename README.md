@@ -56,7 +56,7 @@ preflight check --with-env
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
 | `--no-monorepo` | Only check the current directory |
 | `--project` | Restrict to sub-projects matching path globs (e.g. `packages/*`) |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
 
 ### fix
 
@@ -80,7 +80,7 @@ preflight fix --yes --no-diff
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only fix the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
 
 ### audit
 
@@ -89,7 +89,7 @@ Runs native security scanners for each ecosystem.
 ```sh
 preflight audit
 preflight audit --only js,composer
-preflight audit --json
+preflight audit -o json
 ```
 
 | Scope | Tool |
@@ -108,7 +108,7 @@ preflight audit --json
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only audit the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
 
 ### run
 

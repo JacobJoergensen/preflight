@@ -71,8 +71,10 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 
 	messages := []model.Message{
 		{Severity: model.SeveritySuccess, Text: fmt.Sprintf("Installed %sComposer (%s)", terminal.Reset, composerVersion)},
-		{Severity: model.SeveritySuccess, Text: "composer.json found:"},
 	}
+
+	hasDependencies := len(dependencies)+len(devDependencies) > 0
+	messages = append(messages, ecosystem.MissingLockfileWarning(rc, detection.Active, hasDependencies)...)
 
 	installed := installedDependencies(ctx, rc, dependencies, devDependencies)
 
@@ -175,9 +177,7 @@ func parseOutdated(_ ecosystem.RunContext, output string) ([]ecosystem.OutdatedP
 		})
 	}
 
-	slices.SortFunc(packages, func(a, b ecosystem.OutdatedPackage) int {
-		return strings.Compare(a.Name, b.Name)
-	})
+	ecosystem.SortOutdated(packages)
 
 	return packages, nil
 }

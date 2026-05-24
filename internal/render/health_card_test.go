@@ -52,31 +52,6 @@ func TestHealthStatusFromItem(t *testing.T) {
 	}
 }
 
-func TestIsProjectSignalLine(t *testing.T) {
-	tests := []struct {
-		text string
-		want bool
-	}{
-		{"package.json found:", true},
-		{"composer.json found:", true},
-		{"go.mod found", true},
-		{"package.json found", true},
-		{"random text", false},
-		{"", false},
-		{"   ", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.text, func(t *testing.T) {
-			got := isProjectSignalLine(tt.text)
-
-			if got != tt.want {
-				t.Errorf("isProjectSignalLine(%q) = %v, want %v", tt.text, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestExtractRunCommands(t *testing.T) {
 	tests := []struct {
 		name string

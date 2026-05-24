@@ -84,7 +84,7 @@ type Spec struct {
 	Detect        []Marker
 	AlwaysPresent bool
 
-	// Optional signals beyond the default "<lockfile> exists" line.
+	// Optional signals shown in the Project section: version pins, env vars, or a custom override.
 	VersionPins  []string
 	EnvSignals   []string
 	ExtraSignals SignalFunc

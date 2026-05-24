@@ -20,22 +20,7 @@ func Spec() *ecosystem.Spec {
 		Priority:      9,
 		AlwaysPresent: true,
 		Check:         check,
-		ExtraSignals:  projectSignals,
 	}
-}
-
-func projectSignals(rc ecosystem.RunContext) []string {
-	var lines []string
-
-	if rc.FileExists(exampleFile) {
-		lines = append(lines, exampleFile+" exists")
-	}
-
-	if rc.FileExists(".env") {
-		lines = append(lines, ".env exists")
-	}
-
-	return lines
 }
 
 func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) []model.Message {

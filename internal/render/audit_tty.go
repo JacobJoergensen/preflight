@@ -163,11 +163,11 @@ func monorepoAuditStatusFromReport(report result.AuditReport) (icon, color, text
 	totalProjects := len(report.Projects)
 
 	if failedProjects > 0 {
-		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s failed to audit", failedProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, terminal.Red, projectStatusLine(failedProjects, totalProjects, "failed to audit")
 	}
 
 	if issueProjects > 0 {
-		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported vulnerabilities", issueProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.WarningSign, terminal.Yellow, projectStatusLine(issueProjects, totalProjects, "reported vulnerabilities")
 	}
 
 	return terminal.CheckMark, terminal.Green, fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))

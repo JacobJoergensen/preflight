@@ -90,7 +90,6 @@ func (f envTestFS) Stat(name string) (fs.FileInfo, error) {
 
 func (envTestFS) WriteFile(string, []byte, fs.FileMode) error { return nil }
 func (envTestFS) MkdirAll(string, fs.FileMode) error          { return nil }
-func (envTestFS) RemoveAll(string) error                      { return nil }
 func (envTestFS) ReadDir(string) ([]fs.DirEntry, error)       { return nil, nil }
 
 type envTestFileInfo struct{}

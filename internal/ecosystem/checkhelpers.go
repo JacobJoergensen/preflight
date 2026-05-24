@@ -106,6 +106,27 @@ func ReadVersionPin(rc RunContext, name string) string {
 	return ""
 }
 
+func MissingLockfileWarning(rc RunContext, manager Manager, hasDependencies bool) []model.Message {
+	if !hasDependencies || manager.LockFile == "" {
+		return nil
+	}
+
+	if manager.ConfigFile != "" && !rc.FileExists(manager.ConfigFile) {
+		return nil
+	}
+
+	if rc.FileExists(manager.LockFile) {
+		return nil
+	}
+
+	command := strings.TrimSpace(manager.Command + " " + strings.Join(manager.InstallArgs, " "))
+
+	return []model.Message{{
+		Severity: model.SeverityWarning,
+		Text:     fmt.Sprintf("%s missing, run `%s` for reproducible installs", manager.LockFile, command),
+	}}
+}
+
 func FormatExecFailure(label string, err error) string {
 	if err == nil {
 		return label
