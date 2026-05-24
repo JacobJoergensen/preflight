@@ -35,7 +35,7 @@ jobs:
         run: npm install -g npm@latest && npm --version
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@v0
