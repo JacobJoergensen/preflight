@@ -1,9 +1,41 @@
 package js
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
+
+func TestScanLicenses(t *testing.T) {
+	files := map[string][]byte{
+		filepath.Join("node_modules", "lodash", "package.json"):        []byte(`{"name":"lodash","version":"4.17.21","license":"MIT"}`),
+		filepath.Join("node_modules", "@scope", "pkg", "package.json"): []byte(`{"name":"@scope/pkg","version":"1.0.0","license":"Apache-2.0"}`),
+		filepath.Join("node_modules", ".bin", "ignored"):               []byte("x"),
+	}
+
+	rc := ecosystem.RunContext{FS: memfs.New(files)}
+
+	result := scanLicenses(context.Background(), rc, ecosystem.Detection{})
+	if result.Skipped {
+		t.Fatalf("unexpected skip: %s", result.SkipReason)
+	}
+
+	if len(result.Packages) != 2 {
+		t.Fatalf("got %d packages, want 2", len(result.Packages))
+	}
+
+	// Sorted by name; the scoped package sorts before lodash, and .bin is skipped.
+	if result.Packages[0].Name != "@scope/pkg" || result.Packages[0].License != "Apache-2.0" {
+		t.Errorf("packages[0] = %+v", result.Packages[0])
+	}
+
+	if result.Packages[1].Name != "lodash" || result.Packages[1].Version != "4.17.21" || result.Packages[1].License != "MIT" {
+		t.Errorf("packages[1] = %+v", result.Packages[1])
+	}
+}
 
 func TestParseNPMVulnerabilityFindings(t *testing.T) {
 	raw := `{"vulnerabilities":{"lodash":{"name":"lodash","severity":"high","via":[{"source":1065,"name":"lodash","title":"Prototype Pollution","url":"https://github.com/advisories/GHSA-jf85-cpcp-j695","severity":"high","range":"<4.17.19"}]},"minimist":{"name":"minimist","severity":"moderate","via":["lodash"]}}}`

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -67,20 +66,9 @@ func Spec() *ecosystem.Spec {
 func scanLicenses(_ context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
 	root := filepath.Join(rc.WorkDir, "node_modules")
 
-	info, err := os.Stat(root)
-	if err != nil || !info.IsDir() {
-		return ecosystem.LicenseResult{Skipped: true, SkipReason: "node_modules not found (run install first)"}
-	}
-
-	return ecosystem.LicenseResult{Packages: nodeModuleLicenses(root)}
-}
-
-func nodeModuleLicenses(root string) []ecosystem.PackageLicense {
-	// #nosec G304 - root is the project's node_modules directory; only fixed
-	// "package.json" files beneath discovered package directories are read.
-	entries, err := os.ReadDir(root)
+	entries, err := rc.FS.ReadDir(root)
 	if err != nil {
-		return nil
+		return ecosystem.LicenseResult{Skipped: true, SkipReason: "node_modules not found (run install first)"}
 	}
 
 	var packages []ecosystem.PackageLicense
@@ -97,22 +85,22 @@ func nodeModuleLicenses(root string) []ecosystem.PackageLicense {
 		}
 
 		if strings.HasPrefix(name, "@") {
-			packages = append(packages, scopedModuleLicenses(root, name)...)
+			packages = append(packages, scopedModuleLicenses(rc.FS, filepath.Join(root, name))...)
 			continue
 		}
 
-		if pkg, ok := readModuleLicense(filepath.Join(root, name)); ok {
+		if pkg, ok := readModuleLicense(rc.FS, filepath.Join(root, name)); ok {
 			packages = append(packages, pkg)
 		}
 	}
 
 	ecosystem.SortPackageLicenses(packages)
 
-	return packages
+	return ecosystem.LicenseResult{Packages: packages}
 }
 
-func scopedModuleLicenses(root, scope string) []ecosystem.PackageLicense {
-	entries, err := os.ReadDir(filepath.Join(root, scope))
+func scopedModuleLicenses(fsys fs.FS, scopeDir string) []ecosystem.PackageLicense {
+	entries, err := fsys.ReadDir(scopeDir)
 	if err != nil {
 		return nil
 	}
@@ -124,7 +112,7 @@ func scopedModuleLicenses(root, scope string) []ecosystem.PackageLicense {
 			continue
 		}
 
-		if pkg, ok := readModuleLicense(filepath.Join(root, scope, entry.Name())); ok {
+		if pkg, ok := readModuleLicense(fsys, filepath.Join(scopeDir, entry.Name())); ok {
 			packages = append(packages, pkg)
 		}
 	}
@@ -132,9 +120,8 @@ func scopedModuleLicenses(root, scope string) []ecosystem.PackageLicense {
 	return packages
 }
 
-func readModuleLicense(dir string) (ecosystem.PackageLicense, bool) {
-	// #nosec G304 - dir is a discovered package directory under node_modules.
-	raw, err := os.ReadFile(filepath.Join(dir, "package.json"))
+func readModuleLicense(fsys fs.FS, dir string) (ecosystem.PackageLicense, bool) {
+	raw, err := fsys.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {
 		return ecosystem.PackageLicense{}, false
 	}
