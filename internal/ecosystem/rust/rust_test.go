@@ -1,6 +1,9 @@
 package rust
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestAdvisorySeverity(t *testing.T) {
 	tests := []struct {
@@ -54,5 +57,34 @@ func TestAdvisorySeverity(t *testing.T) {
 				t.Errorf("advisorySeverity(%q, %q) = %q, want %q", tt.informational, tt.cvss, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseCargoToml(t *testing.T) {
+	config := parseCargoToml([]byte(`[package]
+rust-version = "1.75"
+
+[dependencies]
+serde = "1.0"
+tokio = { version = "1", optional = true }
+
+[dev-dependencies]
+mockall = "0.12"
+`))
+
+	if config.RustVersion != "1.75" {
+		t.Errorf("rust-version = %q, want 1.75", config.RustVersion)
+	}
+
+	if !slices.Equal(config.Dependencies, []string{"serde"}) {
+		t.Errorf("dependencies = %v, want [serde]", config.Dependencies)
+	}
+
+	if !slices.Equal(config.OptionalDependencies, []string{"tokio"}) {
+		t.Errorf("optionalDependencies = %v, want [tokio]", config.OptionalDependencies)
+	}
+
+	if !slices.Equal(config.DevDependencies, []string{"mockall"}) {
+		t.Errorf("devDependencies = %v, want [mockall]", config.DevDependencies)
 	}
 }

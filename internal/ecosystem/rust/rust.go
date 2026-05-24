@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
 	"github.com/JacobJoergensen/preflight/internal/model"
@@ -191,7 +193,7 @@ func loadConfig(rc ecosystem.RunContext) (cargoConfig, error) {
 		return cargoConfig{}, err
 	}
 
-	return parseCargoToml(string(raw)), nil
+	return parseCargoToml(raw), nil
 }
 
 func installedFromCargoLock(rc ecosystem.RunContext) map[string]string {
@@ -213,38 +215,31 @@ func installedFromCargoLock(rc ecosystem.RunContext) map[string]string {
 	return parsed
 }
 
-func parseCargoToml(content string) cargoConfig {
-	var config cargoConfig
+func parseCargoToml(raw []byte) cargoConfig {
+	var doc struct {
+		Package struct {
+			RustVersion string `toml:"rust-version"`
+		} `toml:"package"`
+		Dependencies    map[string]any `toml:"dependencies"`
+		DevDependencies map[string]any `toml:"dev-dependencies"`
+	}
 
-	section := ""
+	if err := toml.Unmarshal(raw, &doc); err != nil {
+		return cargoConfig{}
+	}
 
-	for rawLine := range strings.SplitSeq(content, "\n") {
-		line := strings.TrimSpace(stripCargoComment(rawLine))
+	config := cargoConfig{RustVersion: doc.Package.RustVersion}
 
-		if line == "" {
-			continue
+	for name, value := range doc.Dependencies {
+		if cargoDepOptional(value) {
+			config.OptionalDependencies = append(config.OptionalDependencies, name)
+		} else {
+			config.Dependencies = append(config.Dependencies, name)
 		}
+	}
 
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section = strings.TrimSpace(line[1 : len(line)-1])
-			continue
-		}
-
-		key, value, ok := splitCargoKeyValue(line)
-		if !ok {
-			continue
-		}
-
-		switch section {
-		case "package":
-			if key == "rust-version" {
-				config.RustVersion = unquoteCargoValue(value)
-			}
-		case "dependencies":
-			appendCargoDep(&config, key, value, false)
-		case "dev-dependencies":
-			appendCargoDep(&config, key, value, true)
-		}
+	for name := range doc.DevDependencies {
+		config.DevDependencies = append(config.DevDependencies, name)
 	}
 
 	slices.Sort(config.Dependencies)
@@ -254,69 +249,15 @@ func parseCargoToml(content string) cargoConfig {
 	return config
 }
 
-func appendCargoDep(config *cargoConfig, name, value string, isDev bool) {
-	if name == "" {
-		return
-	}
-
-	if !isDev && cargoValueIsOptional(value) {
-		config.OptionalDependencies = append(config.OptionalDependencies, name)
-		return
-	}
-
-	if isDev {
-		config.DevDependencies = append(config.DevDependencies, name)
-	} else {
-		config.Dependencies = append(config.Dependencies, name)
-	}
-}
-
-func cargoValueIsOptional(value string) bool {
-	trimmed := strings.TrimSpace(value)
-
-	if !strings.HasPrefix(trimmed, "{") {
+func cargoDepOptional(value any) bool {
+	table, ok := value.(map[string]any)
+	if !ok {
 		return false
 	}
 
-	return strings.Contains(trimmed, "optional = true") || strings.Contains(trimmed, "optional=true")
-}
+	optional, _ := table["optional"].(bool)
 
-func splitCargoKeyValue(line string) (key, value string, ok bool) {
-	eq := strings.Index(line, "=")
-
-	if eq <= 0 {
-		return "", "", false
-	}
-
-	key = strings.Trim(strings.TrimSpace(line[:eq]), `"`)
-	value = strings.TrimSpace(line[eq+1:])
-
-	if key == "" {
-		return "", "", false
-	}
-
-	return key, value, true
-}
-
-func unquoteCargoValue(value string) string {
-	return strings.Trim(strings.TrimSpace(value), `"'`)
-}
-
-func stripCargoComment(line string) string {
-	inString := false
-
-	for i, r := range line {
-		switch r {
-		case '"':
-			inString = !inString
-		case '#':
-			if !inString {
-				return line[:i]
-			}
-		}
-	}
-
-	return line
+	return optional
 }
 
 func parseCargoAuditCounts(jsonText string) map[string]int {

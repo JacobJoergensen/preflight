@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/semver"
@@ -59,11 +61,7 @@ var managers = []ecosystem.Manager{
 var (
 	pythonSemverFromVersion = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
 	pep508NameFromLine      = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)`)
-	requiresPythonRe        = regexp.MustCompile(`(?m)^requires-python\s*=\s*["']([^"']+)["']`)
-	pythonVersionRe         = regexp.MustCompile(`(?m)^python\s*=\s*["']([^"']+)["']`)
-	pep621ExtraNameRe       = regexp.MustCompile(`(?m)^([a-zA-Z][a-zA-Z0-9_-]*)\s*=\s*\[`)
 	pep621DevExtraNames     = map[string]struct{}{"dev": {}, "test": {}, "docs": {}}
-	poetryOptionalMarker    = regexp.MustCompile(`(?:^|[,{ \t])optional\s*=\s*true(?:[\s,}]|$)`)
 )
 
 var detectMarkers = []ecosystem.Marker{
@@ -312,70 +310,69 @@ func extractPackageName(line string) string {
 	return strings.TrimSpace(line)
 }
 
-func loadPoetryPyproject(rc ecosystem.RunContext) (main, dev, optional []string, requiresPython string, err error) {
-	raw, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, "pyproject.toml"))
-	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
-	}
-
-	content := string(raw)
-
-	if project := extractTomlSection(content, "[project]"); project != "" {
-		if match := requiresPythonRe.FindStringSubmatch(project); len(match) > 1 {
-			requiresPython = strings.TrimSpace(match[1])
-		}
-	}
-
-	if requiresPython == "" {
-		if dep := extractTomlSection(content, "[tool.poetry.dependencies]"); dep != "" {
-			if match := pythonVersionRe.FindStringSubmatch(dep); len(match) > 1 {
-				requiresPython = strings.TrimSpace(match[1])
-			}
-		}
-	}
-
-	main, optional = parsePoetryDependenciesSection(extractTomlSection(content, "[tool.poetry.dependencies]"))
-
-	dev = parseTomlKeyValueSection(content, "[tool.poetry.group.dev.dependencies]")
-
-	if len(dev) == 0 {
-		dev = parseTomlKeyValueSection(content, "[tool.poetry.dev-dependencies]")
-	}
-
-	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), requiresPython, nil
+type pyproject struct {
+	Project *struct {
+		RequiresPython       string              `toml:"requires-python"`
+		Dependencies         []string            `toml:"dependencies"`
+		OptionalDependencies map[string][]string `toml:"optional-dependencies"`
+	} `toml:"project"`
+	Tool struct {
+		Poetry struct {
+			Dependencies    map[string]any `toml:"dependencies"`
+			DevDependencies map[string]any `toml:"dev-dependencies"`
+			Group           map[string]struct {
+				Dependencies map[string]any `toml:"dependencies"`
+			} `toml:"group"`
+		} `toml:"poetry"`
+	} `toml:"tool"`
 }
 
-func parsePoetryDependenciesSection(section string) (required, optional []string) {
-	if section == "" {
-		return nil, nil
+func (p pyproject) requiresPython() string {
+	if p.Project != nil && p.Project.RequiresPython != "" {
+		return p.Project.RequiresPython
 	}
 
-	if newline := strings.Index(section, "\n"); newline >= 0 {
-		section = section[newline+1:]
+	if constraint, ok := p.Tool.Poetry.Dependencies["python"].(string); ok {
+		return constraint
 	}
 
-	for line := range strings.SplitSeq(section, "\n") {
-		line = strings.TrimSpace(strings.Split(line, "#")[0])
+	return ""
+}
 
-		if line == "" || strings.HasPrefix(line, "[") {
+func loadPyproject(rc ecosystem.RunContext) (pyproject, error) {
+	raw, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, "pyproject.toml"))
+	if err != nil {
+		return pyproject{}, fmt.Errorf("failed to read pyproject.toml: %w", err)
+	}
+
+	var doc pyproject
+
+	if err := toml.Unmarshal(raw, &doc); err != nil {
+		return pyproject{}, nil
+	}
+
+	return doc, nil
+}
+
+func loadPoetryPyproject(rc ecosystem.RunContext) (main, dev, optional []string, requiresPython string, err error) {
+	doc, err := loadPyproject(rc)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	main, optional = splitPoetryDeps(doc.Tool.Poetry.Dependencies)
+	dev = poetryDevDeps(doc)
+
+	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), doc.requiresPython(), nil
+}
+
+func splitPoetryDeps(deps map[string]any) (required, optional []string) {
+	for name, value := range deps {
+		if strings.EqualFold(name, "python") {
 			continue
 		}
 
-		eq := strings.Index(line, "=")
-
-		if eq <= 0 {
-			continue
-		}
-
-		name := strings.Trim(strings.TrimSpace(line[:eq]), `"'`)
-
-		if name == "" || strings.EqualFold(name, "python") {
-			continue
-		}
-
-		value := strings.TrimSpace(line[eq+1:])
-
-		if strings.HasPrefix(value, "{") && poetryOptionalMarker.MatchString(value) {
+		if poetryDepOptional(value) {
 			optional = append(optional, name)
 		} else {
 			required = append(required, name)
@@ -385,47 +382,71 @@ func parsePoetryDependenciesSection(section string) (required, optional []string
 	return required, optional
 }
 
-func loadPEP621Pyproject(rc ecosystem.RunContext) (main, dev, optional []string, requiresPython string, err error) {
-	raw, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, "pyproject.toml"))
-	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("failed to read pyproject.toml: %w", err)
+func poetryDepOptional(value any) bool {
+	table, ok := value.(map[string]any)
+	if !ok {
+		return false
 	}
 
-	content := string(raw)
-	requiresPython = extractRequiresPythonConstraint(content)
+	optional, _ := table["optional"].(bool)
 
-	project := extractTomlSection(content, "[project]")
-
-	if project == "" {
-		return nil, nil, nil, requiresPython, errors.New("pyproject.toml has no [project] section")
-	}
-
-	main = parseTomlArray(project, `(?m)^dependencies\s*=\s*\[`)
-
-	if extras := extractTomlSection(content, "[project.optional-dependencies]"); extras != "" {
-		for _, extraName := range extraGroupNames(extras) {
-			pattern := fmt.Sprintf(`(?m)^%s\s*=\s*\[`, regexp.QuoteMeta(extraName))
-			items := parseTomlArray(extras, pattern)
-
-			if _, isDev := pep621DevExtraNames[strings.ToLower(extraName)]; isDev {
-				dev = append(dev, items...)
-			} else {
-				optional = append(optional, items...)
-			}
-		}
-	}
-
-	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), requiresPython, nil
+	return optional
 }
 
-func extraGroupNames(section string) []string {
-	matches := pep621ExtraNameRe.FindAllStringSubmatch(section, -1)
-	names := make([]string, 0, len(matches))
+func poetryDevDeps(doc pyproject) []string {
+	if group, ok := doc.Tool.Poetry.Group["dev"]; ok && len(group.Dependencies) > 0 {
+		return mapKeys(group.Dependencies)
+	}
 
-	for _, match := range matches {
-		if len(match) > 1 {
-			names = append(names, match[1])
+	return mapKeys(doc.Tool.Poetry.DevDependencies)
+}
+
+func mapKeys(deps map[string]any) []string {
+	keys := make([]string, 0, len(deps))
+
+	for name := range deps {
+		keys = append(keys, name)
+	}
+
+	return keys
+}
+
+func loadPEP621Pyproject(rc ecosystem.RunContext) (main, dev, optional []string, requiresPython string, err error) {
+	doc, err := loadPyproject(rc)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	if doc.Project == nil {
+		return nil, nil, nil, doc.requiresPython(), errors.New("pyproject.toml has no [project] section")
+	}
+
+	main = pep508Names(doc.Project.Dependencies)
+
+	for group, specs := range doc.Project.OptionalDependencies {
+		names := pep508Names(specs)
+
+		if _, isDev := pep621DevExtraNames[strings.ToLower(group)]; isDev {
+			dev = append(dev, names...)
+		} else {
+			optional = append(optional, names...)
 		}
+	}
+
+	return dedupeSorted(main), dedupeSorted(dev), dedupeSorted(optional), doc.requiresPython(), nil
+}
+
+func pep508Names(specs []string) []string {
+	names := make([]string, 0, len(specs))
+
+	for _, spec := range specs {
+		match := pep508NameFromLine.FindStringSubmatch(strings.TrimSpace(spec))
+
+		if len(match) < 2 {
+			continue
+		}
+
+		names = append(names, match[1])
 	}
 
 	return names
@@ -437,135 +458,16 @@ func loadPipfileDeps(rc ecosystem.RunContext) (main, dev []string, err error) {
 		return nil, nil, fmt.Errorf("failed to read Pipfile: %w", err)
 	}
 
-	content := string(raw)
-	main = parseTomlKeyValueSection(content, "[packages]")
-	dev = parseTomlKeyValueSection(content, "[dev-packages]")
-
-	return dedupeSorted(main), dedupeSorted(dev), nil
-}
-
-func parseTomlArray(content, anchorPattern string) []string {
-	regex := regexp.MustCompile(anchorPattern)
-	location := regex.FindStringIndex(content)
-
-	if location == nil {
-		return nil
+	var doc struct {
+		Packages    map[string]any `toml:"packages"`
+		DevPackages map[string]any `toml:"dev-packages"`
 	}
 
-	substring := content[location[1]-1:]
-	open := strings.Index(substring, "[")
-
-	if open < 0 {
-		return nil
+	if err := toml.Unmarshal(raw, &doc); err != nil {
+		return nil, nil, nil
 	}
 
-	closeIdx := strings.Index(substring[open:], "]")
-
-	if closeIdx < 0 {
-		return nil
-	}
-
-	inner := substring[open+1 : open+closeIdx]
-
-	var output []string
-
-	seen := make(map[string]struct{})
-
-	for part := range strings.SplitSeq(inner, ",") {
-		part = strings.Trim(strings.TrimSpace(part), `"'`)
-
-		if part == "" {
-			continue
-		}
-
-		match := pep508NameFromLine.FindStringSubmatch(part)
-
-		if len(match) < 2 {
-			continue
-		}
-
-		lower := strings.ToLower(match[1])
-
-		if _, ok := seen[lower]; ok {
-			continue
-		}
-
-		seen[lower] = struct{}{}
-		output = append(output, match[1])
-	}
-
-	slices.Sort(output)
-
-	return output
-}
-
-func parseTomlKeyValueSection(full, header string) []string {
-	_, section, ok := strings.Cut(full, header)
-
-	if !ok {
-		return nil
-	}
-
-	if end := strings.Index(section, "\n["); end >= 0 {
-		section = section[:end]
-	}
-
-	var names []string
-
-	seen := make(map[string]struct{})
-
-	for line := range strings.SplitSeq(section, "\n") {
-		line = strings.TrimSpace(strings.Split(line, "#")[0])
-
-		if line == "" || strings.HasPrefix(line, "[") {
-			continue
-		}
-
-		name := strings.Trim(strings.TrimSpace(strings.SplitN(line, "=", 2)[0]), `"'`)
-
-		if name == "" {
-			continue
-		}
-
-		lower := strings.ToLower(name)
-
-		if _, ok := seen[lower]; ok {
-			continue
-		}
-
-		seen[lower] = struct{}{}
-		names = append(names, name)
-	}
-
-	return names
-}
-
-func extractRequiresPythonConstraint(content string) string {
-	if match := requiresPythonRe.FindStringSubmatch(content); len(match) > 1 {
-		return strings.TrimSpace(match[1])
-	}
-
-	if match := pythonVersionRe.FindStringSubmatch(content); len(match) > 1 {
-		return strings.TrimSpace(match[1])
-	}
-
-	return ""
-}
-
-func extractTomlSection(content, header string) string {
-	i := strings.Index(content, header)
-
-	if i < 0 {
-		return ""
-	}
-
-	section := content[i:]
-
-	if end := strings.Index(section[1:], "\n["); end >= 0 {
-		return section[:end+1]
-	}
-
-	return section
+	return dedupeSorted(mapKeys(doc.Packages)), dedupeSorted(mapKeys(doc.DevPackages)), nil
 }
 
 func dedupeSorted(in []string) []string {

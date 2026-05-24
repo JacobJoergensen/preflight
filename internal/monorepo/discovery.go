@@ -1,9 +1,11 @@
 package monorepo
 
 import (
+	"cmp"
+	"errors"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 )
 
 func DiscoverProjects(workDir string) ([]Project, error) {
@@ -15,6 +17,8 @@ func DiscoverProjects(workDir string) ([]Project, error) {
 		discoverPnpmWorkspace,
 		discoverPackageJSONWorkspaces,
 		discoverGoWork,
+		discoverCargoWorkspace,
+		discoverUvWorkspace,
 	}
 
 	for _, source := range sources {
@@ -42,8 +46,8 @@ func DiscoverProjects(workDir string) ([]Project, error) {
 		projects = walked
 	}
 
-	sort.Slice(projects, func(i, j int) bool {
-		return projects[i].RelativePath < projects[j].RelativePath
+	slices.SortFunc(projects, func(a, b Project) int {
+		return cmp.Compare(a.RelativePath, b.RelativePath)
 	})
 
 	return projects, nil
@@ -132,13 +136,21 @@ func projectFromDir(workDir, absDir string) (Project, error) {
 }
 
 func readProjectName(absDir string) string {
-	if name := readNpmName(absDir); name != "" {
-		return name
-	}
-
-	if name := readGoModuleName(absDir); name != "" {
-		return name
+	for _, read := range []func(string) string{readNpmName, readGoModuleName, readCargoName, readPyName} {
+		if name := read(absDir); name != "" {
+			return name
+		}
 	}
 
 	return ""
+}
+
+func readManifest(workDir, filename string) ([]byte, error) {
+	// #nosec G304 - workDir joined with a fixed manifest filename; workDir is resolved by the cmd layer, not user input at read time.
+	raw, err := os.ReadFile(filepath.Join(workDir, filename))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+
+	return raw, err
 }

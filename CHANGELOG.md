@@ -13,6 +13,7 @@
 - Replaced the per-command `--json` flag with `-o`/`--format text|json`
 - `-v` is now the shorthand for `--verbose`; print the version with the long `--version` flag
 - Added a global `--cwd`/`-C` flag to run PreFlight as if started in another directory
+- Monorepo traversal now recognizes Cargo workspaces and uv (Python) workspaces, alongside npm/yarn/pnpm/bun and Go
 - `check --json` now reports one `messages` array per scope with a `severity` field instead of separate `errors`/`warnings`/`successes` arrays
 - Replaced the `version` command with a `--version` flag
 - Removed the GitHub update check

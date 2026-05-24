@@ -25,6 +25,7 @@ var walkManifestFiles = []string{
 	"package.json",
 	"composer.json",
 	"go.mod",
+	"Cargo.toml",
 	"pyproject.toml",
 	"Gemfile",
 	"gems.rb",

@@ -1,23 +1,14 @@
 package monorepo
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 func discoverGoWork(workDir string) ([]Project, error) {
-	path := filepath.Join(workDir, "go.work")
-
-	// #nosec G304 - path is workDir joined with the fixed "go.work" filename; workDir is supplied by the caller (cmd layer resolves it from os.Getwd), not user input at read time.
-	raw, err := os.ReadFile(path)
-
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-
-	if err != nil {
+	raw, err := readManifest(workDir, "go.work")
+	if err != nil || raw == nil {
 		return nil, err
 	}
 
@@ -87,7 +78,7 @@ func parseGoWorkUseDirectives(content string) []string {
 }
 
 func readGoModuleName(absDir string) string {
-	// #nosec G304 - absDir is a discovered sub-project directory resolved during workspace traversal; the fixed "go.mod" suffix means we only read declared module manifests, not arbitrary user input.
+	// #nosec G304 - absDir is a discovered subproject directory resolved during workspace traversal; the fixed "go.mod" suffix means we only read declared module manifests, not arbitrary user input.
 	raw, err := os.ReadFile(filepath.Join(absDir, "go.mod"))
 	if err != nil {
 		return ""
