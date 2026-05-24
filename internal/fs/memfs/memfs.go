@@ -2,6 +2,9 @@ package memfs
 
 import (
 	"io/fs"
+	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	preflightfs "github.com/JacobJoergensen/preflight/internal/fs"
@@ -42,6 +45,45 @@ func (m FS) Stat(name string) (fs.FileInfo, error) {
 	return nil, fs.ErrNotExist
 }
 
+func (m FS) ReadDir(name string) ([]fs.DirEntry, error) {
+	prefix := name
+
+	if prefix != "" && !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
+	}
+
+	seen := make(map[string]bool)
+
+	var entries []fs.DirEntry
+
+	for path := range m.files {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+
+		rest := strings.TrimPrefix(path, prefix)
+
+		if rest == "" {
+			continue
+		}
+
+		child, _, isDir := strings.Cut(rest, string(filepath.Separator))
+
+		if child == "" || seen[child] {
+			continue
+		}
+
+		seen[child] = true
+		entries = append(entries, dirEntry{name: child, dir: isDir})
+	}
+
+	slices.SortFunc(entries, func(a, b fs.DirEntry) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+
+	return entries, nil
+}
+
 var _ preflightfs.FS = FS{}
 
 type fileInfo struct{}
@@ -52,3 +94,21 @@ func (fileInfo) Mode() fs.FileMode  { return 0 }
 func (fileInfo) ModTime() time.Time { return time.Time{} }
 func (fileInfo) IsDir() bool        { return false }
 func (fileInfo) Sys() any           { return nil }
+
+type dirEntry struct {
+	name string
+	dir  bool
+}
+
+func (e dirEntry) Name() string { return e.name }
+func (e dirEntry) IsDir() bool  { return e.dir }
+
+func (e dirEntry) Type() fs.FileMode {
+	if e.dir {
+		return fs.ModeDir
+	}
+
+	return 0
+}
+
+func (dirEntry) Info() (fs.FileInfo, error) { return fileInfo{}, nil }

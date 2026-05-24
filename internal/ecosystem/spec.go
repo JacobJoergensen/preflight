@@ -47,6 +47,10 @@ func (s *Spec) Resolve(rc RunContext) (Detection, bool) {
 }
 
 func (m Marker) matches(rc RunContext) bool {
+	if m.Glob != "" {
+		return m.globMatches(rc)
+	}
+
 	if !rc.FileExists(m.File) {
 		return false
 	}
@@ -58,6 +62,21 @@ func (m Marker) matches(rc RunContext) bool {
 	data, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, m.File))
 
 	return err == nil && strings.Contains(string(data), m.Contains)
+}
+
+func (m Marker) globMatches(rc RunContext) bool {
+	entries, err := rc.FS.ReadDir(rc.WorkDir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if matched, _ := filepath.Match(m.Glob, entry.Name()); matched {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *Spec) activeManager(rc RunContext, fallback string) Manager {

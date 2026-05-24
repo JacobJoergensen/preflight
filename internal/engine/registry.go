@@ -3,6 +3,7 @@ package engine
 import (
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem/composer"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem/dotnet"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem/env"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem/golang"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem/js"
@@ -22,6 +23,7 @@ var registeredSpecs = []*ecosystem.Spec{
 	python.Spec(),
 	php.Spec(),
 	ruby.Spec(),
+	dotnet.Spec(),
 	env.Spec(),
 }
 

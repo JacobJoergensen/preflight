@@ -101,6 +101,7 @@ preflight audit -o sarif > preflight.sarif
 | rust | cargo-audit |
 | python | pip-audit |
 | ruby | bundle-audit |
+| dotnet | dotnet list package --vulnerable |
 
 | Flag | Description |
 |------|-------------|
@@ -294,6 +295,7 @@ By default preflight auto-detects every ecosystem present in the project. Use `-
 | rust, cargo | Rust |
 | python, pip, poetry, uv, pdm, pipenv | Python |
 | ruby, bundle | Ruby |
+| dotnet | .NET (NuGet) |
 | php, node | runtime check only |
 | env | .env validation |
 
@@ -307,6 +309,7 @@ By default preflight auto-detects every ecosystem present in the project. Use `-
 | Rust | Rust | Cargo |
 | Python | Python | pip, Poetry, uv |
 | Ruby | Ruby | Bundler |
+| .NET | .NET SDK | NuGet (dotnet CLI) |
 
 ## License
 

@@ -17,7 +17,7 @@ func Spec() *ecosystem.Spec {
 	return &ecosystem.Spec{
 		Name:          "env",
 		DisplayName:   "Environment",
-		Priority:      9,
+		Priority:      10,
 		AlwaysPresent: true,
 		Check:         check,
 	}

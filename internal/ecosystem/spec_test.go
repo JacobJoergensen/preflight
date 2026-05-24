@@ -8,7 +8,37 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
+
+func TestResolveGlobMarker(t *testing.T) {
+	spec := &Spec{
+		Name:     "dotnet",
+		Managers: []Manager{{Command: "dotnet"}},
+		Detect:   []Marker{{Glob: "*.csproj", Manager: "dotnet"}},
+	}
+
+	t.Run("detects when a file matches the glob", func(t *testing.T) {
+		rc := RunContext{FS: memfs.New(map[string][]byte{"App.csproj": nil})}
+
+		detection, ok := spec.Resolve(rc)
+		if !ok {
+			t.Fatal("expected the project to be detected")
+		}
+
+		if detection.Active.Command != "dotnet" {
+			t.Errorf("active manager = %q, want dotnet", detection.Active.Command)
+		}
+	})
+
+	t.Run("no detection without a matching file", func(t *testing.T) {
+		rc := RunContext{FS: memfs.New(map[string][]byte{"README.md": nil})}
+
+		if _, ok := spec.Resolve(rc); ok {
+			t.Error("expected no detection without a .csproj")
+		}
+	})
+}
 
 var errFake = errors.New("fake failure")
 

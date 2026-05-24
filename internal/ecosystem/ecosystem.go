@@ -60,6 +60,7 @@ type (
 
 type Marker struct {
 	File     string
+	Glob     string // matches when any entry in WorkDir matches this glob (e.g. "*.csproj")
 	Contains string
 	Manager  string
 }
