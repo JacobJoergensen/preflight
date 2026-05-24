@@ -47,11 +47,13 @@ func BuildInfo() (version, commit, date string, dirty bool) {
 }
 
 func releaseVersion(mainVersion string) string {
-	if mainVersion == "" || mainVersion == "(devel)" || strings.HasPrefix(mainVersion, "0.0.0-") {
+	version := strings.TrimPrefix(mainVersion, "v")
+
+	if version == "" || version == "(devel)" || strings.HasPrefix(version, "0.0.0-") {
 		return ""
 	}
 
-	return strings.TrimPrefix(mainVersion, "v")
+	return version
 }
 
 func shortCommit(commit string) string {

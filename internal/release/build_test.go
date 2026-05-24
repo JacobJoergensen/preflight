@@ -11,7 +11,7 @@ func TestReleaseVersion(t *testing.T) {
 		{"tagged with v prefix", "v2.0.0", "2.0.0"},
 		{"tagged without prefix", "2.0.0", "2.0.0"},
 		{"devel build", "(devel)", ""},
-		{"pseudo-version", "0.0.0-20260524060539-7502eb5ff0b2+dirty", ""},
+		{"pseudo-version", "v0.0.0-20260524060539-7502eb5ff0b2+dirty", ""},
 		{"empty", "", ""},
 	}
 
