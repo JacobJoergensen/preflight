@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Release archives are now signed with cosign and ship SBOMs, and npm packages are published with provenance, so installs can be verified
 - `check` no longer falsely reports PHP as not installed, or lists a startup warning as an extension, when PHP prints warnings (such as a failed extension load) before its version banner
 - Added a global `--debug` flag that logs each command run, its exit code, and duration (plus stderr on failure) to stderr
 - `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<file> exists` and `<manifest> found:` confirmations
