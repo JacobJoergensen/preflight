@@ -1,11 +1,14 @@
 package ecosystem
 
 import (
+	"cmp"
 	"context"
 	goexec "os/exec"
+	"slices"
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/exec"
+	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
 func (s *Spec) RunAudit(ctx context.Context, rc RunContext, detection Detection) AuditResult {
@@ -38,16 +41,86 @@ func (s *Spec) RunAudit(ctx context.Context, rc RunContext, detection Detection)
 		}
 	}
 
-	counts := probe.Parse(result.Stdout)
+	findings := probe.Parse(result.Stdout)
+
+	manifest := detection.Active.LockFile
+	if manifest == "" {
+		manifest = detection.Active.ConfigFile
+	}
 
 	return AuditResult{
 		CommandLine:  commandLine,
 		ExitCode:     result.ExitCode,
 		OK:           result.ExitCode == 0,
-		SeverityRank: severityRankFromCounts(counts),
-		Counts:       counts,
+		SeverityRank: SeverityRankFromFindings(findings),
+		Findings:     findings,
+		Manifest:     manifest,
 		Output:       mergeOutput(result.Stdout, result.Stderr),
 	}
+}
+
+func NormalizeSeverity(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "critical":
+		return "critical"
+	case "high":
+		return "high"
+	case "moderate", "medium":
+		return "moderate"
+	case "low":
+		return "low"
+	default:
+		return "info"
+	}
+}
+
+func CountsBySeverity(findings []model.Finding) map[string]int {
+	if len(findings) == 0 {
+		return nil
+	}
+
+	counts := make(map[string]int)
+
+	for _, finding := range findings {
+		counts[NormalizeSeverity(finding.Severity)]++
+	}
+
+	return counts
+}
+
+func SortFindings(findings []model.Finding) {
+	slices.SortFunc(findings, func(a, b model.Finding) int {
+		if diff := cmp.Compare(SeverityLevel(b.Severity), SeverityLevel(a.Severity)); diff != 0 {
+			return diff
+		}
+
+		if diff := cmp.Compare(a.Package, b.Package); diff != 0 {
+			return diff
+		}
+
+		return cmp.Compare(a.ID, b.ID)
+	})
+}
+
+func SeverityRankFromFindings(findings []model.Finding) int {
+	rank := 0
+
+	for _, finding := range findings {
+		switch SeverityLevel(finding.Severity) {
+		case 4:
+			rank += 1000
+		case 3:
+			rank += 100
+		case 2:
+			rank += 10
+		case 1:
+			rank++
+		default:
+			rank += 5
+		}
+	}
+
+	return rank
 }
 
 func SeverityLevel(name string) int {
@@ -63,35 +136,6 @@ func SeverityLevel(name string) int {
 	default:
 		return 0
 	}
-}
-
-func severityRankFromCounts(counts map[string]int) int {
-	if len(counts) == 0 {
-		return 0
-	}
-
-	rank := 0
-
-	for severity, count := range counts {
-		if count <= 0 {
-			continue
-		}
-
-		switch SeverityLevel(severity) {
-		case 4:
-			rank += 1000 * count
-		case 3:
-			rank += 100 * count
-		case 2:
-			rank += 10 * count
-		case 1:
-			rank += count
-		default:
-			rank += 5 * count
-		}
-	}
-
-	return rank
 }
 
 func mergeOutput(stdout, stderr string) string {

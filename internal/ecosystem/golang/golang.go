@@ -35,7 +35,7 @@ func Spec() *ecosystem.Spec {
 				Tool:            "govulncheck",
 				Args:            []string{"-json", "./..."},
 				ToolMissingHint: "govulncheck not found on PATH (install: go install golang.org/x/vuln/cmd/govulncheck@latest)",
-				Parse:           parseGovulncheckCounts,
+				Parse:           parseGovulncheckFindings,
 			},
 		}},
 		Check: check,
@@ -215,14 +215,30 @@ func parseOutdated(_ ecosystem.RunContext, output string) ([]ecosystem.OutdatedP
 	return packages, nil
 }
 
-func parseGovulncheckCounts(jsonText string) map[string]int {
+func parseGovulncheckFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" {
 		return nil
 	}
 
-	vulnCount := 0
+	type osvEntry struct {
+		ID      string   `json:"id"`
+		Aliases []string `json:"aliases"`
+		Summary string   `json:"summary"`
+	}
+
+	type findingMessage struct {
+		OSV          string `json:"osv"`
+		FixedVersion string `json:"fixed_version"`
+		Trace        []struct {
+			Module  string `json:"module"`
+			Version string `json:"version"`
+		} `json:"trace"`
+	}
+
+	osvByID := make(map[string]osvEntry)
+	findingByID := make(map[string]model.Finding)
 
 	for line := range strings.SplitSeq(jsonText, "\n") {
 		line = strings.TrimSpace(line)
@@ -232,21 +248,65 @@ func parseGovulncheckCounts(jsonText string) map[string]int {
 		}
 
 		var message struct {
-			Finding *json.RawMessage `json:"finding"`
+			OSV     *osvEntry       `json:"osv"`
+			Finding *findingMessage `json:"finding"`
 		}
 
 		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			continue
 		}
 
-		if message.Finding != nil {
-			vulnCount++
+		if message.OSV != nil && message.OSV.ID != "" {
+			osvByID[message.OSV.ID] = *message.OSV
+		}
+
+		if message.Finding == nil || message.Finding.OSV == "" {
+			continue
+		}
+
+		module := ""
+		version := ""
+
+		if len(message.Finding.Trace) > 0 {
+			module = message.Finding.Trace[0].Module
+			version = message.Finding.Trace[0].Version
+		}
+
+		existing, seen := findingByID[message.Finding.OSV]
+
+		// govulncheck emits several finding records per vulnerability; keep the
+		// one that names the affected module (the call-stack finding).
+		if seen && (existing.Package != "" || module == "") {
+			continue
+		}
+
+		findingByID[message.Finding.OSV] = model.Finding{
+			ID:      message.Finding.OSV,
+			Package: module,
+			Version: version,
+			FixedIn: message.Finding.FixedVersion,
+			URL:     "https://pkg.go.dev/vuln/" + message.Finding.OSV,
 		}
 	}
 
-	if vulnCount == 0 {
+	if len(findingByID) == 0 {
 		return nil
 	}
 
-	return map[string]int{"high": vulnCount}
+	findings := make([]model.Finding, 0, len(findingByID))
+
+	for id, finding := range findingByID {
+		if osv, ok := osvByID[id]; ok {
+			finding.Aliases = osv.Aliases
+			finding.Summary = osv.Summary
+		}
+
+		finding.Severity = "high" // govulncheck reports reachable vulnerabilities without a CVSS score
+
+		findings = append(findings, finding)
+	}
+
+	ecosystem.SortFindings(findings)
+
+	return findings
 }

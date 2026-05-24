@@ -30,7 +30,7 @@ var managers = []ecosystem.Manager{{
 		Tool:            "bundle-audit",
 		Args:            []string{"check"},
 		ToolMissingHint: "bundle-audit not found on PATH (gem install bundler-audit)",
-		Parse:           parseBundleAuditCounts,
+		Parse:           parseBundleAuditFindings,
 	},
 }}
 
@@ -390,39 +390,80 @@ func parseOutdated(rc ecosystem.RunContext, output string) ([]ecosystem.Outdated
 	return ecosystem.FilterDirect(packages, ecosystem.ToSet(config.Dependencies)), nil
 }
 
-func parseBundleAuditCounts(output string) map[string]int {
-	if output == "" {
+func parseBundleAuditFindings(output string) []model.Finding {
+	if strings.TrimSpace(output) == "" {
 		return nil
 	}
 
-	counts := make(map[string]int)
+	var findings []model.Finding
+
+	var current model.Finding
+
+	open := false
+
+	flush := func() {
+		if open {
+			if current.Severity == "" {
+				current.Severity = "high"
+			}
+
+			findings = append(findings, current)
+		}
+
+		current = model.Finding{}
+		open = false
+	}
 
 	for line := range strings.SplitSeq(output, "\n") {
-		line = strings.TrimSpace(line)
-
-		if !strings.HasPrefix(line, "Criticality:") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok {
 			continue
 		}
 
-		severity := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "Criticality:")))
+		value = strings.TrimSpace(value)
 
-		switch severity {
-		case "critical":
-			counts["critical"]++
-		case "high":
-			counts["high"]++
-		case "medium":
-			counts["moderate"]++
-		case "low":
-			counts["low"]++
-		default:
-			counts["high"]++
+		switch strings.TrimSpace(key) {
+		case "Name":
+			flush()
+			current.Package = value
+			open = true
+		case "Version":
+			current.Version = value
+		case "Advisory", "CVE", "GHSA":
+			if current.ID == "" {
+				current.ID = value
+			} else {
+				current.Aliases = append(current.Aliases, value)
+			}
+		case "Criticality":
+			current.Severity = bundleCriticality(value)
+		case "URL":
+			current.URL = value
+		case "Title":
+			current.Summary = value
+		case "Solution":
+			current.FixedIn = strings.TrimSpace(strings.TrimPrefix(value, "upgrade to "))
 		}
 	}
 
-	if len(counts) == 0 {
-		return nil
-	}
+	flush()
 
-	return counts
+	ecosystem.SortFindings(findings)
+
+	return findings
+}
+
+func bundleCriticality(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "critical":
+		return "critical"
+	case "high":
+		return "high"
+	case "medium":
+		return "moderate"
+	case "low":
+		return "low"
+	default:
+		return "high"
+	}
 }

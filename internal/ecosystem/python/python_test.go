@@ -13,6 +13,34 @@ func pyprojectContext(content string) ecosystem.RunContext {
 	return ecosystem.RunContext{FS: memfs.New(map[string][]byte{"pyproject.toml": []byte(content)})}
 }
 
+func TestParsePipAuditFindings(t *testing.T) {
+	raw := `[{"name":"flask","version":"2.0.0","vulns":[{"id":"PYSEC-2023-1","fix_versions":["2.0.1"],"aliases":["CVE-2023-2222"],"description":"XSS issue"}]}]`
+
+	findings := parsePipAuditFindings(raw)
+
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want 1", len(findings))
+	}
+
+	got := findings[0]
+
+	if got.ID != "PYSEC-2023-1" || got.Severity != "high" {
+		t.Errorf("id/severity = %q / %q", got.ID, got.Severity)
+	}
+
+	if got.Package != "flask" || got.Version != "2.0.0" || got.FixedIn != "2.0.1" {
+		t.Errorf("package/version/fixedIn = %q / %q / %q", got.Package, got.Version, got.FixedIn)
+	}
+
+	if got.Summary != "XSS issue" {
+		t.Errorf("summary = %q, want XSS issue", got.Summary)
+	}
+
+	if !slices.Equal(got.Aliases, []string{"CVE-2023-2222"}) {
+		t.Errorf("aliases = %v, want [CVE-2023-2222]", got.Aliases)
+	}
+}
+
 func TestLoadPoetryPyproject(t *testing.T) {
 	rc := pyprojectContext(`[tool.poetry.dependencies]
 python = "^3.11"

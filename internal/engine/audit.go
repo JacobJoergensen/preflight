@@ -3,10 +3,12 @@ package engine
 import (
 	"cmp"
 	"context"
+	"strings"
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
@@ -14,6 +16,7 @@ func (r Runner) Audit(
 	ctx context.Context,
 	only []string,
 	minSeverity string,
+	ignoredCVEs []string,
 	progress ScanProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
@@ -28,10 +31,10 @@ func (r Runner) Audit(
 	}
 
 	if len(projects) > 0 {
-		return r.auditMonorepo(ctx, projects, only, minSeverity, progress)
+		return r.auditMonorepo(ctx, projects, only, minSeverity, ignoredCVEs, progress)
 	}
 
-	return r.auditProject(ctx, r.WorkDir, "", only, minSeverity, progress)
+	return r.auditProject(ctx, r.WorkDir, "", only, minSeverity, ignoredCVEs, progress)
 }
 
 func (r Runner) auditMonorepo(
@@ -39,12 +42,13 @@ func (r Runner) auditMonorepo(
 	projects []monorepo.Project,
 	only []string,
 	minSeverity string,
+	ignoredCVEs []string,
 	progress ScanProgress,
 ) (result.AuditReport, error) {
 	startedAt := time.Now()
 
 	allItems, projectSummaries, err := aggregateProjects(projects, func(project monorepo.Project) ([]result.AuditItem, error) {
-		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, only, minSeverity, progress)
+		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, only, minSeverity, ignoredCVEs, progress)
 		return projectReport.Items, err
 	})
 	if err != nil {
@@ -66,6 +70,7 @@ func (r Runner) auditProject(
 	projectPath string,
 	only []string,
 	minSeverity string,
+	ignoredCVEs []string,
 	progress ScanProgress,
 ) (result.AuditReport, error) {
 	selection, err := Select(SelectInput{Only: only, Mode: ModeAudit})
@@ -86,6 +91,8 @@ func (r Runner) auditProject(
 	}
 
 	report := runAudits(ctx, specs, rc, progress)
+
+	report = filterAuditReportByIgnored(report, ignoredCVEs)
 
 	if minSeverity != "" {
 		report = filterAuditReportBySeverity(report, minSeverity)
@@ -134,85 +141,100 @@ func runAudits(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunCon
 	}
 }
 
-func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
-	threshold := ecosystem.SeverityLevel(minSeverity)
-	filtered := make([]result.AuditItem, 0, len(report.Items))
+func filterAuditReportByIgnored(report result.AuditReport, ignored []string) result.AuditReport {
+	suppress := make(map[string]struct{}, len(ignored))
 
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			filtered = append(filtered, item)
+	for _, id := range ignored {
+		if normalized := normalizeAdvisoryID(id); normalized != "" {
+			suppress[normalized] = struct{}{}
+		}
+	}
+
+	if len(suppress) == 0 {
+		return report
+	}
+
+	for i := range report.Items {
+		item := &report.Items[i]
+
+		// Only items that actually produced findings are eligible: an item with no
+		// findings (a parse gap or a tool error) must keep its original status.
+		if item.ErrText != "" || len(item.Findings) == 0 {
 			continue
 		}
 
-		filteredCounts := filterCountsBySeverity(item.Counts, threshold)
-		hasIssues := len(filteredCounts) > 0
+		kept := make([]model.Finding, 0, len(item.Findings))
 
-		filtered = append(filtered, result.AuditItem{
-			Project:       item.Project,
-			ScopeID:       item.ScopeID,
-			ScopeDisplay:  item.ScopeDisplay,
-			Priority:      item.Priority,
-			CommandLine:   item.CommandLine,
-			ExitCode:      item.ExitCode,
-			OK:            !hasIssues,
-			SeverityRank:  recalculateSeverityRank(filteredCounts),
-			Counts:        filteredCounts,
-			Output:        item.Output,
-			ErrText:       item.ErrText,
-			StartedAt:     item.StartedAt,
-			EndedAt:       item.EndedAt,
-			ElapsedMillis: item.ElapsedMillis,
-		})
+		for _, finding := range item.Findings {
+			if !findingSuppressed(finding, suppress) {
+				kept = append(kept, finding)
+			}
+		}
+
+		if len(kept) == len(item.Findings) {
+			continue
+		}
+
+		item.Findings = kept
+		item.SeverityRank = ecosystem.SeverityRankFromFindings(kept)
+
+		// Every finding was an accepted advisory, so the audit passes.
+		if len(kept) == 0 {
+			item.OK = true
+		}
 	}
-
-	report.Items = filtered
 
 	return report
 }
 
-func filterCountsBySeverity(counts map[string]int, threshold int) map[string]int {
-	if len(counts) == 0 {
-		return counts
+func findingSuppressed(finding model.Finding, suppress map[string]struct{}) bool {
+	if _, ok := suppress[normalizeAdvisoryID(finding.ID)]; ok {
+		return true
 	}
 
-	filtered := make(map[string]int)
+	for _, alias := range finding.Aliases {
+		if _, ok := suppress[normalizeAdvisoryID(alias)]; ok {
+			return true
+		}
+	}
 
-	for name, count := range counts {
-		if count <= 0 {
+	return false
+}
+
+func normalizeAdvisoryID(id string) string {
+	return strings.ToUpper(strings.TrimSpace(id))
+}
+
+func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
+	threshold := ecosystem.SeverityLevel(minSeverity)
+
+	for i := range report.Items {
+		item := &report.Items[i]
+
+		if item.ErrText != "" {
 			continue
 		}
 
-		if ecosystem.SeverityLevel(name) >= threshold {
-			filtered[name] = count
+		item.Findings = filterFindingsBySeverity(item.Findings, threshold)
+		item.SeverityRank = ecosystem.SeverityRankFromFindings(item.Findings)
+		item.OK = len(item.Findings) == 0
+	}
+
+	return report
+}
+
+func filterFindingsBySeverity(findings []model.Finding, threshold int) []model.Finding {
+	if len(findings) == 0 {
+		return findings
+	}
+
+	filtered := make([]model.Finding, 0, len(findings))
+
+	for _, finding := range findings {
+		if ecosystem.SeverityLevel(finding.Severity) >= threshold {
+			filtered = append(filtered, finding)
 		}
 	}
 
 	return filtered
-}
-
-func recalculateSeverityRank(counts map[string]int) int {
-	if len(counts) == 0 {
-		return 0
-	}
-
-	rank := 0
-
-	for name, count := range counts {
-		if count <= 0 {
-			continue
-		}
-
-		switch ecosystem.SeverityLevel(name) {
-		case 4:
-			rank += 1000 * count
-		case 3:
-			rank += 100 * count
-		case 2:
-			rank += 10 * count
-		case 1:
-			rank += count
-		}
-	}
-
-	return rank
 }

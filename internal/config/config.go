@@ -29,6 +29,7 @@ type Profile struct {
 type AuditCommand struct {
 	Only        *[]string `yaml:"only,omitempty"`
 	MinSeverity *string   `yaml:"minSeverity,omitempty"`
+	IgnoredCVEs *[]string `yaml:"ignoredCves,omitempty"`
 }
 
 type RunBlock struct {

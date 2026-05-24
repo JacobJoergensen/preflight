@@ -4,19 +4,33 @@ import (
 	"io"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-const AuditJSONSchemaVersion = 2
+const AuditJSONSchemaVersion = 3
 
 type JSONAuditRenderer struct {
 	Out io.Writer
 }
 
+type findingJSON struct {
+	ID       string   `json:"id,omitempty"`
+	Aliases  []string `json:"aliases,omitempty"`
+	Severity string   `json:"severity"`
+	Package  string   `json:"package,omitempty"`
+	Version  string   `json:"version,omitempty"`
+	FixedIn  string   `json:"fixedIn,omitempty"`
+	URL      string   `json:"url,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
+}
+
 type auditItemJSON struct {
 	CommandLine   string         `json:"commandLine,omitempty"`
 	Counts        map[string]int `json:"counts,omitempty"`
+	Findings      []findingJSON  `json:"findings,omitempty"`
 	ElapsedMillis int64          `json:"elapsedMillis,omitempty"`
 	EndedAt       *time.Time     `json:"endedAt,omitempty"`
 	Err           string         `json:"error,omitempty"`
@@ -57,7 +71,8 @@ func (r JSONAuditRenderer) Render(report result.AuditReport) error {
 func auditItemToJSON(item result.AuditItem) auditItemJSON {
 	jsonItem := auditItemJSON{
 		CommandLine:   item.CommandLine,
-		Counts:        item.Counts,
+		Counts:        ecosystem.CountsBySeverity(item.Findings),
+		Findings:      findingsToJSON(item.Findings),
 		ElapsedMillis: item.ElapsedMillis,
 		Err:           item.ErrText,
 		ExitCode:      item.ExitCode,
@@ -79,6 +94,29 @@ func auditItemToJSON(item result.AuditItem) auditItemJSON {
 	}
 
 	return jsonItem
+}
+
+func findingsToJSON(findings []model.Finding) []findingJSON {
+	if len(findings) == 0 {
+		return nil
+	}
+
+	out := make([]findingJSON, 0, len(findings))
+
+	for _, finding := range findings {
+		out = append(out, findingJSON{
+			ID:       finding.ID,
+			Aliases:  finding.Aliases,
+			Severity: ecosystem.NormalizeSeverity(finding.Severity),
+			Package:  finding.Package,
+			Version:  finding.Version,
+			FixedIn:  finding.FixedIn,
+			URL:      finding.URL,
+			Summary:  finding.Summary,
+		})
+	}
+
+	return out
 }
 
 func quietAuditPayload(report result.AuditReport) any {

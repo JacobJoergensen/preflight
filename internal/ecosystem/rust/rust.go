@@ -39,7 +39,7 @@ func Spec() *ecosystem.Spec {
 				Tool:            "cargo-audit",
 				Args:            []string{"audit", "--json"},
 				ToolMissingHint: "cargo-audit not found on PATH (install: cargo install cargo-audit)",
-				Parse:           parseCargoAuditCounts,
+				Parse:           parseCargoAuditFindings,
 			},
 		}},
 		Check: check,
@@ -260,7 +260,7 @@ func cargoDepOptional(value any) bool {
 	return optional
 }
 
-func parseCargoAuditCounts(jsonText string) map[string]int {
+func parseCargoAuditFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" {
@@ -271,9 +271,21 @@ func parseCargoAuditCounts(jsonText string) map[string]int {
 		Vulnerabilities struct {
 			List []struct {
 				Advisory struct {
-					Informational string `json:"informational"`
-					CVSS          string `json:"cvss"`
+					ID            string   `json:"id"`
+					Package       string   `json:"package"`
+					Title         string   `json:"title"`
+					URL           string   `json:"url"`
+					Aliases       []string `json:"aliases"`
+					Informational string   `json:"informational"`
+					CVSS          string   `json:"cvss"`
 				} `json:"advisory"`
+				Versions struct {
+					Patched []string `json:"patched"`
+				} `json:"versions"`
+				Package struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				} `json:"package"`
 			} `json:"list"`
 		} `json:"vulnerabilities"`
 	}
@@ -282,17 +294,38 @@ func parseCargoAuditCounts(jsonText string) map[string]int {
 		return nil
 	}
 
-	counts := make(map[string]int)
+	findings := make([]model.Finding, 0, len(report.Vulnerabilities.List))
 
 	for _, vuln := range report.Vulnerabilities.List {
-		counts[advisorySeverity(vuln.Advisory.Informational, vuln.Advisory.CVSS)]++
+		pkg := vuln.Advisory.Package
+		if pkg == "" {
+			pkg = vuln.Package.Name
+		}
+
+		fixedIn := ""
+		if len(vuln.Versions.Patched) > 0 {
+			fixedIn = vuln.Versions.Patched[0]
+		}
+
+		findings = append(findings, model.Finding{
+			ID:       vuln.Advisory.ID,
+			Aliases:  vuln.Advisory.Aliases,
+			Severity: advisorySeverity(vuln.Advisory.Informational, vuln.Advisory.CVSS),
+			Package:  pkg,
+			Version:  vuln.Package.Version,
+			FixedIn:  fixedIn,
+			URL:      vuln.Advisory.URL,
+			Summary:  vuln.Advisory.Title,
+		})
 	}
 
-	if len(counts) == 0 {
+	if len(findings) == 0 {
 		return nil
 	}
 
-	return counts
+	ecosystem.SortFindings(findings)
+
+	return findings
 }
 
 func advisorySeverity(informational, cvss string) string {

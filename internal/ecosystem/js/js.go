@@ -23,24 +23,24 @@ var managers = []ecosystem.Manager{
 	{
 		Command: "bun", DisplayName: "Bun", ConfigFile: "package.json", LockFile: "bun.lock",
 		VersionArgs: []string{"--version"}, InstallArgs: []string{"install"}, ForceArgs: []string{"--force"},
-		Audit: &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityCounts},
+		Audit: &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityFindings},
 	},
 	{
 		Command: "pnpm", DisplayName: "PNPM", ConfigFile: "package.json", LockFile: "pnpm-lock.yaml",
 		VersionArgs: []string{"--version"}, InstallArgs: []string{"install"}, ForceArgs: []string{"--force"},
 		Outdated: &ecosystem.OutdatedProbe{Args: []string{"outdated", "--json"}, Parse: parseOutdated},
-		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityCounts},
+		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityFindings},
 	},
 	{
 		Command: "yarn", DisplayName: "Yarn", ConfigFile: "package.json", LockFile: "yarn.lock",
 		VersionArgs: []string{"--version"}, InstallArgs: []string{"install"}, ForceArgs: []string{"--force"},
-		Audit: &ecosystem.AuditProbe{Args: []string{"npm", "audit", "--json"}, Parse: parseYarnNpmAuditCounts},
+		Audit: &ecosystem.AuditProbe{Args: []string{"npm", "audit", "--json"}, Parse: parseYarnNpmAuditFindings},
 	},
 	{
 		Command: "npm", DisplayName: "NPM", ConfigFile: "package.json", LockFile: "package-lock.json",
 		VersionArgs: []string{"--version"}, InstallArgs: []string{"install"}, ForceArgs: []string{"--force"},
 		Outdated: &ecosystem.OutdatedProbe{Args: []string{"outdated", "--json"}, Parse: parseOutdated},
-		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityCounts},
+		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--json"}, Parse: parseNPMVulnerabilityFindings},
 	},
 }
 
@@ -572,7 +572,7 @@ func normalizeNodeVersionOutput(version string) string {
 	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
-func parseYarnNpmAuditCounts(jsonText string) map[string]int {
+func parseYarnNpmAuditFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" || !strings.HasPrefix(jsonText, "{") {
@@ -580,81 +580,135 @@ func parseYarnNpmAuditCounts(jsonText string) map[string]int {
 	}
 
 	var advisories map[string][]struct {
-		Severity string `json:"severity"`
+		Severity   string   `json:"severity"`
+		ModuleName string   `json:"module_name"`
+		Title      string   `json:"title"`
+		URL        string   `json:"url"`
+		CVEs       []string `json:"cves"`
 	}
 
 	if err := json.Unmarshal([]byte(jsonText), &advisories); err != nil {
 		return nil
 	}
 
-	counts := make(map[string]int)
+	var findings []model.Finding
 
-	for _, list := range advisories {
+	for key, list := range advisories {
 		for _, advisory := range list {
-			severity := strings.ToLower(strings.TrimSpace(advisory.Severity))
-
-			if severity == "" {
+			if strings.TrimSpace(advisory.Severity) == "" {
 				continue
 			}
 
-			counts[severity]++
+			pkg := advisory.ModuleName
+			if pkg == "" {
+				pkg = key
+			}
+
+			id := ""
+			var aliases []string
+
+			if len(advisory.CVEs) > 0 {
+				id = advisory.CVEs[0]
+				aliases = advisory.CVEs[1:]
+			}
+
+			findings = append(findings, model.Finding{
+				ID:       id,
+				Aliases:  aliases,
+				Severity: ecosystem.NormalizeSeverity(advisory.Severity),
+				Package:  pkg,
+				URL:      advisory.URL,
+				Summary:  advisory.Title,
+			})
 		}
 	}
 
-	if len(counts) == 0 {
-		return nil
-	}
+	ecosystem.SortFindings(findings)
 
-	return counts
+	return findings
 }
 
-func parseNPMVulnerabilityCounts(jsonText string) map[string]int {
+func parseNPMVulnerabilityFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" || !strings.HasPrefix(jsonText, "{") {
 		return nil
 	}
 
-	var root map[string]json.RawMessage
+	var root struct {
+		Vulnerabilities map[string]struct {
+			Severity string            `json:"severity"`
+			Via      []json.RawMessage `json:"via"`
+		} `json:"vulnerabilities"`
+	}
 
 	if err := json.Unmarshal([]byte(jsonText), &root); err != nil {
 		return nil
 	}
 
-	counts := make(map[string]int)
+	var findings []model.Finding
 
-	metadataRaw, ok := root["metadata"]
-	if !ok {
-		return counts
-	}
+	seen := make(map[string]struct{})
 
-	var metadata struct {
-		Vulnerabilities struct {
-			Critical int `json:"critical"`
-			High     int `json:"high"`
-			Info     int `json:"info"`
-			Low      int `json:"low"`
-			Moderate int `json:"moderate"`
-		} `json:"vulnerabilities"`
-	}
+	for name, entry := range root.Vulnerabilities {
+		for _, raw := range entry.Via {
+			var via struct {
+				Name     string `json:"name"`
+				Title    string `json:"title"`
+				URL      string `json:"url"`
+				Severity string `json:"severity"`
+			}
 
-	if err := json.Unmarshal(metadataRaw, &metadata); err != nil {
-		return counts
-	}
+			// A string `via` entry references a transitive package rather than an
+			// advisory; unmarshaling it into the struct fails, so we skip it.
+			if err := json.Unmarshal(raw, &via); err != nil {
+				continue
+			}
 
-	vulnerabilities := metadata.Vulnerabilities
+			severity := via.Severity
+			if severity == "" {
+				severity = entry.Severity
+			}
 
-	addIfPositive := func(key string, count int) {
-		if count > 0 {
-			counts[key] = count
+			pkg := via.Name
+			if pkg == "" {
+				pkg = name
+			}
+
+			id := ghsaFromURL(via.URL)
+
+			key := id + "|" + pkg
+			if id == "" {
+				key = via.Title + "|" + pkg
+			}
+
+			if _, dup := seen[key]; dup {
+				continue
+			}
+
+			seen[key] = struct{}{}
+
+			findings = append(findings, model.Finding{
+				ID:       id,
+				Severity: ecosystem.NormalizeSeverity(severity),
+				Package:  pkg,
+				URL:      via.URL,
+				Summary:  via.Title,
+			})
 		}
 	}
 
-	addIfPositive("info", vulnerabilities.Info)
-	addIfPositive("low", vulnerabilities.Low)
-	addIfPositive("moderate", vulnerabilities.Moderate)
-	addIfPositive("high", vulnerabilities.High)
-	addIfPositive("critical", vulnerabilities.Critical)
+	ecosystem.SortFindings(findings)
 
-	return counts
+	return findings
+}
+
+func ghsaFromURL(advisoryURL string) string {
+	const marker = "/advisories/"
+
+	if i := strings.LastIndex(advisoryURL, marker); i >= 0 {
+		return advisoryURL[i+len(marker):]
+	}
+
+	return ""
 }

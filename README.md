@@ -90,6 +90,7 @@ Runs native security scanners for each ecosystem.
 preflight audit
 preflight audit --only js,composer
 preflight audit -o json
+preflight audit -o sarif > preflight.sarif
 ```
 
 | Scope | Tool |
@@ -105,10 +106,24 @@ preflight audit -o json
 |------|-------------|
 | `--only` | Limit to ecosystems or tools |
 | `--min-severity` | Minimum severity to report (info, low, moderate, high, critical) |
+| `--ignore-cve` | Advisory ID (CVE/GHSA) to suppress; repeatable, merged with `ignoredCves` |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only audit the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--format`, `-o` | Output format: text or json (default: text) |
+| `--format`, `-o` | Output format: text, json, or sarif (default: text) |
+
+Each finding carries the advisory ID, affected package, severity, and a link. Suppress reviewed, accepted advisories with `--ignore-cve CVE-2023-1234` (repeatable) or the `ignoredCves` list in `preflight.yml`; matching is by CVE/GHSA ID or alias, and an ecosystem whose findings are all suppressed passes.
+
+Export findings to GitHub/GitLab code scanning with SARIF:
+
+```yaml
+- run: preflight audit -o sarif > preflight.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: preflight.sarif
+```
+
+In SARIF mode, findings are reported to code scanning rather than failing the step, so the upload step always runs (a tool that fails to run still fails the step).
 
 ### run
 
@@ -189,6 +204,7 @@ profiles:
       only: [npm, composer]
     audit:
       minSeverity: high  # ignore info, low, moderate
+      ignoredCves: [CVE-2023-1234]  # suppress reviewed, accepted advisories
     run:
       scripts:
         test:

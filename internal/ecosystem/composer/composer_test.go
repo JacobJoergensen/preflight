@@ -1,7 +1,6 @@
 package composer
 
 import (
-	"maps"
 	"slices"
 	"testing"
 )
@@ -47,34 +46,43 @@ func TestParseComposerJSON(t *testing.T) {
 	}
 }
 
-func TestParseComposerAdvisoryCounts(t *testing.T) {
-	tests := []struct {
-		name string
-		json string
-		want map[string]int
-	}{
-		{
-			name: "counts advisories by severity across the package-keyed object",
-			json: `{"advisories":{"vendor/a":[{"severity":"high"},{"severity":"high"}],"vendor/b":[{"severity":"critical"}]}}`,
-			want: map[string]int{"high": 2, "critical": 1},
-		},
-		{
-			name: "an advisory with no severity counts as medium",
-			json: `{"advisories":{"vendor/a":[{"cve":"CVE-1"}]}}`,
-			want: map[string]int{"medium": 1},
-		},
-		{
-			name: "no advisories yields an empty count",
-			json: `{"advisories":{}}`,
-			want: map[string]int{},
-		},
+func TestParseComposerAdvisoryFindings(t *testing.T) {
+	raw := `{"advisories":{"vendor/a":[{"advisoryId":"PKSA-1","cve":"CVE-1","severity":"high","title":"Title 1","link":"https://example.test/1"}],"vendor/b":[{"advisoryId":"PKSA-2","severity":"critical"}]}}`
+
+	findings := parseComposerAdvisoryFindings(raw)
+
+	if len(findings) != 2 {
+		t.Fatalf("got %d findings, want 2", len(findings))
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseComposerAdvisoryCounts(tt.json); !maps.Equal(got, tt.want) {
-				t.Errorf("got %v, want %v", got, tt.want)
-			}
-		})
+	// Findings sort by descending severity, so the critical advisory comes first.
+	if findings[0].ID != "PKSA-2" || findings[0].Severity != "critical" || findings[0].Package != "vendor/b" {
+		t.Errorf("findings[0] = %+v", findings[0])
+	}
+
+	if findings[1].ID != "CVE-1" || findings[1].Severity != "high" || findings[1].Package != "vendor/a" {
+		t.Errorf("findings[1] = %+v", findings[1])
+	}
+
+	if !slices.Equal(findings[1].Aliases, []string{"PKSA-1"}) {
+		t.Errorf("findings[1].Aliases = %v, want [PKSA-1]", findings[1].Aliases)
+	}
+
+	if findings[1].URL != "https://example.test/1" || findings[1].Summary != "Title 1" {
+		t.Errorf("findings[1] url/summary = %q / %q", findings[1].URL, findings[1].Summary)
+	}
+}
+
+func TestParseComposerAdvisoryFindingsDefaultsSeverity(t *testing.T) {
+	findings := parseComposerAdvisoryFindings(`{"advisories":{"vendor/a":[{"cve":"CVE-1"}]}}`)
+
+	if len(findings) != 1 || findings[0].Severity != "moderate" {
+		t.Fatalf("got %+v, want one moderate finding", findings)
+	}
+}
+
+func TestParseComposerAdvisoryFindingsEmpty(t *testing.T) {
+	if findings := parseComposerAdvisoryFindings(`{"advisories":{}}`); findings != nil {
+		t.Errorf("got %v, want nil", findings)
 	}
 }

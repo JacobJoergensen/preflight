@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
 type AuditReport = Report[AuditItem]
@@ -17,7 +18,8 @@ type AuditItem struct {
 	ExitCode      int
 	OK            bool
 	SeverityRank  int
-	Counts        map[string]int
+	Findings      []model.Finding
+	Manifest      string
 	Output        string
 	ErrText       string
 	StartedAt     time.Time
@@ -34,7 +36,8 @@ func FromAuditResult(scopeID, scopeDisplay string, priority int, ar ecosystem.Au
 		ExitCode:      ar.ExitCode,
 		OK:            ar.OK,
 		SeverityRank:  ar.SeverityRank,
-		Counts:        ar.Counts,
+		Findings:      ar.Findings,
+		Manifest:      ar.Manifest,
 		Output:        ar.Output,
 		StartedAt:     startedAt,
 		EndedAt:       endedAt,

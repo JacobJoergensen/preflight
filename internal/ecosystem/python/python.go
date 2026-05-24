@@ -22,7 +22,7 @@ var pipAudit = &ecosystem.AuditProbe{
 	Tool:            "pip-audit",
 	Args:            []string{"--format", "json"},
 	ToolMissingHint: "pip-audit not found on PATH (install: pip install pip-audit)",
-	Parse:           parsePipAuditCounts,
+	Parse:           parsePipAuditFindings,
 }
 
 var managers = []ecosystem.Manager{
@@ -42,7 +42,7 @@ var managers = []ecosystem.Manager{
 		Command: "uv", DisplayName: "uv", ConfigFile: "pyproject.toml", LockFile: "uv.lock",
 		VersionArgs: []string{"--version"}, InstallArgs: []string{"sync"}, ForceArgs: []string{"--frozen"},
 		Outdated: &ecosystem.OutdatedProbe{Tool: "uv", Args: []string{"run", "python", "-m", "pip", "list", "--outdated", "--format=json"}, Parse: outdatedParser("uv", parsePipOutdated)},
-		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--format", "json"}, Parse: parseUvAuditCounts},
+		Audit:    &ecosystem.AuditProbe{Args: []string{"audit", "--format", "json"}, Parse: parseUvAuditFindings},
 	},
 	{
 		Command: "pipenv", DisplayName: "Pipenv", ConfigFile: "Pipfile", LockFile: "Pipfile.lock",
@@ -697,7 +697,7 @@ func parsePipOutdated(output string) ([]ecosystem.OutdatedPackage, error) {
 	return packages, nil
 }
 
-func parsePipAuditCounts(jsonText string) map[string]int {
+func parsePipAuditFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" || !strings.HasPrefix(jsonText, "[") {
@@ -705,8 +705,13 @@ func parsePipAuditCounts(jsonText string) map[string]int {
 	}
 
 	var packages []struct {
-		Vulns []struct {
-			ID string `json:"id"`
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Vulns   []struct {
+			ID          string   `json:"id"`
+			FixVersions []string `json:"fix_versions"`
+			Aliases     []string `json:"aliases"`
+			Description string   `json:"description"`
 		} `json:"vulns"`
 	}
 
@@ -714,20 +719,36 @@ func parsePipAuditCounts(jsonText string) map[string]int {
 		return nil
 	}
 
-	vulnCount := 0
+	var findings []model.Finding
 
 	for _, pkg := range packages {
-		vulnCount += len(pkg.Vulns)
+		for _, vuln := range pkg.Vulns {
+			fixedIn := ""
+			if len(vuln.FixVersions) > 0 {
+				fixedIn = vuln.FixVersions[0]
+			}
+
+			findings = append(findings, model.Finding{
+				ID:       vuln.ID,
+				Aliases:  vuln.Aliases,
+				Severity: "high", // pip-audit does not report a severity
+				Package:  pkg.Name,
+				Version:  pkg.Version,
+				FixedIn:  fixedIn,
+				Summary:  ecosystem.FirstLine(vuln.Description),
+			})
+		}
 	}
 
-	if vulnCount == 0 {
-		return nil
-	}
+	ecosystem.SortFindings(findings)
 
-	return map[string]int{"high": vulnCount}
+	return findings
 }
 
-func parseUvAuditCounts(jsonText string) map[string]int {
+// parseUvAuditFindings reads uv audit's summary count. uv only exposes the total
+// vulnerability count in a documented field today, so each finding carries just
+// a severity until uv stabilizes a per-vulnerability JSON shape.
+func parseUvAuditFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" {
@@ -744,9 +765,15 @@ func parseUvAuditCounts(jsonText string) map[string]int {
 		return nil
 	}
 
-	if report.Summary.Vulnerabilities == 0 {
+	if report.Summary.Vulnerabilities <= 0 {
 		return nil
 	}
 
-	return map[string]int{"high": report.Summary.Vulnerabilities}
+	findings := make([]model.Finding, report.Summary.Vulnerabilities)
+
+	for i := range findings {
+		findings[i] = model.Finding{Severity: "high"}
+	}
+
+	return findings
 }

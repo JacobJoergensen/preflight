@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
@@ -85,11 +87,17 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 		ow.Println(terminal.Red + "    " + item.ErrText + terminal.Reset)
 	}
 
-	if len(item.Counts) > 0 {
-		ow.Println(terminal.Dim + "    counts: " + formatCounts(item.Counts) + terminal.Reset)
+	counts := ecosystem.CountsBySeverity(item.Findings)
+
+	if len(counts) > 0 {
+		ow.Println(terminal.Dim + "    counts: " + formatCounts(counts) + terminal.Reset)
 	}
 
-	if item.Output != "" {
+	for _, finding := range item.Findings {
+		ow.Println(formatFinding(finding))
+	}
+
+	if len(item.Findings) == 0 && item.Output != "" {
 		body := truncateRunes(strings.TrimSpace(item.Output), auditOutputMaxRunes)
 
 		for line := range strings.SplitSeq(body, "\n") {
@@ -107,11 +115,51 @@ func formatCounts(counts map[string]int) string {
 
 	var parts []string
 
-	for severity, count := range counts {
-		parts = append(parts, fmt.Sprintf("%s=%d", severity, count))
+	for _, severity := range auditSeverityColumns {
+		if count := counts[severity]; count > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", severity, count))
+		}
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+func formatFinding(finding model.Finding) string {
+	severity := ecosystem.NormalizeSeverity(finding.Severity)
+	tag := severityColor(severity) + strings.ToUpper(severity) + terminal.Reset
+
+	detail := finding.ID
+
+	if finding.Package != "" {
+		pkg := finding.Package
+
+		if finding.Version != "" {
+			pkg += " " + finding.Version
+		}
+
+		if detail == "" {
+			detail = pkg
+		} else {
+			detail += "  " + pkg
+		}
+	}
+
+	if finding.FixedIn != "" {
+		detail += "  (fixed in " + finding.FixedIn + ")"
+	}
+
+	return "    " + tag + "  " + terminal.Dim + strings.TrimSpace(detail) + terminal.Reset
+}
+
+func severityColor(severity string) string {
+	switch severity {
+	case "critical", "high":
+		return terminal.Red
+	case "moderate":
+		return terminal.Yellow
+	default:
+		return terminal.Dim
+	}
 }
 
 func truncateRunes(s string, limit int) string {

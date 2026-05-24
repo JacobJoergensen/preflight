@@ -60,6 +60,34 @@ func TestAdvisorySeverity(t *testing.T) {
 	}
 }
 
+func TestParseCargoAuditFindings(t *testing.T) {
+	raw := `{"vulnerabilities":{"list":[{"advisory":{"id":"RUSTSEC-2021-0001","package":"time","title":"Segfault","url":"https://rustsec.org/advisories/RUSTSEC-2021-0001","aliases":["CVE-2020-26235"],"cvss":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},"versions":{"patched":[">=0.2.23"]},"package":{"name":"time","version":"0.2.22"}}]}}`
+
+	findings := parseCargoAuditFindings(raw)
+
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want 1", len(findings))
+	}
+
+	got := findings[0]
+
+	if got.ID != "RUSTSEC-2021-0001" || got.Severity != "critical" || got.Package != "time" {
+		t.Errorf("id/severity/package = %q / %q / %q", got.ID, got.Severity, got.Package)
+	}
+
+	if got.Version != "0.2.22" || got.FixedIn != ">=0.2.23" {
+		t.Errorf("version/fixedIn = %q / %q", got.Version, got.FixedIn)
+	}
+
+	if got.URL != "https://rustsec.org/advisories/RUSTSEC-2021-0001" || got.Summary != "Segfault" {
+		t.Errorf("url/summary = %q / %q", got.URL, got.Summary)
+	}
+
+	if !slices.Equal(got.Aliases, []string{"CVE-2020-26235"}) {
+		t.Errorf("aliases = %v, want [CVE-2020-26235]", got.Aliases)
+	}
+}
+
 func TestParseCargoToml(t *testing.T) {
 	config := parseCargoToml([]byte(`[package]
 rust-version = "1.75"

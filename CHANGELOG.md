@@ -2,6 +2,9 @@
 
 ## Unreleased
 - Release artifacts now ship cosign signatures, SBOMs, and SLSA build provenance, and npm packages are published with provenance, so installs can be verified
+- `audit` now reports individual findings with advisory ID, affected package, severity, and advisory URL instead of only severity counts; `audit --json` adds a `findings` array (schemaVersion 3)
+- `audit` can now suppress accepted advisories via `ignoredCves` in preflight.yml or the repeatable `--ignore-cve` flag, matched by CVE/GHSA ID or alias; an ecosystem whose findings are all suppressed passes
+- `audit -o sarif` exports findings as SARIF 2.1.0 for upload to GitHub/GitLab code scanning; in SARIF mode findings are reported to code scanning rather than via a non-zero exit, so a later upload step still runs
 - `check` no longer falsely reports PHP as not installed, or lists a startup warning as an extension, when PHP prints warnings (such as a failed extension load) before its version banner
 - Added a global `--debug` flag that logs each command run, its exit code, and duration (plus stderr on failure) to stderr
 - `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<file> exists` and `<manifest> found:` confirmations

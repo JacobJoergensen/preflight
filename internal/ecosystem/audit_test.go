@@ -3,6 +3,8 @@ package ecosystem
 import (
 	"context"
 	"testing"
+
+	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
 func TestRunAudit(t *testing.T) {
@@ -25,7 +27,7 @@ func TestRunAudit(t *testing.T) {
 				Tool:            "preflight-nonexistent-audit-binary",
 				Args:            []string{"-json"},
 				ToolMissingHint: "install the audit tool",
-				Parse:           func(string) map[string]int { return nil },
+				Parse:           func(string) []model.Finding { return nil },
 			},
 		}
 

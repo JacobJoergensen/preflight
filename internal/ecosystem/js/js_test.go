@@ -5,6 +5,32 @@ import (
 	"testing"
 )
 
+func TestParseNPMVulnerabilityFindings(t *testing.T) {
+	raw := `{"vulnerabilities":{"lodash":{"name":"lodash","severity":"high","via":[{"source":1065,"name":"lodash","title":"Prototype Pollution","url":"https://github.com/advisories/GHSA-jf85-cpcp-j695","severity":"high","range":"<4.17.19"}]},"minimist":{"name":"minimist","severity":"moderate","via":["lodash"]}}}`
+
+	findings := parseNPMVulnerabilityFindings(raw)
+
+	// The string `via` entry (minimist → lodash) is a transitive link, not an
+	// advisory, so only the object entry yields a finding.
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want 1", len(findings))
+	}
+
+	got := findings[0]
+
+	if got.ID != "GHSA-jf85-cpcp-j695" {
+		t.Errorf("id = %q, want GHSA-jf85-cpcp-j695", got.ID)
+	}
+
+	if got.Severity != "high" || got.Package != "lodash" {
+		t.Errorf("severity/package = %q / %q", got.Severity, got.Package)
+	}
+
+	if got.URL != "https://github.com/advisories/GHSA-jf85-cpcp-j695" || got.Summary != "Prototype Pollution" {
+		t.Errorf("url/summary = %q / %q", got.URL, got.Summary)
+	}
+}
+
 func TestBuildPackagePath(t *testing.T) {
 	tests := []struct {
 		name     string

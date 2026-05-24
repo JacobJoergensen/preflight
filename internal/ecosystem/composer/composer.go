@@ -33,7 +33,7 @@ func Spec() *ecosystem.Spec {
 			},
 			Audit: &ecosystem.AuditProbe{
 				Args:  []string{"audit", "--format=json"},
-				Parse: parseComposerAdvisoryCounts,
+				Parse: parseComposerAdvisoryFindings,
 			},
 		}},
 		Check: check,
@@ -293,7 +293,7 @@ func depVersionFromShow(ctx context.Context, rc ecosystem.RunContext, dep string
 	return ""
 }
 
-func parseComposerAdvisoryCounts(jsonText string) map[string]int {
+func parseComposerAdvisoryFindings(jsonText string) []model.Finding {
 	jsonText = strings.TrimSpace(jsonText)
 
 	if jsonText == "" || !strings.HasPrefix(jsonText, "{") {
@@ -302,7 +302,15 @@ func parseComposerAdvisoryCounts(jsonText string) map[string]int {
 
 	var root struct {
 		Advisories map[string][]struct {
-			Severity string `json:"severity"`
+			AdvisoryID  string `json:"advisoryId"`
+			PackageName string `json:"packageName"`
+			Title       string `json:"title"`
+			CVE         string `json:"cve"`
+			Link        string `json:"link"`
+			Severity    string `json:"severity"`
+			Sources     []struct {
+				RemoteID string `json:"remoteId"`
+			} `json:"sources"`
 		} `json:"advisories"`
 	}
 
@@ -310,19 +318,47 @@ func parseComposerAdvisoryCounts(jsonText string) map[string]int {
 		return nil
 	}
 
-	counts := make(map[string]int)
+	var findings []model.Finding
 
-	for _, advisories := range root.Advisories {
+	for pkg, advisories := range root.Advisories {
 		for _, advisory := range advisories {
-			severity := strings.ToLower(strings.TrimSpace(advisory.Severity))
-
-			if severity == "" {
-				severity = "medium"
+			severity := advisory.Severity
+			if strings.TrimSpace(severity) == "" {
+				severity = "moderate"
 			}
 
-			counts[severity]++
+			id := advisory.CVE
+			var aliases []string
+
+			if id == "" {
+				id = advisory.AdvisoryID
+			} else if advisory.AdvisoryID != "" {
+				aliases = append(aliases, advisory.AdvisoryID)
+			}
+
+			for _, source := range advisory.Sources {
+				if source.RemoteID != "" && source.RemoteID != id {
+					aliases = append(aliases, source.RemoteID)
+				}
+			}
+
+			name := advisory.PackageName
+			if name == "" {
+				name = pkg
+			}
+
+			findings = append(findings, model.Finding{
+				ID:       id,
+				Aliases:  aliases,
+				Severity: ecosystem.NormalizeSeverity(severity),
+				Package:  name,
+				URL:      advisory.Link,
+				Summary:  advisory.Title,
+			})
 		}
 	}
 
-	return counts
+	ecosystem.SortFindings(findings)
+
+	return findings
 }

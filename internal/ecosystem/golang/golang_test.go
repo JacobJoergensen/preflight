@@ -7,6 +7,37 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 )
 
+func TestParseGovulncheckFindings(t *testing.T) {
+	stream := `{"osv":{"id":"GO-2021-0001","aliases":["CVE-2021-1111"],"summary":"Bad bug"}}
+{"finding":{"osv":"GO-2021-0001","trace":[{"module":""}]}}
+{"finding":{"osv":"GO-2021-0001","fixed_version":"v1.2.3","trace":[{"module":"example.com/m","version":"v1.0.0"}]}}`
+
+	findings := parseGovulncheckFindings(stream)
+
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want 1", len(findings))
+	}
+
+	got := findings[0]
+
+	if got.ID != "GO-2021-0001" || got.Severity != "high" {
+		t.Errorf("id/severity = %q / %q", got.ID, got.Severity)
+	}
+
+	// The module-level record is preferred over the package-less one.
+	if got.Package != "example.com/m" || got.Version != "v1.0.0" || got.FixedIn != "v1.2.3" {
+		t.Errorf("package/version/fixedIn = %q / %q / %q", got.Package, got.Version, got.FixedIn)
+	}
+
+	if got.URL != "https://pkg.go.dev/vuln/GO-2021-0001" || got.Summary != "Bad bug" {
+		t.Errorf("url/summary = %q / %q", got.URL, got.Summary)
+	}
+
+	if !slices.Equal(got.Aliases, []string{"CVE-2021-1111"}) {
+		t.Errorf("aliases = %v, want [CVE-2021-1111]", got.Aliases)
+	}
+}
+
 func TestParseGoMod(t *testing.T) {
 	tests := []struct {
 		name        string

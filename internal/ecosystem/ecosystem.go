@@ -52,7 +52,7 @@ type Detection struct {
 
 type (
 	CheckFunc      func(ctx context.Context, rc RunContext, detection Detection) []model.Message
-	AuditParser    func(stdout string) map[string]int
+	AuditParser    func(stdout string) []model.Finding
 	OutdatedParser func(rc RunContext, stdout string) ([]OutdatedPackage, error)
 	SignalFunc     func(rc RunContext) []string
 )
@@ -121,7 +121,8 @@ type AuditResult struct {
 	ExitCode     int
 	OK           bool
 	SeverityRank int
-	Counts       map[string]int
+	Findings     []model.Finding
+	Manifest     string // lockfile or config file the audit ran against, for SARIF locations
 	Output       string
 	Err          error
 }

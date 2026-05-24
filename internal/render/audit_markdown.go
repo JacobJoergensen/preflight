@@ -3,10 +3,10 @@ package render
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 )
 
@@ -121,18 +121,11 @@ func writeMarkdownAuditTable(doc *strings.Builder, items []result.AuditItem) {
 		return
 	}
 
-	hasOther := auditItemsHaveOtherSeverities(items)
-
 	headers := []string{"Ecosystem", "Status"}
 	separators := []string{"---------", "------"}
 
 	for _, severity := range auditSeverityColumns {
 		headers = append(headers, capitalize(severity))
-		separators = append(separators, "---")
-	}
-
-	if hasOther {
-		headers = append(headers, "Other")
 		separators = append(separators, "---")
 	}
 
@@ -143,24 +136,20 @@ func writeMarkdownAuditTable(doc *strings.Builder, items []result.AuditItem) {
 	fmt.Fprintf(doc, "| %s |\n", strings.Join(separators, " | "))
 
 	for _, item := range items {
-		writeMarkdownAuditRow(doc, item, hasOther)
+		writeMarkdownAuditRow(doc, item)
 	}
 
 	doc.WriteString("\n")
 }
 
-func writeMarkdownAuditRow(doc *strings.Builder, item result.AuditItem, includeOther bool) {
-	row := []string{
-		escapeMarkdownCell(auditItemTitle(item)),
-		auditItemMarkdownStatus(item),
-	}
+func writeMarkdownAuditRow(doc *strings.Builder, item result.AuditItem) {
+	row := make([]string, 0, 2+len(auditSeverityColumns)+1)
+	row = append(row, escapeMarkdownCell(auditItemTitle(item)), auditItemMarkdownStatus(item))
+
+	counts := ecosystem.CountsBySeverity(item.Findings)
 
 	for _, severity := range auditSeverityColumns {
-		row = append(row, strconv.Itoa(item.Counts[severity]))
-	}
-
-	if includeOther {
-		row = append(row, formatOtherSeverities(item.Counts))
+		row = append(row, strconv.Itoa(counts[severity]))
 	}
 
 	tool := item.CommandLine
@@ -193,54 +182,6 @@ func auditItemMarkdownStatus(item result.AuditItem) string {
 	}
 
 	return "✓ PASS"
-}
-
-func auditItemsHaveOtherSeverities(items []result.AuditItem) bool {
-	known := make(map[string]struct{}, len(auditSeverityColumns))
-
-	for _, severity := range auditSeverityColumns {
-		known[severity] = struct{}{}
-	}
-
-	for _, item := range items {
-		for severity := range item.Counts {
-			if _, ok := known[severity]; !ok && item.Counts[severity] > 0 {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func formatOtherSeverities(counts map[string]int) string {
-	known := make(map[string]struct{}, len(auditSeverityColumns))
-
-	for _, severity := range auditSeverityColumns {
-		known[severity] = struct{}{}
-	}
-
-	var extras []string
-
-	for severity, count := range counts {
-		if _, ok := known[severity]; ok {
-			continue
-		}
-
-		if count == 0 {
-			continue
-		}
-
-		extras = append(extras, fmt.Sprintf("%s=%d", severity, count))
-	}
-
-	if len(extras) == 0 {
-		return "—"
-	}
-
-	sort.Strings(extras)
-
-	return "`" + strings.Join(extras, ", ") + "`"
 }
 
 func writeMarkdownAuditDetails(doc *strings.Builder, items []result.AuditItem) {
