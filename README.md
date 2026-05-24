@@ -209,7 +209,7 @@ These work with any command:
 | `--profile` | Use specific profile from `preflight.yml` |
 | `--quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
-| `--version`, `-v` | Print version, commit, build date, and platform |
+| `--version` | Print version, commit, build date, and platform |
 
 Color also turns off automatically when output is not a terminal (piped or redirected), and respects the `NO_COLOR` and `FORCE_COLOR` environment variables.
 

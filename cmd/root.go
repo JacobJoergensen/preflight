@@ -131,7 +131,7 @@ func configureLogging(debug bool) {
 }
 
 func printVersion(out *terminal.OutputWriter) {
-	version, commit, date := release.BuildInfo()
+	version, commit, date, dirty := release.BuildInfo()
 
 	if version == "" {
 		version = "dev"
@@ -145,7 +145,13 @@ func printVersion(out *terminal.OutputWriter) {
 	out.Printf("%spreflight%s %s\n", terminal.Bold, terminal.Reset, version)
 
 	if commit != "" {
-		out.Printf("  %scommit%s    %s\n", terminal.Dim, terminal.Reset, commit)
+		suffix := ""
+
+		if dirty {
+			suffix = " " + terminal.Yellow + "(dirty)" + terminal.Reset
+		}
+
+		out.Printf("  %scommit%s    %s%s\n", terminal.Dim, terminal.Reset, commit, suffix)
 	}
 
 	if built := formatBuildDate(date); built != "" {
