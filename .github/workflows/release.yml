@@ -59,6 +59,17 @@ jobs:
       - name: Generate npm packages
         run: node npm/generate.mjs "${{ github.ref_name }}"
 
+      - name: Determine npm dist-tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tag="latest"
+          if [ "$version" != "${version%%-*}" ]; then
+            pre="${version#*-}"
+            tag="${pre%%.*}"
+          fi
+          echo "NPM_DIST_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Publishing $version to npm dist-tag: $tag"
+
       - name: Publish platform packages
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -67,7 +78,7 @@ jobs:
             if [ -n "$(npm view "$name@$version" version 2>/dev/null || true)" ]; then
               echo "$name@$version already published, skipping"
             else
-              npm publish --provenance "$dir"
+              npm publish --provenance --tag "$NPM_DIST_TAG" "$dir"
             fi
           done
 
@@ -78,5 +89,5 @@ jobs:
           if [ -n "$(npm view "$name@$version" version 2>/dev/null || true)" ]; then
             echo "$name@$version already published, skipping"
           else
-            npm publish --provenance npm/dist/preflight
+            npm publish --provenance --tag "$NPM_DIST_TAG" npm/dist/preflight
           fi
