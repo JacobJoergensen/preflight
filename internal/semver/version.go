@@ -57,6 +57,16 @@ func ParseVersionPin(pin string) string {
 	return fmt.Sprintf("%d.%d.%d", parts.Major, parts.Minor, parts.Patch)
 }
 
+func MajorMinor(version string) string {
+	parts := strings.Split(version, ".")
+
+	if len(parts) < 2 {
+		return version
+	}
+
+	return parts[0] + "." + parts[1]
+}
+
 // MatchVersionConstraint supported operators: >=, >, <=, <, ^, ~, wildcards (*, x), OR (||), AND (space or comma), hyphen ranges
 func MatchVersionConstraint(installed, required string) bool {
 	required = strings.TrimSpace(required)
@@ -277,12 +287,8 @@ func matchTildeRange(installed, required string) bool {
 	}
 
 	if requiredParts.Patch != -1 {
-		if installedParts.Minor == requiredParts.Minor {
-			return installedParts.Patch >= requiredParts.Patch
-		}
-
-		// If minor is higher, any patch version is ok
-		return installedParts.Minor > requiredParts.Minor
+		// The minor guard above guarantees installed.Minor == required.Minor here.
+		return installedParts.Patch >= requiredParts.Patch
 	}
 
 	return true

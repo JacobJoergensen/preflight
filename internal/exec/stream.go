@@ -2,37 +2,24 @@ package exec
 
 import (
 	"context"
-	"fmt"
 	"io"
-	goexec "os/exec"
-
-	"github.com/JacobJoergensen/preflight/internal/manifest"
 )
 
 type DefaultStreamRunner struct{}
 
-func (DefaultStreamRunner) RunStreaming(ctx context.Context, name string, args []string, stdout, stderr io.Writer) error {
+func (DefaultStreamRunner) RunStreaming(ctx context.Context, name string, args []string, stdout, stderr io.Writer) (Result, error) {
 	return RunStreamingInDir(ctx, "", name, args, stdout, stderr)
 }
 
-func RunStreamingInDir(ctx context.Context, dir, name string, args []string, stdout, stderr io.Writer) error {
-	if _, known := manifest.GetTool(name); !known {
-		return fmt.Errorf("%w: %s", ErrCommandNotAllowed, name)
-	}
-
-	path, err := goexec.LookPath(name)
+func RunStreamingInDir(ctx context.Context, dir, name string, args []string, stdout, stderr io.Writer) (Result, error) {
+	result, err := run(ctx, dir, name, args, stdout, stderr)
 	if err != nil {
-		return fmt.Errorf("command not found: %s", name)
+		return result, err
 	}
 
-	// #nosec G204 - command validated against manifest.Tools registry
-	cmd := goexec.CommandContext(ctx, path, args...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-
-	if dir != "" {
-		cmd.Dir = dir
+	if result.ExitCode != 0 {
+		return result, commandError(name, args, result)
 	}
 
-	return cmd.Run()
+	return result, nil
 }

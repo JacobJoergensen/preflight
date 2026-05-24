@@ -4,14 +4,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 // CheckJSONSchemaVersion is bumped when preflight check --json output shape changes incompatibly.
-const CheckJSONSchemaVersion = 10
+const CheckJSONSchemaVersion = 11
 
 type JSONCheckRenderer struct {
 	Out io.Writer
@@ -23,28 +23,12 @@ type outdatedPackageJSON struct {
 	Latest  string `json:"latest"`
 }
 
-type checkReportJSON struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	StartedAt     time.Time          `json:"startedAt"`
-	EndedAt       time.Time          `json:"endedAt"`
-	Canceled      bool               `json:"canceled"`
-	Items         []checkItemJSON    `json:"items"`
-	Projects      []checkProjectJSON `json:"projects,omitempty"`
-}
-
-type checkProjectJSON struct {
-	RelativePath string `json:"relativePath"`
-	Name         string `json:"name,omitempty"`
-}
-
 type checkItemJSON struct {
 	Project        string                `json:"project,omitempty"`
 	ScopeID        string                `json:"scopeId"`
 	ScopeDisplay   string                `json:"scopeDisplay"`
 	Priority       int                   `json:"priority"`
-	Errors         []model.Message       `json:"errors,omitempty"`
-	Warnings       []model.Message       `json:"warnings,omitempty"`
-	Successes      []model.Message       `json:"successes,omitempty"`
+	Messages       []model.Message       `json:"messages,omitempty"`
 	StartedAt      *time.Time            `json:"startedAt,omitempty"`
 	EndedAt        *time.Time            `json:"endedAt,omitempty"`
 	ElapsedMillis  int64                 `json:"elapsedMillis,omitempty"`
@@ -67,33 +51,16 @@ func (r JSONCheckRenderer) Render(report result.CheckReport) error {
 		items = append(items, jsonItem)
 	}
 
-	payload := checkReportJSON{
+	payload := reportJSON[checkItemJSON]{
 		SchemaVersion: CheckJSONSchemaVersion,
 		StartedAt:     report.StartedAt,
 		EndedAt:       report.EndedAt,
 		Canceled:      report.Canceled,
 		Items:         items,
-		Projects:      checkProjectsToJSON(report.Projects),
+		Projects:      projectsToJSON(report.Projects),
 	}
 
 	return encodeJSON(r.Out, payload, true)
-}
-
-func checkProjectsToJSON(projects []result.CheckProject) []checkProjectJSON {
-	if len(projects) == 0 {
-		return nil
-	}
-
-	jsonProjects := make([]checkProjectJSON, len(projects))
-
-	for i, project := range projects {
-		jsonProjects[i] = checkProjectJSON{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		}
-	}
-
-	return jsonProjects
 }
 
 func checkItemToJSON(item result.CheckItem) checkItemJSON {
@@ -102,9 +69,7 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 		ScopeID:        item.ScopeID,
 		ScopeDisplay:   item.ScopeDisplay,
 		Priority:       item.Priority,
-		Errors:         cloneMessages(item.Errors),
-		Warnings:       cloneMessages(item.Warnings),
-		Successes:      cloneMessages(item.Successes),
+		Messages:       cloneMessages(item.Messages),
 		ElapsedMillis:  item.ElapsedMillis,
 		ProjectSignals: append([]string(nil), item.ProjectSignals...),
 		FixPMHint:      item.FixPMHint,
@@ -122,7 +87,7 @@ func checkItemToJSON(item result.CheckItem) checkItemJSON {
 	return jsonItem
 }
 
-func outdatedPackagesToJSON(pkgs []adapter.OutdatedPackage) []outdatedPackageJSON {
+func outdatedPackagesToJSON(pkgs []ecosystem.OutdatedPackage) []outdatedPackageJSON {
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -175,7 +140,7 @@ func quietCheckPayload(report result.CheckReport) any {
 	for _, item := range report.Items {
 		outdated := item.Outdated
 
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -189,8 +154,8 @@ func quietCheckPayload(report result.CheckReport) any {
 			Summary:         card.Summary,
 			ProjectSignals:  append([]string(nil), item.ProjectSignals...),
 			PrimaryNextStep: card.PrimaryNextStep,
-			Errors:          cloneMessages(item.Errors),
-			Warnings:        cloneMessages(item.Warnings),
+			Errors:          cloneMessages(item.Errors()),
+			Warnings:        cloneMessages(item.Warnings()),
 			Outdated:        outdatedPackagesToJSON(outdated),
 		})
 	}

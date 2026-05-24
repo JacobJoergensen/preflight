@@ -21,48 +21,43 @@ func TestSelect(t *testing.T) {
 			wantMode: ModeCheck,
 		},
 		{
-			name:      "cannot use both scopes and selectors",
-			input:     SelectInput{Scopes: []string{"js"}, Selectors: []string{"npm"}, Mode: ModeCheck},
-			wantError: true,
-		},
-		{
-			name:       "unknown scope returns error",
-			input:      SelectInput{Scopes: []string{"invalid"}, Mode: ModeCheck},
+			name:       "unknown token returns error",
+			input:      SelectInput{Only: []string{"invalid"}, Mode: ModeCheck},
 			wantError:  true,
-			errContain: "unknown scope",
+			errContain: "unknown ecosystem",
 		},
 		{
-			name:     "valid scope selects adapter",
-			input:    SelectInput{Scopes: []string{"js"}, Mode: ModeCheck},
+			name:     "ecosystem token selects adapter",
+			input:    SelectInput{Only: []string{"js"}, Mode: ModeCheck},
 			wantIDs:  []string{"js"},
 			wantMode: ModeCheck,
 		},
 		{
-			name:     "selector npm resolves to js adapter",
-			input:    SelectInput{Selectors: []string{"npm"}, Mode: ModeCheck},
+			name:     "tool token resolves to ecosystem adapter",
+			input:    SelectInput{Only: []string{"npm"}, Mode: ModeCheck},
 			wantIDs:  []string{"js"},
 			wantMode: ModeCheck,
 		},
 		{
-			name:     "fix mode with selector preserves selector",
-			input:    SelectInput{Selectors: []string{"yarn"}, Mode: ModeFix},
+			name:     "fix mode with tool token preserves selector",
+			input:    SelectInput{Only: []string{"yarn"}, Mode: ModeFix},
 			wantIDs:  []string{"js"},
 			wantMode: ModeFix,
 		},
 		{
-			name:       "fix mode with unknown selector returns error",
-			input:      SelectInput{Selectors: []string{"unknown"}, Mode: ModeFix},
+			name:       "fix mode with unknown token returns error",
+			input:      SelectInput{Only: []string{"unknown"}, Mode: ModeFix},
 			wantError:  true,
 			errContain: "unknown selector",
 		},
 		{
 			name:     "whitespace-only inputs treated as empty",
-			input:    SelectInput{Scopes: []string{"  ", ""}, Mode: ModeCheck},
+			input:    SelectInput{Only: []string{"  ", ""}, Mode: ModeCheck},
 			wantMode: ModeCheck,
 		},
 		{
 			name:     "input is case-insensitive",
-			input:    SelectInput{Scopes: []string{"JS"}, Mode: ModeCheck},
+			input:    SelectInput{Only: []string{"JS"}, Mode: ModeCheck},
 			wantIDs:  []string{"js"},
 			wantMode: ModeCheck,
 		},
@@ -92,8 +87,8 @@ func TestSelect(t *testing.T) {
 				t.Errorf("mode = %q, want %q", result.RequestedMode, tt.wantMode)
 			}
 
-			if tt.wantIDs != nil && !slices.Equal(result.AdapterIDs, tt.wantIDs) {
-				t.Errorf("adapterIDs = %v, want %v", result.AdapterIDs, tt.wantIDs)
+			if tt.wantIDs != nil && !slices.Equal(result.SpecIDs, tt.wantIDs) {
+				t.Errorf("specIDs = %v, want %v", result.SpecIDs, tt.wantIDs)
 			}
 		})
 	}

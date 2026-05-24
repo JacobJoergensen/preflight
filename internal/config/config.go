@@ -20,17 +20,23 @@ type File struct {
 }
 
 type Profile struct {
-	Check *Command      `yaml:"check,omitempty"`
-	Fix   *Command      `yaml:"fix,omitempty"`
-	List  *Command      `yaml:"list,omitempty"`
-	Audit *AuditCommand `yaml:"audit,omitempty"`
-	Run   *RunBlock     `yaml:"run,omitempty"`
+	Check    *Command         `yaml:"check,omitempty"`
+	Fix      *Command         `yaml:"fix,omitempty"`
+	Audit    *AuditCommand    `yaml:"audit,omitempty"`
+	Licenses *LicensesCommand `yaml:"licenses,omitempty"`
+	Run      *RunBlock        `yaml:"run,omitempty"`
+}
+
+type LicensesCommand struct {
+	Only  *[]string `yaml:"only,omitempty"`
+	Allow *[]string `yaml:"allow,omitempty"`
+	Deny  *[]string `yaml:"deny,omitempty"`
 }
 
 type AuditCommand struct {
-	Scope       *[]string `yaml:"scope,omitempty"`
-	PM          *[]string `yaml:"pm,omitempty"`
+	Only        *[]string `yaml:"only,omitempty"`
 	MinSeverity *string   `yaml:"minSeverity,omitempty"`
+	IgnoredCVEs *[]string `yaml:"ignoredCves,omitempty"`
 }
 
 type RunBlock struct {
@@ -38,8 +44,7 @@ type RunBlock struct {
 }
 
 type Command struct {
-	Scope   *[]string `yaml:"scope,omitempty"`
-	PM      *[]string `yaml:"pm,omitempty"`
+	Only    *[]string `yaml:"only,omitempty"`
 	WithEnv *bool     `yaml:"withEnv,omitempty"`
 }
 
@@ -94,30 +99,8 @@ func (f File) validate() error {
 }
 
 func (p Profile) validate(profileName string) error {
-	if p.Check != nil {
-		if err := p.Check.validate("check"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-	}
-
-	if p.Fix != nil {
-		if err := p.Fix.validate("fix"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-
-		if p.Fix.WithEnv != nil {
-			return fmt.Errorf("profiles.%s.fix: withEnv applies only to check", profileName)
-		}
-	}
-
-	if p.List != nil {
-		if err := p.List.validate("list"); err != nil {
-			return fmt.Errorf("profiles.%s.%w", profileName, err)
-		}
-
-		if p.List.WithEnv != nil {
-			return fmt.Errorf("profiles.%s.list: withEnv applies only to check", profileName)
-		}
+	if p.Fix != nil && p.Fix.WithEnv != nil {
+		return fmt.Errorf("profiles.%s.fix: withEnv applies only to check", profileName)
 	}
 
 	if p.Audit != nil {
@@ -192,23 +175,9 @@ func (s ScriptTarget) Validate() error {
 	}
 }
 
-func (c Command) validate(command string) error {
-	if c.Scope != nil && c.PM != nil {
-		return fmt.Errorf("%s: set only one of scope or pm", command)
-	}
-
-	return nil
-}
-
 func (a AuditCommand) validate() error {
-	if a.Scope != nil && a.PM != nil {
-		return errors.New("set only one of scope or pm")
-	}
-
-	if a.MinSeverity != nil {
-		if !isValidSeverity(*a.MinSeverity) {
-			return fmt.Errorf("invalid minSeverity %q (use: info, low, moderate, medium, high, critical)", *a.MinSeverity)
-		}
+	if a.MinSeverity != nil && !isValidSeverity(*a.MinSeverity) {
+		return fmt.Errorf("invalid minSeverity %q (use: info, low, moderate, medium, high, critical)", *a.MinSeverity)
 	}
 
 	return nil

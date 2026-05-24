@@ -1,76 +1,13 @@
 package run
 
 import (
-	"io/fs"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/config"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/fs"
 )
-
-type fakeFileInfo struct{}
-
-type fakeFS struct {
-	files map[string][]byte
-}
-
-func (fakeFileInfo) Name() string {
-	return ""
-}
-
-func (fakeFileInfo) Size() int64 {
-	return 0
-}
-
-func (fakeFileInfo) Mode() fs.FileMode {
-	return 0
-}
-
-func (fakeFileInfo) ModTime() time.Time {
-	return time.Time{}
-}
-
-func (fakeFileInfo) IsDir() bool {
-	return false
-}
-
-func (fakeFileInfo) Sys() any {
-	return nil
-}
-
-func (f fakeFS) ReadFile(name string) ([]byte, error) {
-	if data, ok := f.files[name]; ok {
-		return data, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f fakeFS) WriteFile(string, []byte, fs.FileMode) error {
-	return nil
-}
-
-func (f fakeFS) MkdirAll(string, fs.FileMode) error {
-	return nil
-}
-
-func (f fakeFS) RemoveAll(string) error {
-	return nil
-}
-
-func (f fakeFS) Stat(name string) (fs.FileInfo, error) {
-	if _, ok := f.files[name]; ok {
-		return fakeFileInfo{}, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f fakeFS) ReadDir(string) ([]fs.DirEntry, error) {
-	return nil, nil
-}
 
 func TestResolveScript(t *testing.T) {
 	tests := []struct {
@@ -163,12 +100,12 @@ func TestResolveScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			loader := manifest.Loader{
+			rc := ecosystem.RunContext{
 				WorkDir: "",
-				FS:      fakeFS{files: tt.files},
+				FS:      fs.NewMemFS(tt.files),
 			}
 
-			bin, args, err := ResolveScript(loader, tt.target)
+			bin, args, err := ResolveScript(rc, tt.target)
 
 			if tt.wantError {
 				if err == nil {

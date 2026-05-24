@@ -95,18 +95,12 @@ func markdownMonorepoFixStatus(report result.FixReport) (symbol, text string) {
 		return "⚠", "No package managers to fix"
 	}
 
-	projectsWithFailures := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if !item.Success {
-			projectsWithFailures[item.Project] = struct{}{}
-		}
-	}
+	failedProjects := countProjects(report.Items, func(i result.FixItem) (string, bool) { return i.Project, !i.Success })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithFailures) > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s reported failures", len(projectsWithFailures), totalProjects, pluralSuffix(totalProjects))
+	if failedProjects > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s reported failures", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return "✓", fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))

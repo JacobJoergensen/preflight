@@ -2,7 +2,6 @@ package render
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
@@ -58,32 +57,25 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 
 	card.Signals = append(card.Signals, item.ProjectSignals...)
 
-	for _, msg := range item.Successes {
-		switch {
-		case msg.Nested:
-			switch {
-			case msg.Optional && msg.Info:
-				card.DepOptionalInfo = append(card.DepOptionalInfo, msg)
-			case msg.Optional:
-				card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
-			case msg.Dev:
-				card.DepDevSuccess = append(card.DepDevSuccess, msg)
-			default:
-				card.DepSuccess = append(card.DepSuccess, msg)
-			}
-		case isProjectSignalLine(msg.Text):
-			// Structured ProjectSignals from the engine supersede legacy adapter "*found:" echoes
-			if len(item.ProjectSignals) > 0 {
-				continue
-			}
-
-			card.Signals = appendUniqueSignal(card.Signals, msg.Text)
-		default:
+	for _, msg := range item.Successes() {
+		if !msg.Nested {
 			card.Toolchain = append(card.Toolchain, msg.Text)
+			continue
+		}
+
+		switch {
+		case msg.Optional && msg.Info:
+			card.DepOptionalInfo = append(card.DepOptionalInfo, msg)
+		case msg.Optional:
+			card.DepOptionalSuccess = append(card.DepOptionalSuccess, msg)
+		case msg.Dev:
+			card.DepDevSuccess = append(card.DepDevSuccess, msg)
+		default:
+			card.DepSuccess = append(card.DepSuccess, msg)
 		}
 	}
 
-	for _, msg := range item.Warnings {
+	for _, msg := range item.Warnings() {
 		if msg.Nested {
 			switch {
 			case msg.Optional:
@@ -98,7 +90,7 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 		}
 	}
 
-	for _, msg := range item.Errors {
+	for _, msg := range item.Errors() {
 		if msg.Nested {
 			if msg.Dev {
 				card.DepDevErrors = append(card.DepDevErrors, msg)
@@ -119,13 +111,13 @@ func BuildHealthCard(item result.CheckItem) HealthCard {
 }
 
 func deriveBlockers(item result.CheckItem) []string {
-	if len(item.Errors) == 0 {
+	if len(item.Errors()) == 0 {
 		return nil
 	}
 
-	blockers := make([]string, 0, len(item.Errors))
+	blockers := make([]string, 0, len(item.Errors()))
 
-	for _, msg := range item.Errors {
+	for _, msg := range item.Errors() {
 		text := strings.TrimSpace(msg.Text)
 
 		if text != "" {
@@ -134,14 +126,6 @@ func deriveBlockers(item result.CheckItem) []string {
 	}
 
 	return blockers
-}
-
-func appendUniqueSignal(signals []string, line string) []string {
-	if slices.Contains(signals, line) {
-		return signals
-	}
-
-	return append(signals, line)
 }
 
 func buildSummary(item result.CheckItem, card *HealthCard) string {
@@ -178,7 +162,7 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 	}
 
 	if flatErr > 0 {
-		parts = append(parts, fmt.Sprintf("%d configuration or environment error%s", flatErr, pluralS(flatErr)))
+		parts = append(parts, fmt.Sprintf("%d configuration or environment error%s", flatErr, pluralSuffix(flatErr)))
 	}
 
 	if len(parts) == 0 {
@@ -196,16 +180,8 @@ func dependencySummaryPhrase(count int) string {
 	return fmt.Sprintf("%d missing or invalid dependencies", count)
 }
 
-func pluralS(count int) string {
-	if count == 1 {
-		return ""
-	}
-
-	return "s"
-}
-
 func toolchainMismatchHint(item result.CheckItem) bool {
-	for _, msg := range item.Warnings {
+	for _, msg := range item.Warnings() {
 		if msg.Nested {
 			continue
 		}
@@ -237,29 +213,15 @@ func buildPrimaryNextStep(item result.CheckItem, card *HealthCard) string {
 }
 
 func healthStatusFromItem(item result.CheckItem) HealthStatus {
-	if len(item.Errors) > 0 {
+	if len(item.Errors()) > 0 {
 		return HealthFail
 	}
 
-	if len(item.Warnings) > 0 {
+	if len(item.Warnings()) > 0 {
 		return HealthWarn
 	}
 
 	return HealthOK
-}
-
-func isProjectSignalLine(text string) bool {
-	trimmed := strings.TrimSpace(text)
-
-	if trimmed == "" {
-		return false
-	}
-
-	if strings.HasSuffix(trimmed, "found:") {
-		return true
-	}
-
-	return strings.Contains(trimmed, ".json found") || strings.Contains(trimmed, "go.mod found")
 }
 
 func extractSuggestedActions(item result.CheckItem) []string {
@@ -279,45 +241,28 @@ func extractSuggestedActions(item result.CheckItem) []string {
 		actions = append(actions, cmd)
 	}
 
-	tryExtract := func(msg model.Message) {
-		for _, line := range extractRunCommands(msg.Text) {
-			add(line)
-		}
+	// Buckets are tried in priority order; add() dedups, so earlier buckets win.
+	buckets := []struct {
+		messages []model.Message
+		match    func(model.Message) bool
+	}{
+		{item.Errors(), func(m model.Message) bool { return !m.Nested }},
+		{item.Errors(), func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Errors(), func(m model.Message) bool { return m.Nested && m.Dev }},
+		{item.Warnings(), func(m model.Message) bool { return !m.Nested }},
+		{item.Warnings(), func(m model.Message) bool { return m.Nested && !m.Dev }},
+		{item.Warnings(), func(m model.Message) bool { return m.Nested && m.Dev }},
 	}
 
-	for _, msg := range item.Errors {
-		if !msg.Nested {
-			tryExtract(msg)
-		}
-	}
+	for _, bucket := range buckets {
+		for _, msg := range bucket.messages {
+			if !bucket.match(msg) {
+				continue
+			}
 
-	for _, msg := range item.Errors {
-		if msg.Nested && !msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Errors {
-		if msg.Nested && msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if !msg.Nested {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if msg.Nested && !msg.Dev {
-			tryExtract(msg)
-		}
-	}
-
-	for _, msg := range item.Warnings {
-		if msg.Nested && msg.Dev {
-			tryExtract(msg)
+			for _, line := range extractRunCommands(msg.Text) {
+				add(line)
+			}
 		}
 	}
 

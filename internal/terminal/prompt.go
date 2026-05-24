@@ -44,39 +44,68 @@ type ConfirmOptions struct {
 const maxPromptAttempts = 3
 
 func Confirm(in io.Reader, out io.Writer, question, hint string, opts ConfirmOptions) (Answer, error) {
+	return prompt(in, out,
+		func() error { return writePrompt(out, question, hint, opts) },
+		func(line string) (Answer, bool) { return parseAnswer(line, opts) },
+		AnswerYes,
+		promptInvalidMessage(opts),
+	)
+}
+
+func prompt[T any](in io.Reader, out io.Writer, render func() error, parse func(string) (T, bool), onEOF T, invalidMessage string) (T, error) {
+	var zero T
+
 	if in == nil || out == nil {
-		return 0, errors.New("terminal: Confirm requires non-nil reader and writer")
+		return zero, errors.New("terminal: prompt requires non-nil reader and writer")
 	}
 
 	reader := bufio.NewReader(in)
 
 	for range maxPromptAttempts {
-		if err := writePrompt(out, question, hint, opts); err != nil {
-			return 0, err
+		if err := render(); err != nil {
+			return zero, err
 		}
 
 		line, err := reader.ReadString('\n')
 
 		if err != nil && (!errors.Is(err, io.EOF) || line == "") {
 			if errors.Is(err, io.EOF) {
-				return AnswerYes, nil
+				return onEOF, nil
 			}
 
-			return 0, fmt.Errorf("read prompt response: %w", err)
+			return zero, fmt.Errorf("read prompt response: %w", err)
 		}
 
-		answer, ok := parseAnswer(line, opts)
-
-		if ok {
-			return answer, nil
+		if value, ok := parse(line); ok {
+			return value, nil
 		}
 
-		if _, err := fmt.Fprintln(out, Dim+"  "+promptInvalidMessage(opts)+Reset); err != nil {
-			return 0, err
+		if _, err := fmt.Fprintln(out, Dim+"  "+invalidMessage+Reset); err != nil {
+			return zero, err
 		}
 	}
 
-	return 0, errors.New("terminal: too many invalid responses")
+	return zero, errors.New("terminal: too many invalid responses")
+}
+
+func Ask(in io.Reader, out io.Writer, question string) (bool, error) {
+	render := func() error {
+		_, err := fmt.Fprint(out, "  "+Cyan+"?"+Reset+" "+Bold+question+Reset+" "+Dim+"[y/N]"+Reset+" ")
+		return err
+	}
+
+	parse := func(line string) (bool, bool) {
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "y", "yes":
+			return true, true
+		case "", "n", "no":
+			return false, true
+		default:
+			return false, false
+		}
+	}
+
+	return prompt(in, out, render, parse, false, "Please answer y or n.")
 }
 
 func IsInteractiveTTY(f *os.File) bool {
@@ -90,6 +119,10 @@ func IsInteractiveTTY(f *os.File) bool {
 	}
 
 	return info.Mode()&gofs.ModeCharDevice != 0
+}
+
+func IsInteractive() bool {
+	return IsInteractiveTTY(os.Stdin) && IsInteractiveTTY(os.Stdout)
 }
 
 func writePrompt(out io.Writer, question, hint string, opts ConfirmOptions) error {

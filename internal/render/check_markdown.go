@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
@@ -76,8 +76,8 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 	var totalErrors, totalWarnings int
 
 	for _, item := range report.Items {
-		totalErrors += len(item.Errors)
-		totalWarnings += len(item.Warnings)
+		totalErrors += len(item.Errors())
+		totalWarnings += len(item.Warnings())
 	}
 
 	switch {
@@ -91,27 +91,17 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 }
 
 func markdownMonorepoCheckStatus(report result.CheckReport) (symbol, text string) {
-	projectsWithErrors := make(map[string]struct{})
-	projectsWithWarnings := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if len(item.Errors) > 0 {
-			projectsWithErrors[item.Project] = struct{}{}
-		}
-
-		if len(item.Warnings) > 0 {
-			projectsWithWarnings[item.Project] = struct{}{}
-		}
-	}
+	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors()) > 0 })
+	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings()) > 0 })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithErrors) > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s reported errors", len(projectsWithErrors), totalProjects, pluralSuffix(totalProjects))
+	if errorProjects > 0 {
+		return "✗", fmt.Sprintf("%d of %d project%s reported errors", errorProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	if len(projectsWithWarnings) > 0 {
-		return "⚠", fmt.Sprintf("%d of %d project%s reported warnings", len(projectsWithWarnings), totalProjects, pluralSuffix(totalProjects))
+	if warningProjects > 0 {
+		return "⚠", fmt.Sprintf("%d of %d project%s reported warnings", warningProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	return "✓", fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))
@@ -129,8 +119,8 @@ func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
 		fmt.Fprintf(doc, "| %s | %s | %d | %d | %d |\n",
 			escapeMarkdownCell(item.ScopeDisplay),
 			checkItemStatus(item),
-			len(item.Errors),
-			len(item.Warnings),
+			len(item.Errors()),
+			len(item.Warnings()),
 			len(item.Outdated),
 		)
 	}
@@ -140,9 +130,9 @@ func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
 
 func checkItemStatus(item result.CheckItem) string {
 	switch {
-	case len(item.Errors) > 0:
+	case len(item.Errors()) > 0:
 		return "✗ FAIL"
-	case len(item.Warnings) > 0:
+	case len(item.Warnings()) > 0:
 		return "⚠ WARN"
 	}
 
@@ -153,7 +143,7 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 	hasIssues := false
 
 	for _, item := range items {
-		if len(item.Errors) > 0 || len(item.Warnings) > 0 {
+		if len(item.Errors()) > 0 || len(item.Warnings()) > 0 {
 			hasIssues = true
 			break
 		}
@@ -166,14 +156,14 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 	doc.WriteString("#### Issues\n\n")
 
 	for _, item := range items {
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 {
 			continue
 		}
 
 		fmt.Fprintf(doc, "**%s**\n\n", escapeMarkdownCell(item.ScopeDisplay))
 
-		writeMarkdownMessageList(doc, item.Errors, "✗")
-		writeMarkdownMessageList(doc, item.Warnings, "⚠")
+		writeMarkdownMessageList(doc, item.Errors(), "✗")
+		writeMarkdownMessageList(doc, item.Warnings(), "⚠")
 
 		doc.WriteString("\n")
 	}
@@ -216,7 +206,7 @@ func writeMarkdownCheckOutdated(doc *strings.Builder, items []result.CheckItem) 
 	}
 }
 
-func writeMarkdownOutdatedLine(doc *strings.Builder, pkg adapter.OutdatedPackage) {
+func writeMarkdownOutdatedLine(doc *strings.Builder, pkg ecosystem.OutdatedPackage) {
 	fmt.Fprintf(doc, "- `%s` `%s` → `%s`\n",
 		escapeMarkdownCell(pkg.Name),
 		pkg.Current,

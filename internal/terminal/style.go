@@ -18,7 +18,7 @@ var (
 	Lightning   = "⚡"
 )
 
-func DisableColor() {
+func disableColor() {
 	Bold = ""
 	Dim = ""
 	Reset = ""

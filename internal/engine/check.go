@@ -3,89 +3,54 @@ package engine
 import (
 	"cmp"
 	"context"
-	"fmt"
-	"slices"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-type CheckProgress interface {
-	Plan(total int)
-	Start(scopeID, displayName string)
-	Finish(scopeID string, included bool)
-	Close()
-}
-
-type NoopCheckProgress struct{}
-
-func (NoopCheckProgress) Plan(int)             {}
-func (NoopCheckProgress) Start(string, string) {}
-func (NoopCheckProgress) Finish(string, bool)  {}
-func (NoopCheckProgress) Close()               {}
-
 func (r Runner) Check(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.CheckReport, error) {
 	if progress == nil {
-		progress = NoopCheckProgress{}
+		progress = NoopScanProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.CheckReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
-
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.CheckReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.checkMonorepo(ctx, projects, scopes, selectors, withEnv, outdated, progress)
-		}
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.CheckReport{}, err
 	}
 
-	return r.checkProject(ctx, r.WorkDir, "", scopes, selectors, withEnv, outdated, progress)
+	if len(projects) > 0 {
+		return r.checkMonorepo(ctx, projects, only, withEnv, outdated, progress)
+	}
+
+	return r.checkProject(ctx, r.WorkDir, "", only, withEnv, outdated, progress)
 }
 
 func (r Runner) checkMonorepo(
 	ctx context.Context,
 	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 ) (result.CheckReport, error) {
 	startedAt := time.Now()
 
-	var allItems []result.CheckItem
-
-	projectSummaries := make([]result.CheckProject, 0, len(projects))
-
-	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.CheckProject{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		})
-
-		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, withEnv, outdated, progress)
-		if err != nil {
-			return result.CheckReport{}, err
-		}
-
-		allItems = append(allItems, projectReport.Items...)
+	allItems, projectSummaries, err := aggregateProjects(projects, func(project monorepo.Project) ([]result.CheckItem, error) {
+		projectReport, err := r.checkProject(ctx, project.AbsolutePath, project.RelativePath, only, withEnv, outdated, progress)
+		return projectReport.Items, err
+	})
+	if err != nil {
+		return result.CheckReport{}, err
 	}
 
 	return result.CheckReport{
@@ -101,35 +66,34 @@ func (r Runner) checkProject(
 	ctx context.Context,
 	workDir string,
 	projectPath string,
-	scopes []string,
-	selectors []string,
+	only []string,
 	withEnv bool,
 	outdated bool,
-	progress CheckProgress,
+	progress ScanProgress,
 ) (result.CheckReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeCheck})
+	selection, err := Select(SelectInput{Only: only, Mode: ModeCheck})
 	if err != nil {
 		return result.CheckReport{}, err
 	}
 
-	deps := r.depsForDir(workDir)
+	rc := r.runContextForDir(workDir)
 
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, rc); err != nil {
 		return result.CheckReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+	specs := filterComposerUnlessExplicit(selection.Specs, rc, only)
 
-	if isImplicitFullSelection(scopes, selectors) {
-		adapters = withoutAdapter(adapters, "env")
+	if isImplicitFullSelection(only) {
+		specs = withoutSpec(specs, "env")
 	}
 
-	adapters = appendEnvIfRequested(adapters, withEnv, scopes, selectors)
+	specs = appendEnvIfRequested(specs, withEnv, only)
 
-	report := runChecks(ctx, adapters, deps, progress)
+	report := runChecks(ctx, specs, rc, progress)
 
 	if outdated {
-		attachOutdatedPackages(ctx, adapters, deps, report.Items)
+		attachOutdatedPackages(ctx, specs, rc, report.Items)
 	}
 
 	if projectPath != "" {
@@ -141,77 +105,67 @@ func (r Runner) checkProject(
 	return report, nil
 }
 
-func runChecks(ctx context.Context, modules []adapter.Adapter, deps adapter.Dependencies, progress CheckProgress) result.CheckReport {
-	startedAt := time.Now()
+func runChecks(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.CheckReport {
+	run := runScopes(ctx, specs, rc, progress,
+		func(ctx context.Context, spec *ecosystem.Spec, detection ecosystem.Detection) (result.CheckItem, bool) {
+			startedAt := time.Now()
+			messages := spec.RunCheck(ctx, rc, detection)
+			endedAt := time.Now()
 
-	progress.Plan(len(modules))
+			if len(messages) == 0 {
+				return result.CheckItem{}, false
+			}
 
-	items := runParallel(ctx, modules, func(ctx context.Context, m adapter.Adapter) (result.CheckItem, bool) {
-		scopeID := m.Name()
-
-		progress.Start(scopeID, adapter.DisplayName(m))
-
-		var included bool
-		defer func() { progress.Finish(scopeID, included) }()
-
-		itemStartedAt := time.Now()
-		errors, warnings, successes := m.Check(ctx, deps)
-		itemEndedAt := time.Now()
-
-		if len(errors) == 0 && len(warnings) == 0 && len(successes) == 0 {
-			return result.CheckItem{}, false
-		}
-
-		included = true
-
-		return result.CheckItem{
-			ScopeID:        m.Name(),
-			ScopeDisplay:   adapter.DisplayName(m),
-			Priority:       adapter.GetPriority(m.Name()),
-			Errors:         errors,
-			Warnings:       warnings,
-			Successes:      successes,
-			StartedAt:      itemStartedAt,
-			EndedAt:        itemEndedAt,
-			ElapsedMillis:  itemEndedAt.Sub(itemStartedAt).Milliseconds(),
-			ProjectSignals: adapter.ProjectSignals(m.Name(), deps.Loader),
-			FixPMHint:      adapter.FixPMHint(m.Name(), deps.Loader),
-		}, true
-	})
-
-	slices.SortFunc(items, func(a, b result.CheckItem) int {
-		return cmp.Compare(a.Priority, b.Priority)
-	})
+			return result.CheckItem{
+				ScopeID:        spec.Name,
+				ScopeDisplay:   spec.Title(),
+				Priority:       spec.Priority,
+				Messages:       messages,
+				StartedAt:      startedAt,
+				EndedAt:        endedAt,
+				ElapsedMillis:  endedAt.Sub(startedAt).Milliseconds(),
+				ProjectSignals: spec.Signals(rc, detection),
+				FixPMHint:      spec.FixPMHint(detection),
+			}, true
+		},
+		func(a, b result.CheckItem) int {
+			return cmp.Compare(a.Priority, b.Priority)
+		},
+	)
 
 	return result.CheckReport{
-		StartedAt: startedAt,
-		EndedAt:   time.Now(),
-		Canceled:  ctx.Err() != nil,
-		Items:     items,
+		StartedAt: run.StartedAt,
+		EndedAt:   run.EndedAt,
+		Canceled:  run.Canceled,
+		Items:     run.Items,
 	}
 }
 
-func attachOutdatedPackages(ctx context.Context, adapters []adapter.Adapter, deps adapter.Dependencies, items []result.CheckItem) {
+func attachOutdatedPackages(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, items []result.CheckItem) {
 	itemByScopeID := make(map[string]int, len(items))
 
 	for i, item := range items {
 		itemByScopeID[item.ScopeID] = i
 	}
 
-	for _, a := range adapters {
-		outdatedLister, ok := a.(adapter.OutdatedLister)
+	for _, spec := range specs {
+		if !spec.CanOutdated() {
+			continue
+		}
+
+		detection, ok := spec.Resolve(rc)
 
 		if !ok {
 			continue
 		}
 
-		packages, err := outdatedLister.ListOutdated(ctx, deps)
+		packages, err := spec.RunOutdated(ctx, rc, detection)
 
 		if err != nil || len(packages) == 0 {
 			continue
 		}
 
-		if idx, ok := itemByScopeID[a.Name()]; ok {
+		if idx, ok := itemByScopeID[spec.Name]; ok {
 			items[idx].Outdated = packages
 		}
 	}

@@ -10,5 +10,4 @@ type FS interface {
 	MkdirAll(path string, perm fs.FileMode) error
 	Stat(name string) (fs.FileInfo, error)
 	ReadDir(name string) ([]fs.DirEntry, error)
-	RemoveAll(path string) error
 }

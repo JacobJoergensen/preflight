@@ -101,8 +101,13 @@ func TestValidatePreCommitPath(t *testing.T) {
 		errContain string
 	}{
 		{
-			name:      "valid path",
+			name:      "valid .git path",
 			path:      "/project/.git/hooks/pre-commit",
+			wantError: false,
+		},
+		{
+			name:      "valid core.hooksPath dir",
+			path:      "/project/.husky/pre-commit",
 			wantError: false,
 		},
 		{
@@ -110,18 +115,6 @@ func TestValidatePreCommitPath(t *testing.T) {
 			path:       "/project/.git/hooks/post-commit",
 			wantError:  true,
 			errContain: "must end with",
-		},
-		{
-			name:       "not under hooks dir",
-			path:       "/project/.git/pre-commit",
-			wantError:  true,
-			errContain: "must live under",
-		},
-		{
-			name:       "not under .git dir",
-			path:       "/project/hooks/pre-commit",
-			wantError:  true,
-			errContain: "must live under",
 		},
 	}
 

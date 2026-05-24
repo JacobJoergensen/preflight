@@ -4,33 +4,33 @@ import (
 	"io"
 	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-const AuditJSONSchemaVersion = 2
+const AuditJSONSchemaVersion = 3
 
 type JSONAuditRenderer struct {
 	Out io.Writer
 }
 
-type auditReportJSON struct {
-	Canceled      bool               `json:"canceled"`
-	EndedAt       time.Time          `json:"endedAt"`
-	Items         []auditItemJSON    `json:"items"`
-	Projects      []auditProjectJSON `json:"projects,omitempty"`
-	SchemaVersion int                `json:"schemaVersion"`
-	StartedAt     time.Time          `json:"startedAt"`
-}
-
-type auditProjectJSON struct {
-	Name         string `json:"name,omitempty"`
-	RelativePath string `json:"relativePath"`
+type findingJSON struct {
+	ID       string   `json:"id,omitempty"`
+	Aliases  []string `json:"aliases,omitempty"`
+	Severity string   `json:"severity"`
+	Package  string   `json:"package,omitempty"`
+	Version  string   `json:"version,omitempty"`
+	FixedIn  string   `json:"fixedIn,omitempty"`
+	URL      string   `json:"url,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
 }
 
 type auditItemJSON struct {
 	CommandLine   string         `json:"commandLine,omitempty"`
 	Counts        map[string]int `json:"counts,omitempty"`
+	Findings      []findingJSON  `json:"findings,omitempty"`
 	ElapsedMillis int64          `json:"elapsedMillis,omitempty"`
 	EndedAt       *time.Time     `json:"endedAt,omitempty"`
 	Err           string         `json:"error,omitempty"`
@@ -56,39 +56,23 @@ func (r JSONAuditRenderer) Render(report result.AuditReport) error {
 		items = append(items, auditItemToJSON(item))
 	}
 
-	payload := auditReportJSON{
-		Canceled:      report.Canceled,
-		EndedAt:       report.EndedAt,
-		Items:         items,
-		Projects:      auditProjectsToJSON(report.Projects),
+	payload := reportJSON[auditItemJSON]{
 		SchemaVersion: AuditJSONSchemaVersion,
 		StartedAt:     report.StartedAt,
+		EndedAt:       report.EndedAt,
+		Canceled:      report.Canceled,
+		Items:         items,
+		Projects:      projectsToJSON(report.Projects),
 	}
 
 	return encodeJSON(r.Out, payload, true)
 }
 
-func auditProjectsToJSON(projects []result.AuditProject) []auditProjectJSON {
-	if len(projects) == 0 {
-		return nil
-	}
-
-	jsonProjects := make([]auditProjectJSON, len(projects))
-
-	for i, project := range projects {
-		jsonProjects[i] = auditProjectJSON{
-			Name:         project.Name,
-			RelativePath: project.RelativePath,
-		}
-	}
-
-	return jsonProjects
-}
-
 func auditItemToJSON(item result.AuditItem) auditItemJSON {
 	jsonItem := auditItemJSON{
 		CommandLine:   item.CommandLine,
-		Counts:        item.Counts,
+		Counts:        ecosystem.CountsBySeverity(item.Findings),
+		Findings:      findingsToJSON(item.Findings),
 		ElapsedMillis: item.ElapsedMillis,
 		Err:           item.ErrText,
 		ExitCode:      item.ExitCode,
@@ -110,6 +94,29 @@ func auditItemToJSON(item result.AuditItem) auditItemJSON {
 	}
 
 	return jsonItem
+}
+
+func findingsToJSON(findings []model.Finding) []findingJSON {
+	if len(findings) == 0 {
+		return nil
+	}
+
+	out := make([]findingJSON, 0, len(findings))
+
+	for _, finding := range findings {
+		out = append(out, findingJSON{
+			ID:       finding.ID,
+			Aliases:  finding.Aliases,
+			Severity: ecosystem.NormalizeSeverity(finding.Severity),
+			Package:  finding.Package,
+			Version:  finding.Version,
+			FixedIn:  finding.FixedIn,
+			URL:      finding.URL,
+			Summary:  finding.Summary,
+		})
+	}
+
+	return out
 }
 
 func quietAuditPayload(report result.AuditReport) any {

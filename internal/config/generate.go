@@ -6,8 +6,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/fs"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
 )
 
 const headerComment = `# PreFlight — https://github.com/JacobJoergensen/preflight
@@ -29,18 +29,26 @@ const headerComment = `# PreFlight — https://github.com/JacobJoergensen/prefli
 `
 
 func Generate(workDir string, filesystem fs.FS) ([]byte, error) {
-	loader := manifest.NewLoader(workDir)
-	loader.FS = filesystem
+	rc := ecosystem.RunContext{WorkDir: workDir, FS: filesystem}
+
+	specs, err := ecosystem.Select()
+	if err != nil {
+		return nil, fmt.Errorf("list ecosystems: %w", err)
+	}
 
 	var scopes []string
 
-	for _, packageType := range []string{manifest.PackageTypeComposer, manifest.PackageTypeJS, manifest.PackageTypeGo, manifest.PackageTypeRust, manifest.PackageTypePython, manifest.PackageTypeRuby} {
-		if _, ok := loader.DetectPackageManager(packageType); ok {
-			scopes = append(scopes, packageType)
+	for _, spec := range specs {
+		if !spec.CanFix() {
+			continue
+		}
+
+		if _, ok := spec.Resolve(rc); ok {
+			scopes = append(scopes, spec.Name)
 		}
 	}
 
-	withEnv := loader.FileExists(".env.example")
+	withEnv := rc.FileExists(".env.example")
 
 	config := File{
 		Version: SchemaVersion,
@@ -68,13 +76,11 @@ func buildProfile(scopes []string, withEnv bool) Profile {
 	var profile Profile
 
 	if len(scopes) > 0 {
-		profile.Check = &Command{Scope: new(append([]string(nil), scopes...))}
-		profile.Fix = &Command{Scope: new(append([]string(nil), scopes...))}
-		profile.List = &Command{Scope: new(append([]string(nil), scopes...))}
+		profile.Check = &Command{Only: new(append([]string(nil), scopes...))}
+		profile.Fix = &Command{Only: new(append([]string(nil), scopes...))}
 	} else {
 		profile.Check = &Command{}
 		profile.Fix = &Command{}
-		profile.List = &Command{}
 	}
 
 	if withEnv {

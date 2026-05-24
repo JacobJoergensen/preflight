@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
@@ -42,7 +42,7 @@ func (r TTYCheckRenderer) Render(report result.CheckReport) error {
 
 func renderCheckItemsGroupedByProject(ow *terminal.OutputWriter, report result.CheckReport) {
 	renderByProject(ow, report.Projects, report.Items,
-		func(p result.CheckProject) string { return p.RelativePath },
+		func(p result.Project) string { return p.RelativePath },
 		func(i result.CheckItem) string { return i.Project },
 		renderProjectHeader,
 		func(ow *terminal.OutputWriter, item result.CheckItem) {
@@ -52,7 +52,7 @@ func renderCheckItemsGroupedByProject(ow *terminal.OutputWriter, report result.C
 	)
 }
 
-func renderProjectHeader(ow *terminal.OutputWriter, project result.CheckProject) {
+func renderProjectHeader(ow *terminal.OutputWriter, project result.Project) {
 	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
 
 	if project.Name != "" {
@@ -62,7 +62,7 @@ func renderProjectHeader(ow *terminal.OutputWriter, project result.CheckProject)
 	ow.Println(line)
 }
 
-func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []adapter.OutdatedPackage) {
+func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []ecosystem.OutdatedPackage) {
 	ow.PrintNewLines(1)
 
 	badge := healthBadgeTTY(card.Status)
@@ -121,21 +121,21 @@ func renderHealthCardTTY(ow *terminal.OutputWriter, card HealthCard, outdated []
 	if hasProdDeps || hasDevDeps || hasOptionalDeps {
 		if hasProdDeps {
 			printSection("Dependencies")
-			printDepsWithOutdated(ow, card.DepSuccess, outdatedByName)
+			printDepSuccesses(ow, card.DepSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepWarnings, terminal.Yellow, terminal.WarningSign, "dependency warnings")
 			printMessagesUniformCapped(ow, card.DepErrors, terminal.Red, terminal.CrossMark, "dependency errors")
 		}
 
 		if hasDevDeps {
 			printSection("Dev dependencies")
-			printDepsWithOutdated(ow, card.DepDevSuccess, outdatedByName)
+			printDepSuccesses(ow, card.DepDevSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepDevWarnings, terminal.Yellow, terminal.WarningSign, "dev dependency warnings")
 			printMessagesUniformCapped(ow, card.DepDevErrors, terminal.Red, terminal.CrossMark, "dev dependency errors")
 		}
 
 		if hasOptionalDeps {
 			printSection("Optional dependencies")
-			printDepsWithOutdated(ow, card.DepOptionalSuccess, outdatedByName)
+			printDepSuccesses(ow, card.DepOptionalSuccess, outdatedByName)
 			printMessagesUniformCapped(ow, card.DepOptionalWarnings, terminal.Yellow, terminal.WarningSign, "optional dependency warnings")
 			printOptionalInfoLines(ow, card.DepOptionalInfo)
 		}
@@ -173,7 +173,7 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 	for _, item := range report.Items {
 		outdated := item.Outdated
 
-		if len(item.Errors) == 0 && len(item.Warnings) == 0 && len(outdated) == 0 {
+		if len(item.Errors()) == 0 && len(item.Warnings()) == 0 && len(outdated) == 0 {
 			continue
 		}
 
@@ -232,14 +232,18 @@ func renderCheckQuiet(ow *terminal.OutputWriter, report result.CheckReport) erro
 	return nil
 }
 
-func printOutdatedLinesQuietTTY(ow *terminal.OutputWriter, outdated []adapter.OutdatedPackage) {
+func printOutdatedRow(ow *terminal.OutputWriter, pkg ecosystem.OutdatedPackage) {
+	ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
+		terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
+		pkg.Name,
+		terminal.Dim, pkg.Current, terminal.Reset,
+		terminal.Green, pkg.Latest, terminal.Reset,
+	)
+}
+
+func printOutdatedLinesQuietTTY(ow *terminal.OutputWriter, outdated []ecosystem.OutdatedPackage) {
 	for _, pkg := range outdated {
-		ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
-			terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
-			pkg.Name,
-			terminal.Dim, pkg.Current, terminal.Reset,
-			terminal.Green, pkg.Latest, terminal.Reset,
-		)
+		printOutdatedRow(ow, pkg)
 	}
 }
 
@@ -269,12 +273,12 @@ func printMessagesUniform(ow *terminal.OutputWriter, messages []model.Message, c
 	}
 }
 
-func buildOutdatedMap(packages []adapter.OutdatedPackage) map[string]adapter.OutdatedPackage {
+func buildOutdatedMap(packages []ecosystem.OutdatedPackage) map[string]ecosystem.OutdatedPackage {
 	if len(packages) == 0 {
 		return nil
 	}
 
-	m := make(map[string]adapter.OutdatedPackage, len(packages))
+	m := make(map[string]ecosystem.OutdatedPackage, len(packages))
 
 	for _, pkg := range packages {
 		m[strings.ToLower(pkg.Name)] = pkg
@@ -283,34 +287,57 @@ func buildOutdatedMap(packages []adapter.OutdatedPackage) map[string]adapter.Out
 	return m
 }
 
-func printDepsWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+func printDepSuccesses(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]ecosystem.OutdatedPackage) {
 	if len(deps) == 0 {
 		return
 	}
 
-	if len(deps) <= maxDepRowsPerSection {
+	if terminal.Verbose || len(deps) <= maxDepRowsPerSection {
 		printDepLinesWithOutdated(ow, deps, outdated)
 		return
 	}
 
-	printDepLinesWithOutdated(ow, deps[:maxDepRowsPerSection], outdated)
+	noun := depNoun(deps[0].Text, len(deps))
 
-	overflow := len(deps) - maxDepRowsPerSection
-	ow.Printf("%s%s … %s%s\n", terminal.Dim, strings.Repeat(" ", ttyProjectBodySpaces), overflowMoreDepsLine(overflow, "dependencies"), terminal.Reset)
+	ow.Printf("%s%s%s %d %s installed%s  %s(--verbose for all)%s\n",
+		terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark, len(deps), noun, terminal.Reset,
+		terminal.Dim, terminal.Reset,
+	)
+
+	for _, msg := range deps {
+		name := extractDepName(msg.Text)
+
+		if pkg, isOutdated := outdated[strings.ToLower(name)]; isOutdated {
+			printOutdatedRow(ow, pkg)
+		}
+	}
 }
 
-func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]adapter.OutdatedPackage) {
+func depNoun(sample string, count int) string {
+	noun := "dependency"
+
+	if fields := strings.Fields(stripANSI(sample)); len(fields) >= 2 && fields[0] == "Installed" {
+		noun = fields[1]
+	}
+
+	if count == 1 {
+		return noun
+	}
+
+	if strings.HasSuffix(noun, "y") {
+		return noun[:len(noun)-1] + "ies"
+	}
+
+	return noun + "s"
+}
+
+func printDepLinesWithOutdated(ow *terminal.OutputWriter, deps []model.Message, outdated map[string]ecosystem.OutdatedPackage) {
 	for _, msg := range deps {
 		name := extractDepName(msg.Text)
 		pkg, isOutdated := outdated[strings.ToLower(name)]
 
 		if isOutdated {
-			ow.Printf("%s%s%s %s %s%s%s → %s%s%s\n",
-				terminal.Yellow, strings.Repeat(" ", ttyProjectBodySpaces), terminal.Lightning,
-				pkg.Name,
-				terminal.Dim, pkg.Current, terminal.Reset,
-				terminal.Green, pkg.Latest, terminal.Reset,
-			)
+			printOutdatedRow(ow, pkg)
 		} else {
 			ow.Printf("%s%s%s %s\n",
 				terminal.Green, strings.Repeat(" ", ttyProjectBodySpaces), terminal.CheckMark, msg.Text,
@@ -375,8 +402,8 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 	var totalErrors, totalWarnings int
 
 	for _, item := range report.Items {
-		totalErrors += len(item.Errors)
-		totalWarnings += len(item.Warnings)
+		totalErrors += len(item.Errors())
+		totalWarnings += len(item.Warnings())
 	}
 
 	if totalErrors > 0 {
@@ -391,27 +418,17 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 }
 
 func monorepoStatusFromReport(report result.CheckReport) (icon string, color string, text string) {
-	projectsWithErrors := make(map[string]struct{})
-	projectsWithWarnings := make(map[string]struct{})
-
-	for _, item := range report.Items {
-		if len(item.Errors) > 0 {
-			projectsWithErrors[item.Project] = struct{}{}
-		}
-
-		if len(item.Warnings) > 0 {
-			projectsWithWarnings[item.Project] = struct{}{}
-		}
-	}
+	errorProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Errors()) > 0 })
+	warningProjects := countProjects(report.Items, func(i result.CheckItem) (string, bool) { return i.Project, len(i.Warnings()) > 0 })
 
 	totalProjects := len(report.Projects)
 
-	if len(projectsWithErrors) > 0 {
-		return terminal.CrossMark, terminal.Red, fmt.Sprintf("%d of %d project%s reported errors", len(projectsWithErrors), totalProjects, pluralSuffix(totalProjects))
+	if errorProjects > 0 {
+		return terminal.CrossMark, terminal.Red, projectStatusLine(errorProjects, totalProjects, "reported errors")
 	}
 
-	if len(projectsWithWarnings) > 0 {
-		return terminal.WarningSign, terminal.Yellow, fmt.Sprintf("%d of %d project%s reported warnings", len(projectsWithWarnings), totalProjects, pluralSuffix(totalProjects))
+	if warningProjects > 0 {
+		return terminal.WarningSign, terminal.Yellow, projectStatusLine(warningProjects, totalProjects, "reported warnings")
 	}
 
 	return terminal.CheckMark, terminal.Green, fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))

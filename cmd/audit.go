@@ -9,28 +9,26 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/config"
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/release"
 	"github.com/JacobJoergensen/preflight/internal/render"
-	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-type auditOptions struct {
-	managers     []string
-	scopes       []string
-	json         bool
-	timeout      time.Duration
-	minSeverity  string
-	noMonorepo   bool
-	projectGlobs []string
+type auditFlags struct {
+	scanFlags
+	minSeverity string
+	ignoreCVEs  []string
 }
 
-var auditOpts auditOptions
+func newAuditCommand() *cobra.Command {
+	flags := &auditFlags{}
 
-var auditCmd = &cobra.Command{
-	Use:   "audit",
-	Short: "Run native security audits (npm audit, composer audit, govulncheck, …)",
-	Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
+	cmd := &cobra.Command{
+		Use:   "audit",
+		Short: "Run native security audits (npm audit, composer audit, govulncheck, …)",
+		Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
 
 Tools used by scope:
   • js — npm/pnpm/yarn/bun audit --json
@@ -40,163 +38,104 @@ Tools used by scope:
   • ruby — bundle-audit check (bundler-audit gem)
 
 This does not replace dedicated security pipelines, it unifies invocation and reporting.`,
-	Example: `preflight audit
-preflight audit --scope js,composer
-preflight audit --json`,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		ctx, cancel := context.WithTimeout(cmd.Context(), auditOpts.timeout)
-		defer cancel()
-
-		workDir, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		runner := engine.NewRunner(workDir)
-
-		config, profileName, err := loadPreflightConfig(workDir)
-		if err != nil {
-			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		profile, err := config.ProfileFor(profileName)
-		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		var profileScope, profilePM *[]string
-		minSeverity := auditOpts.minSeverity
-
-		if profile.Audit != nil {
-			profileScope = profile.Audit.Scope
-			profilePM = profile.Audit.PM
-
-			if minSeverity == "" && profile.Audit.MinSeverity != nil {
-				minSeverity = *profile.Audit.MinSeverity
+		Example: `preflight audit
+preflight audit --only js,composer
+preflight audit -o json
+preflight audit -o sarif > preflight.sarif`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			format, err := parseAuditFormat(flags.format)
+			if err != nil {
+				return err
 			}
-		}
 
-		scopes, managers := resolveScopeAndPM(cmd, auditOpts.scopes, auditOpts.managers, profileScope, profilePM)
+			return runScan(cmd, scanCommand[result.AuditReport]{
+				failMsg: "audit failed",
+				timeout: flags.timeout,
+				run: func(ctx context.Context, runner engine.Runner, profile config.Profile) (result.AuditReport, error) {
+					var onlyProfile *[]string
+					var minSeverityProfile *string
+					var ignoredProfile *[]string
 
-		if err := validateScopeAndPM(scopes, managers); err != nil {
-			return err
-		}
+					if profile.Audit != nil {
+						onlyProfile = profile.Audit.Only
+						minSeverityProfile = profile.Audit.MinSeverity
+						ignoredProfile = profile.Audit.IgnoredCVEs
+					}
 
-		progress := buildAuditProgress(auditOpts.json)
+					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
+					minSeverity := flagOrProfile(cmd, "min-severity", flags.minSeverity, minSeverityProfile)
+					ignored := mergeStringList(ignoredProfile, flags.ignoreCVEs)
 
-		report, err := runner.Audit(ctx, scopes, managers, minSeverity, progress, auditOpts.noMonorepo, auditOpts.projectGlobs)
+					progress := buildScanProgress(format != auditFormatText, "auditing…")
+					defer progress.Close()
 
-		progress.Close()
+					return runner.Audit(ctx, only, minSeverity, ignored, progress, flags.noMonorepo, flags.projectGlobs)
+				},
+				render: func(report result.AuditReport) error { return renderAudit(report, format) },
+				markdown: func(report result.AuditReport, w io.Writer) error {
+					return render.MarkdownAuditRenderer{Out: w}.Render(report)
+				},
+				exitCode: func(report result.AuditReport) int {
+					// In SARIF mode findings are reported to code scanning, not via the
+					// exit code, so the upload step still runs; tool errors still fail.
+					failed := func(item result.AuditItem) bool {
+						if format == auditFormatSARIF {
+							return item.ErrText != ""
+						}
 
-		if err != nil {
-			return fmt.Errorf("%saudit failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
+						return item.ErrText != "" || !item.OK
+					}
 
-		if err := renderAudit(report, auditOpts.json); err != nil {
-			return err
-		}
+					return reportExitCode(report.Canceled, report.Items, failed)
+				},
+			})
+		},
+	}
 
-		writeGitHubSummary(func(w io.Writer) error {
-			return render.MarkdownAuditRenderer{Out: w}.Render(report)
-		})
+	registerScanFlags(cmd, &flags.scanFlags, 30*time.Minute, "audit processes")
+	cmd.Flags().Lookup("format").Usage = "Output format: text, json, or sarif"
+	cmd.Flags().StringVar(&flags.minSeverity, "min-severity", "", "Minimum severity to report (info, low, moderate, high, critical)")
+	cmd.Flags().StringArrayVar(&flags.ignoreCVEs, "ignore-cve", nil, "Advisory ID (CVE/GHSA/…) to suppress; repeatable, merged with preflight.yml ignoredCves")
 
-		if exitCodeFromAuditReport(report) != 0 {
-			return ErrSilentFailure
-		}
-
-		return nil
-	},
+	return cmd
 }
 
-func renderAudit(report result.AuditReport, jsonOutput bool) error {
-	if jsonOutput {
+const (
+	auditFormatText  = "text"
+	auditFormatJSON  = "json"
+	auditFormatSARIF = "sarif"
+)
+
+func parseAuditFormat(format string) (string, error) {
+	switch format {
+	case "", auditFormatText:
+		return auditFormatText, nil
+	case auditFormatJSON:
+		return auditFormatJSON, nil
+	case auditFormatSARIF:
+		return auditFormatSARIF, nil
+	default:
+		return "", fmt.Errorf("invalid --format %q (use text, json, or sarif)", format)
+	}
+}
+
+func mergeStringList(profile *[]string, flag []string) []string {
+	var merged []string
+
+	if profile != nil {
+		merged = append(merged, *profile...)
+	}
+
+	return append(merged, flag...)
+}
+
+func renderAudit(report result.AuditReport, format string) error {
+	switch format {
+	case auditFormatJSON:
 		return render.JSONAuditRenderer{Out: os.Stdout}.Render(report)
+	case auditFormatSARIF:
+		return render.SARIFAuditRenderer{Out: os.Stdout, ToolVersion: release.Version}.Render(report)
+	default:
+		return render.TTYAuditRenderer{}.Render(report)
 	}
-
-	return render.TTYAuditRenderer{}.Render(report)
-}
-
-func buildAuditProgress(jsonOutput bool) engine.AuditProgress {
-	if jsonOutput || terminal.Quiet {
-		return engine.NoopAuditProgress{}
-	}
-
-	if !terminal.IsInteractiveTTY(os.Stdout) {
-		return engine.NoopAuditProgress{}
-	}
-
-	return render.NewTTYProgress(os.Stdout, "auditing…")
-}
-
-func exitCodeFromAuditReport(report result.AuditReport) int {
-	if report.Canceled {
-		return 1
-	}
-
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			return 1
-		}
-
-		if !item.OK {
-			return 1
-		}
-	}
-
-	return 0
-}
-
-func init() {
-	auditCmd.Flags().StringSliceVarP(
-		&auditOpts.managers,
-		"pm",
-		"p",
-		[]string{},
-		"Tools or scopes to audit (aliases: npm,yarn,pnpm,bun → js)",
-	)
-
-	auditCmd.Flags().StringSliceVar(
-		&auditOpts.scopes,
-		"scope",
-		[]string{},
-		"Scopes to audit (comma-separated: js,composer,go,python,ruby)",
-	)
-
-	auditCmd.Flags().DurationVarP(
-		&auditOpts.timeout,
-		"timeout",
-		"t",
-		30*time.Minute,
-		"Timeout for all audit processes",
-	)
-
-	auditCmd.Flags().BoolVar(
-		&auditOpts.json,
-		"json",
-		false,
-		"Output results as JSON",
-	)
-
-	auditCmd.Flags().StringVar(
-		&auditOpts.minSeverity,
-		"min-severity",
-		"",
-		"Minimum severity to report (info, low, moderate, high, critical)",
-	)
-
-	auditCmd.Flags().BoolVar(
-		&auditOpts.noMonorepo,
-		"no-monorepo",
-		false,
-		"Disable monorepo traversal, audit only the current directory",
-	)
-
-	auditCmd.Flags().StringSliceVar(
-		&auditOpts.projectGlobs,
-		"project",
-		[]string{},
-		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
-	)
-
-	rootCmd.AddCommand(auditCmd)
 }

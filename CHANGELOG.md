@@ -1,6 +1,36 @@
 # Changelog
 
 ## Unreleased
+- Release artifacts now ship cosign signatures, SBOMs, and SLSA build provenance, and npm packages are published with provenance, so installs can be verified
+- `audit` now reports individual findings with advisory ID, affected package, severity, and advisory URL instead of only severity counts; `audit --json` adds a `findings` array (schemaVersion 3)
+- `audit` can now suppress accepted advisories via `ignoredCves` in preflight.yml or the repeatable `--ignore-cve` flag, matched by CVE/GHSA ID or alias; an ecosystem whose findings are all suppressed passes
+- `audit -o sarif` exports findings as SARIF 2.1.0 for upload to GitHub/GitLab code scanning; in SARIF mode findings are reported to code scanning rather than via a non-zero exit, so a later upload step still runs
+- Added a `licenses` command that checks dependency licenses against an allow/deny policy (`licenses.allow`/`licenses.deny` in preflight.yml, or `--allow`/`--deny`) across all supported ecosystems (Composer, Rust, JavaScript natively; Go, Python, and Ruby via go-licenses, pip-licenses, and license_finder)
+- Added .NET (NuGet) ecosystem support: `check`, `audit`, `--outdated`, and `fix` for projects detected via `*.csproj`/`*.fsproj`/`*.vbproj`/`*.sln`, using the native `dotnet` CLI
+- `check` now offers to run `fix` when it finds missing dependencies in an interactive terminal, via a `y/N` prompt that defaults to no (skipped in CI, with `--quiet`, or `-o json`)
+- `init` and `hooks install` now prompt to confirm overwriting an existing file in an interactive terminal instead of requiring `--force` (the `--force`-or-error behavior is unchanged in CI and non-interactive use)
+- `check` no longer falsely reports PHP as not installed, or lists a startup warning as an extension, when PHP prints warnings (such as a failed extension load) before its version banner
+- Added a global `--debug` flag that logs each command run, its exit code, and duration (plus stderr on failure) to stderr
+- `check` Project section no longer shows redundant lines: the package manager version (already under Toolchain), static Node scope text, or `<file> exists` and `<manifest> found:` confirmations
+- `check` now warns when a project that declares dependencies has no lockfile, since installs are not reproducible without one
+- `check` Toolchain line for PHP no longer includes the build date and compiler, only the installed version and required range
+- `check` lists installed dependencies by default and collapses large sections to a count; pass `--verbose` to list every dependency
+- `fix` failures now report the command and exit code instead of a bare `exit status N`
+- `check`, `fix`, and `audit` no longer hang after a timeout or Ctrl-C when a package manager leaves a child process running
+- `fix --json` now emits camelCase keys and a `schemaVersion`, matching `check --json` and `audit --json`
+- Replaced the per-command `--json` flag with `-o`/`--format text|json`
+- `-v` is now the shorthand for `--verbose`; print the version with the long `--version` flag
+- Added a global `--cwd`/`-C` flag to run PreFlight as if started in another directory
+- Monorepo traversal now recognizes Cargo workspaces and uv (Python) workspaces, alongside npm/yarn/pnpm/bun and Go
+- `check --json` now reports one `messages` array per scope with a `severity` field instead of separate `errors`/`warnings`/`successes` arrays
+- Replaced the `version` command with a `--version` flag
+- Removed the GitHub update check
+- Removed the `list` command
+- Replaced the `--pm` and `--scope` flags with a single `--only` flag
+- Colored output now turns off automatically when output is not a terminal and honors the `NO_COLOR` and `FORCE_COLOR` environment variables
+- Usage and internal errors now exit with code 2, leaving exit code 1 for findings such as missing dependencies, vulnerabilities, or fix failures
+- Dropped support for the legacy `bun.lockb` lockfile; bun projects are detected via `bun.lock`
+- `hooks install` now writes to the directory from `core.hooksPath` and supports git worktrees, so it works alongside Husky and custom hook setups
 
 ## Version 1.6.0 (2026-05-21)
 - npm package now installs without a postinstall script, fixing installation under pnpm

@@ -2,7 +2,6 @@ package monorepo
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -10,16 +9,8 @@ import (
 )
 
 func discoverPnpmWorkspace(workDir string) ([]Project, error) {
-	path := filepath.Join(workDir, "pnpm-workspace.yaml")
-
-	// #nosec G304 - path is workDir joined with the fixed "pnpm-workspace.yaml" filename; workDir comes from the cmd layer's os.Getwd, not user input.
-	raw, err := os.ReadFile(path)
-
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-
-	if err != nil {
+	raw, err := readManifest(workDir, "pnpm-workspace.yaml")
+	if err != nil || raw == nil {
 		return nil, err
 	}
 
@@ -35,16 +26,8 @@ func discoverPnpmWorkspace(workDir string) ([]Project, error) {
 }
 
 func discoverPackageJSONWorkspaces(workDir string) ([]Project, error) {
-	path := filepath.Join(workDir, "package.json")
-
-	// #nosec G304 - path is workDir joined with the fixed "package.json" filename; workDir comes from the cmd layer's os.Getwd, not user input.
-	raw, err := os.ReadFile(path)
-
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-
-	if err != nil {
+	raw, err := readManifest(workDir, "package.json")
+	if err != nil || raw == nil {
 		return nil, err
 	}
 
@@ -88,7 +71,7 @@ func workspacePatternsFromJSON(raw json.RawMessage) []string {
 }
 
 func readNpmName(absDir string) string {
-	// #nosec G304 - absDir is a discovered sub-project directory resolved during workspace traversal; the fixed "package.json" suffix means we only read declared manifest files.
+	// #nosec G304 - absDir is a discovered subproject directory resolved during workspace traversal; the fixed "package.json" suffix means we only read declared manifest files.
 	raw, err := os.ReadFile(filepath.Join(absDir, "package.json"))
 	if err != nil {
 		return ""

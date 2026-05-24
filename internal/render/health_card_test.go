@@ -16,12 +16,12 @@ func TestHealthStatusFromItem(t *testing.T) {
 	}{
 		{
 			name: "errors returns fail",
-			item: result.CheckItem{Errors: []model.Message{{Text: "error"}}},
+			item: result.CheckItem{Messages: []model.Message{{Severity: model.SeverityError, Text: "error"}}},
 			want: HealthFail,
 		},
 		{
 			name: "warnings only returns warn",
-			item: result.CheckItem{Warnings: []model.Message{{Text: "warning"}}},
+			item: result.CheckItem{Messages: []model.Message{{Severity: model.SeverityWarning, Text: "warning"}}},
 			want: HealthWarn,
 		},
 		{
@@ -32,8 +32,10 @@ func TestHealthStatusFromItem(t *testing.T) {
 		{
 			name: "errors take precedence over warnings",
 			item: result.CheckItem{
-				Errors:   []model.Message{{Text: "error"}},
-				Warnings: []model.Message{{Text: "warning"}},
+				Messages: []model.Message{
+					{Severity: model.SeverityError, Text: "error"},
+					{Severity: model.SeverityWarning, Text: "warning"},
+				},
 			},
 			want: HealthFail,
 		},
@@ -45,31 +47,6 @@ func TestHealthStatusFromItem(t *testing.T) {
 
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIsProjectSignalLine(t *testing.T) {
-	tests := []struct {
-		text string
-		want bool
-	}{
-		{"package.json found:", true},
-		{"composer.json found:", true},
-		{"go.mod found", true},
-		{"package.json found", true},
-		{"random text", false},
-		{"", false},
-		{"   ", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.text, func(t *testing.T) {
-			got := isProjectSignalLine(tt.text)
-
-			if got != tt.want {
-				t.Errorf("isProjectSignalLine(%q) = %v, want %v", tt.text, got, tt.want)
 			}
 		})
 	}
@@ -124,7 +101,7 @@ func TestExtractRunCommands(t *testing.T) {
 	}
 }
 
-func TestPluralS(t *testing.T) {
+func TestPluralSuffix(t *testing.T) {
 	tests := []struct {
 		count int
 		want  string
@@ -136,10 +113,10 @@ func TestPluralS(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := pluralS(tt.count)
+		got := pluralSuffix(tt.count)
 
 		if got != tt.want {
-			t.Errorf("pluralS(%d) = %q, want %q", tt.count, got, tt.want)
+			t.Errorf("pluralSuffix(%d) = %q, want %q", tt.count, got, tt.want)
 		}
 	}
 }

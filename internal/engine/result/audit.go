@@ -3,21 +3,11 @@ package result
 import (
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
-type AuditReport struct {
-	StartedAt time.Time
-	EndedAt   time.Time
-	Canceled  bool
-	Items     []AuditItem
-	Projects  []AuditProject
-}
-
-type AuditProject struct {
-	RelativePath string
-	Name         string
-}
+type AuditReport = Report[AuditItem]
 
 type AuditItem struct {
 	Project       string
@@ -28,7 +18,8 @@ type AuditItem struct {
 	ExitCode      int
 	OK            bool
 	SeverityRank  int
-	Counts        map[string]int
+	Findings      []model.Finding
+	Manifest      string
 	Output        string
 	ErrText       string
 	StartedAt     time.Time
@@ -36,7 +27,7 @@ type AuditItem struct {
 	ElapsedMillis int64
 }
 
-func FromAdapterAudit(scopeID, scopeDisplay string, priority int, ar adapter.AuditResult, startedAt, endedAt time.Time) AuditItem {
+func FromAuditResult(scopeID, scopeDisplay string, priority int, ar ecosystem.AuditResult, startedAt, endedAt time.Time) AuditItem {
 	item := AuditItem{
 		ScopeID:       scopeID,
 		ScopeDisplay:  scopeDisplay,
@@ -45,7 +36,8 @@ func FromAdapterAudit(scopeID, scopeDisplay string, priority int, ar adapter.Aud
 		ExitCode:      ar.ExitCode,
 		OK:            ar.OK,
 		SeverityRank:  ar.SeverityRank,
-		Counts:        ar.Counts,
+		Findings:      ar.Findings,
+		Manifest:      ar.Manifest,
 		Output:        ar.Output,
 		StartedAt:     startedAt,
 		EndedAt:       endedAt,

@@ -1,17 +1,15 @@
 package engine
 
 import (
-	"context"
 	"fmt"
-	"runtime"
 	"slices"
 	"strings"
-	"sync"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/exec"
 	"github.com/JacobJoergensen/preflight/internal/fs"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
 type Runner struct {
@@ -30,40 +28,71 @@ func NewRunner(workDir string) Runner {
 	}
 }
 
-func (r Runner) depsForDir(workDir string) adapter.Dependencies {
-	loader := manifest.NewLoader(workDir)
-	loader.FS = r.FS
-
-	return adapter.Dependencies{
-		Loader: loader,
-		FS:     r.FS,
-		Runner: r.Command,
-		Stream: r.CommandStream,
+func discoverProjects(workDir string, disableMonorepo bool, projectGlobs []string) ([]monorepo.Project, error) {
+	if disableMonorepo {
+		return nil, nil
 	}
+
+	projects, err := monorepo.DiscoverProjects(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("monorepo discovery failed: %w", err)
+	}
+
+	projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
+	if err != nil {
+		return nil, fmt.Errorf("project filter failed: %w", err)
+	}
+
+	return projects, nil
 }
 
-func appendEnvIfRequested(adapters []adapter.Adapter, withEnv bool, scopes, selectors []string) []adapter.Adapter {
-	if !withEnv || selectionIncludesEnv(scopes, selectors) {
-		return adapters
-	}
+func aggregateProjects[T any](projects []monorepo.Project, perProject func(monorepo.Project) ([]T, error)) ([]T, []result.Project, error) {
+	var items []T
 
-	envAdapters, err := adapter.Select("env")
+	summaries := make([]result.Project, 0, len(projects))
 
-	if err != nil || len(envAdapters) == 0 {
-		return adapters
-	}
+	for _, project := range projects {
+		summaries = append(summaries, result.Project{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
 
-	return append(adapters, envAdapters[0])
-}
-
-func selectionIncludesEnv(scopes, selectors []string) bool {
-	for _, s := range scopes {
-		if strings.EqualFold(strings.TrimSpace(s), "env") {
-			return true
+		projectItems, err := perProject(project)
+		if err != nil {
+			return nil, nil, err
 		}
+
+		items = append(items, projectItems...)
 	}
 
-	for _, s := range selectors {
+	return items, summaries, nil
+}
+
+func (r Runner) runContextForDir(workDir string) ecosystem.RunContext {
+	return ecosystem.RunContext{
+		WorkDir: workDir,
+		FS:      r.FS,
+		Runner:  r.Command,
+		Stream:  r.CommandStream,
+	}
+}
+
+func appendEnvIfRequested(specs []*ecosystem.Spec, withEnv bool, only []string) []*ecosystem.Spec {
+	if !withEnv || selectionIncludesEnv(only) {
+		return specs
+	}
+
+	envSpec, ok := ecosystem.Lookup("env")
+
+	if !ok {
+		return specs
+	}
+
+	return append(specs, envSpec)
+}
+
+func selectionIncludesEnv(only []string) bool {
+	for _, s := range only {
 		if strings.EqualFold(strings.TrimSpace(s), "env") {
 			return true
 		}
@@ -72,20 +101,20 @@ func selectionIncludesEnv(scopes, selectors []string) bool {
 	return false
 }
 
-func filterComposerUnlessExplicit(adapters []adapter.Adapter, deps adapter.Dependencies, scopes, selectors []string) []adapter.Adapter {
-	if !isImplicitFullSelection(scopes, selectors) {
-		return adapters
+func filterComposerUnlessExplicit(specs []*ecosystem.Spec, rc ecosystem.RunContext, only []string) []*ecosystem.Spec {
+	if !isImplicitFullSelection(only) {
+		return specs
 	}
 
-	if deps.Loader.HasComposerJSON() {
-		return adapters
+	if rc.FileExists("composer.json") {
+		return specs
 	}
 
-	return withoutAdapter(adapters, "composer")
+	return withoutSpec(specs, "composer")
 }
 
-func isImplicitFullSelection(scopes, selectors []string) bool {
-	return len(nonEmptyStrings(scopes)) == 0 && len(nonEmptyStrings(selectors)) == 0
+func isImplicitFullSelection(only []string) bool {
+	return len(nonEmptyStrings(only)) == 0
 }
 
 func nonEmptyStrings(ss []string) []string {
@@ -100,114 +129,42 @@ func nonEmptyStrings(ss []string) []string {
 	return output
 }
 
-func withoutAdapter(adapters []adapter.Adapter, name string) []adapter.Adapter {
-	return slices.DeleteFunc(slices.Clone(adapters), func(a adapter.Adapter) bool {
-		return a.Name() == name
+func withoutSpec(specs []*ecosystem.Spec, name string) []*ecosystem.Spec {
+	return slices.DeleteFunc(slices.Clone(specs), func(spec *ecosystem.Spec) bool {
+		return spec.Name == name
 	})
 }
 
-func validateRequestedPackageManagers(selectors []string, deps adapter.Dependencies) error {
-	for _, selector := range selectors {
+func validateRequestedPackageManagers(only []string, rc ecosystem.RunContext) error {
+	for _, selector := range only {
 		selector = strings.ToLower(strings.TrimSpace(selector))
 
-		if selector == "" {
+		if selector == "" || ecosystem.IsScope(selector) {
 			continue
 		}
 
-		// Skip if it's a scope (js, python, etc.) rather than a specific PM
-		if manifest.IsPackageType(selector) {
-			continue
-		}
-
-		packageType, isPackageManager := manifest.GetPackageType(selector)
-
-		if !isPackageManager {
-			continue
-		}
-
-		// Only validate for package types with multiple managers (js, python)
-		if packageType != manifest.PackageTypeJS && packageType != manifest.PackageTypePython {
-			continue
-		}
-
-		detected, ok := deps.Loader.DetectPackageManager(packageType)
+		scope, ok := ecosystem.ScopeForManager(selector)
 
 		if !ok {
-			return fmt.Errorf("requested %s but no %s project detected", selector, packageType)
+			continue
 		}
 
-		if !strings.EqualFold(detected.Command(), selector) {
-			return fmt.Errorf("requested %s but project uses %s", selector, detected.Command())
+		spec, ok := ecosystem.Lookup(scope)
+
+		if !ok || len(spec.Managers) < 2 {
+			continue
+		}
+
+		detection, ok := spec.Resolve(rc)
+
+		if !ok {
+			return fmt.Errorf("requested %s but no %s project detected", selector, scope)
+		}
+
+		if !strings.EqualFold(detection.Active.Command, selector) {
+			return fmt.Errorf("requested %s but project uses %s", selector, detection.Active.Command)
 		}
 	}
 
 	return nil
-}
-
-func runParallel[Job, Result any](ctx context.Context, jobs []Job, work func(context.Context, Job) (Result, bool)) []Result {
-	if len(jobs) == 0 {
-		return nil
-	}
-
-	results := make([]Result, len(jobs))
-	includes := make([]bool, len(jobs))
-	semaphore := make(chan struct{}, parallelWorkerCount(len(jobs)))
-
-	var wg sync.WaitGroup
-
-	wg.Add(len(jobs))
-
-	for index, job := range jobs {
-		go func(index int, job Job) {
-			defer wg.Done()
-
-			select {
-			case semaphore <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-
-			defer func() { <-semaphore }()
-
-			if ctx.Err() != nil {
-				return
-			}
-
-			item, include := work(ctx, job)
-
-			if !include {
-				return
-			}
-
-			results[index] = item
-			includes[index] = true
-		}(index, job)
-	}
-
-	wg.Wait()
-
-	output := make([]Result, 0, len(jobs))
-
-	for i, include := range includes {
-		if include {
-			output = append(output, results[i])
-		}
-	}
-
-	return output
-}
-
-func parallelWorkerCount(jobCount int) int {
-	if jobCount <= 0 {
-		return 1
-	}
-
-	const maxWorkers = 8
-
-	workers := runtime.GOMAXPROCS(0)
-	workers = max(workers, 1)
-	workers = min(workers, maxWorkers)
-	workers = min(workers, jobCount)
-
-	return workers
 }

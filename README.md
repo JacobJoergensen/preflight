@@ -43,21 +43,20 @@ Validates that all required dependencies are installed.
 
 ```sh
 preflight check
-preflight check --pm=npm,composer
-preflight check --scope=js,go
+preflight check --only npm,composer
+preflight check --only js,go
 preflight check --with-env
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to check (npm, yarn, pnpm, bun, composer, go, cargo, pip, bundle) |
-| `--scope` | Scopes to check (js, php, composer, node, go, rust, python, ruby, env) |
+| `--only` | Limit to ecosystems or tools (js, npm, php, composer, node, go, rust, python, ruby, env) |
 | `--with-env` | Also validate `.env` against `.env.example` |
 | `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
 | `--no-monorepo` | Only check the current directory |
 | `--project` | Restrict to sub-projects matching path globs (e.g. `packages/*`) |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
 
 ### fix
 
@@ -65,15 +64,14 @@ Installs missing dependencies. Prompts per ecosystem by default and prints a loc
 
 ```sh
 preflight fix
-preflight fix --pm=npm
+preflight fix --only npm
 preflight fix --dry-run
 preflight fix --yes --no-diff
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to fix |
-| `--scope` | Scopes to fix |
+| `--only` | Limit to ecosystems or tools |
 | `--force`, `-f` | Force reinstall |
 | `--dry-run` | Show what would run without executing |
 | `--yes`, `-y` | Apply every ecosystem without prompting |
@@ -82,7 +80,7 @@ preflight fix --yes --no-diff
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only fix the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
 
 ### audit
 
@@ -90,8 +88,9 @@ Runs native security scanners for each ecosystem.
 
 ```sh
 preflight audit
-preflight audit --scope=js,composer
-preflight audit --json
+preflight audit --only js,composer
+preflight audit -o json
+preflight audit -o sarif > preflight.sarif
 ```
 
 | Scope | Tool |
@@ -102,34 +101,61 @@ preflight audit --json
 | rust | cargo-audit |
 | python | pip-audit |
 | ruby | bundle-audit |
+| dotnet | dotnet list package --vulnerable |
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to audit |
-| `--scope` | Scopes to audit |
+| `--only` | Limit to ecosystems or tools |
 | `--min-severity` | Minimum severity to report (info, low, moderate, high, critical) |
+| `--ignore-cve` | Advisory ID (CVE/GHSA) to suppress; repeatable, merged with `ignoredCves` |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
 | `--no-monorepo` | Only audit the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text, json, or sarif (default: text) |
 
-### list
+Each finding carries the advisory ID, affected package, severity, and a link. Suppress reviewed, accepted advisories with `--ignore-cve CVE-2023-1234` (repeatable) or the `ignoredCves` list in `preflight.yml`; matching is by CVE/GHSA ID or alias, and an ecosystem whose findings are all suppressed passes.
 
-Lists all dependencies for the project.
+Export findings to GitHub/GitLab code scanning with SARIF:
+
+```yaml
+- run: preflight audit -o sarif > preflight.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: preflight.sarif
+```
+
+In SARIF mode, findings are reported to code scanning rather than failing the step, so the upload step always runs (a tool that fails to run still fails the step).
+
+### licenses
+
+Checks the declared license of each installed dependency against an allow/deny policy.
 
 ```sh
-preflight list
-preflight list --pm=composer,go
+preflight licenses --deny GPL-3.0-only,AGPL-3.0-only
+preflight licenses --allow MIT,Apache-2.0,BSD-3-Clause
+preflight licenses -o json
 ```
+
+| Scope | Source |
+|-------|--------|
+| composer | composer licenses |
+| rust | cargo metadata |
+| js | node_modules manifests |
+| go | go-licenses (optional tool) |
+| python | pip-licenses (optional tool) |
+| ruby | license_finder (optional tool) |
 
 | Flag | Description |
 |------|-------------|
-| `--pm`, `-p` | Package managers to list |
-| `--scope` | Scopes to list |
-| `--outdated` | Show outdated packages with version info |
-| `--no-monorepo` | Only list the current directory |
+| `--allow` | Allowed SPDX license IDs (comma-separated); anything else is a violation |
+| `--deny` | Denied SPDX license IDs (comma-separated) |
+| `--only` | Limit to ecosystems or tools |
+| `--timeout`, `-t` | Timeout duration (default: 5m) |
+| `--no-monorepo` | Only check the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
-| `--json` | Output as JSON |
+| `--format`, `-o` | Output format: text or json (default: text) |
+
+A package violates when its license is denied, or (when an allowlist is set) is not on it. Set a durable policy in `preflight.yml` (`licenses.allow` / `licenses.deny`); `--allow`/`--deny` add to it. Go, Python, and Ruby use optional external tools and are skipped when those aren't installed. Python and Ruby report freeform license names rather than SPDX IDs, so matching there is best-effort.
 
 ### run
 
@@ -174,19 +200,6 @@ preflight init --force
 |------|-------------|
 | `--force` | Overwrite existing file |
 
-### version
-
-Prints the installed version and checks for updates.
-
-```sh
-preflight version
-preflight version --json
-```
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Output as JSON |
-
 ### Global Flags
 
 These work with any command:
@@ -196,10 +209,13 @@ These work with any command:
 | `--profile` | Use specific profile from `preflight.yml` |
 | `--quiet` | Suppress non-essential output |
 | `--no-color` | Disable colored output |
+| `--version` | Print version, commit, build date, and platform |
+
+Color also turns off automatically when output is not a terminal (piped or redirected), and respects the `NO_COLOR` and `FORCE_COLOR` environment variables.
 
 ## Monorepo
 
-`check`, `audit`, `list`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
+`check`, `audit`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
 
 Disable with `--no-monorepo`. Narrow the scope with `--project packages/*`.
 
@@ -214,12 +230,15 @@ profile: default
 profiles:
   default:
     check:
-      pm: [npm, composer]
+      only: [npm, composer]
       withEnv: true
     fix:
-      pm: [npm, composer]
+      only: [npm, composer]
     audit:
       minSeverity: high  # ignore info, low, moderate
+      ignoredCves: [CVE-2023-1234]  # suppress reviewed, accepted advisories
+    licenses:
+      deny: [GPL-3.0-only, AGPL-3.0-only]
     run:
       scripts:
         test:
@@ -229,7 +248,7 @@ profiles:
 
   ci:
     check:
-      scope: [js, composer, go]
+      only: [js, composer, go]
     audit:
       minSeverity: critical  # only fail on critical
 ```
@@ -263,23 +282,22 @@ run:
       rust: "test --all"       # runs: cargo test --all
 ```
 
-## Scopes vs Package Managers
+## Selecting ecosystems and tools
 
-Use `--scope` for categories, `--pm` for specific tools.
+By default preflight auto-detects every ecosystem present in the project. Use `--only` to narrow to specific ones. Each value is either an ecosystem or a specific tool; naming a tool also asserts the project uses it.
 
-| Scope | Package Managers |
-|-------|------------------|
-| js | npm, yarn, pnpm, bun |
-| composer | composer |
-| go | go |
-| rust | cargo |
-| python | pip, poetry, uv |
-| ruby | bundle |
-| php | (runtime check only) |
-| node | (runtime check only) |
-| env | (.env validation) |
-
-You can use either `--scope` or `--pm`, not both.
+| Value | Selects |
+|-------|---------|
+| js | JavaScript (npm, yarn, pnpm, bun) |
+| npm, yarn, pnpm, bun | JavaScript, pinned to that tool |
+| composer | PHP Composer |
+| go | Go modules |
+| rust, cargo | Rust |
+| python, pip, poetry, uv, pdm, pipenv | Python |
+| ruby, bundle | Ruby |
+| dotnet | .NET (NuGet) |
+| php, node | runtime check only |
+| env | .env validation |
 
 ## Supported Ecosystems
 
@@ -291,6 +309,7 @@ You can use either `--scope` or `--pm`, not both.
 | Rust | Rust | Cargo |
 | Python | Python | pip, Poetry, uv |
 | Ruby | Ruby | Bundler |
+| .NET | .NET SDK | NuGet (dotnet CLI) |
 
 ## License
 

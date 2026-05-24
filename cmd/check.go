@@ -9,92 +9,77 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/JacobJoergensen/preflight/internal/config"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/render"
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-type checkOptions struct {
-	managers     []string
-	scopes       []string
-	withEnv      bool
-	timeout      time.Duration
-	json         bool
-	outdated     bool
-	noMonorepo   bool
-	projectGlobs []string
+type checkFlags struct {
+	scanFlags
+	withEnv  bool
+	outdated bool
 }
 
-var checkOpts checkOptions
+func newCheckCommand() *cobra.Command {
+	flags := &checkFlags{}
 
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Checks if all required dependencies are installed",
-	Long:  `Validates installed dependencies for the selected scopes. Supports monorepo traversal, .env validation (--with-env), and outdated package reporting (--outdated).`,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		ctx, cancel := context.WithTimeout(cmd.Context(), checkOpts.timeout)
-		defer cancel()
-
-		workDir, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("get working directory: %w", err)
-		}
-
-		runner := engine.NewRunner(workDir)
-
-		config, profName, err := loadPreflightConfig(workDir)
-		if err != nil {
-			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		profile, err := config.ProfileFor(profName)
-		if err != nil {
-			return fmt.Errorf("%s%w%s", terminal.Red, err, terminal.Reset)
-		}
-
-		var profileScope, profilePM *[]string
-		withEnv := checkOpts.withEnv
-
-		if profile.Check != nil {
-			profileScope = profile.Check.Scope
-			profilePM = profile.Check.PM
-
-			if !cmd.Flags().Changed("with-env") && profile.Check.WithEnv != nil {
-				withEnv = *profile.Check.WithEnv
+	cmd := &cobra.Command{
+		Use:   "check",
+		Short: "Checks if all required dependencies are installed",
+		Long:  `Validates installed dependencies for the selected scopes. Supports monorepo traversal, .env validation (--with-env), and outdated package reporting (--outdated).`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			jsonOut, err := parseFormat(flags.format)
+			if err != nil {
+				return err
 			}
-		}
 
-		scopes, managers := resolveScopeAndPM(cmd, checkOpts.scopes, checkOpts.managers, profileScope, profilePM)
+			var resolvedOnly []string
 
-		if err := validateScopeAndPM(scopes, managers); err != nil {
-			return err
-		}
+			return runScan(cmd, scanCommand[result.CheckReport]{
+				failMsg: "check failed",
+				timeout: flags.timeout,
+				run: func(ctx context.Context, runner engine.Runner, profile config.Profile) (result.CheckReport, error) {
+					var onlyProfile *[]string
+					var withEnvProfile *bool
 
-		progress := buildCheckProgress(checkOpts.json)
+					if profile.Check != nil {
+						onlyProfile = profile.Check.Only
+						withEnvProfile = profile.Check.WithEnv
+					}
 
-		report, err := runner.Check(ctx, scopes, managers, withEnv, checkOpts.outdated, progress, checkOpts.noMonorepo, checkOpts.projectGlobs)
+					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
+					resolvedOnly = only
+					withEnv := flagOrProfile(cmd, "with-env", flags.withEnv, withEnvProfile)
 
-		progress.Close()
+					progress := buildScanProgress(jsonOut, "checking…")
+					defer progress.Close()
 
-		if err != nil {
-			return fmt.Errorf("%scheck failed: %w%s", terminal.Red, err, terminal.Reset)
-		}
+					return runner.Check(ctx, only, withEnv, flags.outdated, progress, flags.noMonorepo, flags.projectGlobs)
+				},
+				render: func(report result.CheckReport) error { return renderCheck(report, jsonOut) },
+				markdown: func(report result.CheckReport, w io.Writer) error {
+					return render.MarkdownCheckRenderer{Out: w}.Render(report)
+				},
+				exitCode: func(report result.CheckReport) int {
+					return reportExitCode(report.Canceled, report.Items, func(item result.CheckItem) bool {
+						return len(item.Errors()) > 0
+					})
+				},
+				afterRender: func(report result.CheckReport) (bool, error) {
+					return offerFix(cmd, report, jsonOut, resolvedOnly, flags.noMonorepo, flags.projectGlobs)
+				},
+			})
+		},
+	}
 
-		if err := renderCheck(report, checkOpts.json); err != nil {
-			return err
-		}
+	registerScanFlags(cmd, &flags.scanFlags, 5*time.Minute, "checks")
+	cmd.Flags().BoolVar(&flags.withEnv, "with-env", false, "Also validate `.env` against `.env.example` (in addition to selected dependency checks)")
+	cmd.Flags().BoolVar(&flags.outdated, "outdated", false, "Also check for outdated packages")
 
-		writeGitHubSummary(func(w io.Writer) error {
-			return render.MarkdownCheckRenderer{Out: w}.Render(report)
-		})
-
-		if exitCodeFromReport(report) != 0 {
-			return ErrSilentFailure
-		}
-
-		return nil
-	},
+	return cmd
 }
 
 func renderCheck(report result.CheckReport, jsonOutput bool) error {
@@ -105,90 +90,73 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 	return render.TTYCheckRenderer{}.Render(report)
 }
 
-func buildCheckProgress(jsonOutput bool) engine.CheckProgress {
-	if jsonOutput || terminal.Quiet {
-		return engine.NoopCheckProgress{}
+func offerFix(cmd *cobra.Command, report result.CheckReport, jsonOutput bool, only []string, noMonorepo bool, projectGlobs []string) (bool, error) {
+	if jsonOutput || terminal.Quiet || !terminal.IsInteractive() {
+		return false, nil
 	}
 
-	if !terminal.IsInteractiveTTY(os.Stdout) {
-		return engine.NoopCheckProgress{}
+	count := checkErrorCount(report)
+	if count == 0 {
+		return false, nil
 	}
 
-	return render.NewTTYProgress(os.Stdout, "checking…")
+	noun := "issue"
+	if count != 1 {
+		noun = "issues"
+	}
+
+	if _, err := fmt.Fprintln(os.Stdout); err != nil {
+		return false, err
+	}
+
+	run, err := terminal.Ask(os.Stdin, os.Stdout, fmt.Sprintf("Run preflight fix to resolve %d %s?", count, noun))
+	if err != nil || !run {
+		return false, err
+	}
+
+	return runFixFromCheck(cmd, only, noMonorepo, projectGlobs)
 }
 
-func exitCodeFromReport(report result.CheckReport) int {
-	if report.Canceled {
-		return 1
+func checkErrorCount(report result.CheckReport) int {
+	count := 0
+
+	for _, item := range report.Items {
+		count += len(item.Errors())
+	}
+
+	return count
+}
+
+func runFixFromCheck(cmd *cobra.Command, only []string, noMonorepo bool, projectGlobs []string) (bool, error) {
+	runner, _, err := commandSetup("fix failed")
+	if err != nil {
+		return false, err
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+	defer cancel()
+
+	approver := render.NewTTYFixApprover(os.Stdin, os.Stdout)
+	progress := render.NewTTYFixProgress(os.Stdout)
+
+	report, err := runner.Fix(ctx, only, ecosystem.FixOptions{}, true, approver, progress, noMonorepo, projectGlobs)
+	if err != nil {
+		return false, err
+	}
+
+	if err := renderFix(report, false, true); err != nil {
+		return false, err
+	}
+
+	if report.Canceled || report.Aborted {
+		return false, nil
 	}
 
 	for _, item := range report.Items {
-		if len(item.Errors) > 0 {
-			return 1
+		if !item.Success {
+			return false, nil
 		}
 	}
 
-	return 0
-}
-
-func init() {
-	checkCmd.Flags().StringSliceVarP(
-		&checkOpts.managers,
-		"pm",
-		"p",
-		[]string{},
-		"Tools or scopes to check (aliases: npm,yarn,pnpm,bun → js, use `env` for .env validation)",
-	)
-
-	checkCmd.Flags().StringSliceVar(
-		&checkOpts.scopes,
-		"scope",
-		[]string{},
-		"Scopes to check (comma-separated: js,php,composer,node,go,python,ruby,env)",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.withEnv,
-		"with-env",
-		false,
-		"Also validate `.env` against `.env.example` (in addition to selected dependency checks)",
-	)
-
-	checkCmd.Flags().DurationVarP(
-		&checkOpts.timeout,
-		"timeout",
-		"t",
-		5*time.Minute,
-		"Timeout for all checks to complete",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.json,
-		"json",
-		false,
-		"Output results as JSON",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.outdated,
-		"outdated",
-		false,
-		"Also check for outdated packages",
-	)
-
-	checkCmd.Flags().BoolVar(
-		&checkOpts.noMonorepo,
-		"no-monorepo",
-		false,
-		"Disable monorepo traversal, check only the current directory",
-	)
-
-	checkCmd.Flags().StringSliceVar(
-		&checkOpts.projectGlobs,
-		"project",
-		[]string{},
-		"Restrict monorepo traversal to projects matching these path globs (comma-separated, e.g. packages/*)",
-	)
-
-	rootCmd.AddCommand(checkCmd)
+	return true, nil
 }

@@ -1,130 +1,95 @@
 package engine
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 )
 
 type Mode string
 
 const (
 	ModeCheck Mode = "check"
-	ModeList  Mode = "list"
 	ModeFix   Mode = "fix"
 	ModeAudit Mode = "audit"
 )
 
 type Selection struct {
-	Adapters      []adapter.Adapter
-	AdapterIDs    []string
+	Specs         []*ecosystem.Spec
+	SpecIDs       []string
 	FixSelectors  []string
 	RequestedMode Mode
 }
 
 type SelectInput struct {
-	Scopes    []string
-	Selectors []string
-	Mode      Mode
+	Only []string
+	Mode Mode
 }
 
 func Select(input SelectInput) (Selection, error) {
-	scopes := normalizeNames(input.Scopes)
-	selectors := normalizeNames(input.Selectors)
+	only := normalizeNames(input.Only)
 
-	if len(scopes) > 0 && len(selectors) > 0 {
-		return Selection{}, errors.New("cannot use both scopes and selectors")
-	}
-
-	if len(scopes) > 0 {
-		return selectByScopes(scopes, input.Mode)
-	}
-
-	normalized := selectors
-
-	if len(normalized) == 0 {
-		adapters, err := adapter.Select()
+	if len(only) == 0 {
+		specs, err := ecosystem.Select()
 		if err != nil {
 			return Selection{}, err
 		}
 
 		return Selection{
-			Adapters:      adapters,
-			AdapterIDs:    adapter.Names(adapters),
+			Specs:         specs,
+			SpecIDs:       ecosystem.Names(specs),
 			FixSelectors:  nil,
 			RequestedMode: input.Mode,
 		}, nil
 	}
 
 	switch input.Mode {
-	case ModeCheck, ModeList, ModeAudit:
-		ids := make([]string, 0, len(normalized))
+	case ModeCheck, ModeAudit:
+		ids := make([]string, 0, len(only))
 
-		for _, name := range normalized {
-			ids = append(ids, manifest.ResolvePackageType(name))
+		for _, name := range only {
+			ids = append(ids, ecosystem.ResolveScope(name))
 		}
 
-		adapters, err := adapter.Select(ids...)
+		specs, err := ecosystem.Select(ids...)
 		if err != nil {
 			return Selection{}, err
 		}
 
 		return Selection{
-			Adapters:      adapters,
-			AdapterIDs:    adapter.Names(adapters),
+			Specs:         specs,
+			SpecIDs:       ecosystem.Names(specs),
 			FixSelectors:  nil,
 			RequestedMode: input.Mode,
 		}, nil
 	case ModeFix:
-		return selectForFix(normalized)
+		return selectForFix(only)
 	default:
 		return Selection{}, fmt.Errorf("unknown selection mode: %s", input.Mode)
 	}
-}
-
-func selectByScopes(scopes []string, mode Mode) (Selection, error) {
-	for _, s := range scopes {
-		if !adapter.IsRegistered(s) {
-			return Selection{}, fmt.Errorf("unknown scope: %s", s)
-		}
-	}
-
-	adapters, err := adapter.Select(scopes...)
-	if err != nil {
-		return Selection{}, err
-	}
-
-	return Selection{
-		Adapters:      adapters,
-		AdapterIDs:    adapter.Names(adapters),
-		FixSelectors:  scopes,
-		RequestedMode: mode,
-	}, nil
 }
 
 func selectForFix(normalized []string) (Selection, error) {
 	var errs []string
 
 	fixSelectors := make([]string, 0, len(normalized))
-	adapterSet := make(map[string]struct{})
+	specSet := make(map[string]struct{})
 	selectedIDs := make([]string, 0, len(normalized))
 
 	for _, name := range normalized {
-		if manifest.IsPackageType(name) {
+		if ecosystem.IsScope(name) {
 			fixSelectors = append(fixSelectors, name)
 
-			if _, ok := adapterSet[name]; !ok {
-				adapterSet[name] = struct{}{}
+			if _, ok := specSet[name]; !ok {
+				specSet[name] = struct{}{}
 				selectedIDs = append(selectedIDs, name)
 			}
 
 			continue
 		}
 
-		packageType, ok := manifest.GetPackageType(name)
+		scope, ok := ecosystem.ScopeForManager(name)
 
 		if !ok {
 			errs = append(errs, "unknown selector: "+name)
@@ -133,9 +98,9 @@ func selectForFix(normalized []string) (Selection, error) {
 
 		fixSelectors = append(fixSelectors, name)
 
-		if _, ok := adapterSet[packageType]; !ok {
-			adapterSet[packageType] = struct{}{}
-			selectedIDs = append(selectedIDs, packageType)
+		if _, ok := specSet[scope]; !ok {
+			specSet[scope] = struct{}{}
+			selectedIDs = append(selectedIDs, scope)
 		}
 	}
 
@@ -143,14 +108,14 @@ func selectForFix(normalized []string) (Selection, error) {
 		return Selection{}, fmt.Errorf("selection errors: %s", strings.Join(errs, "; "))
 	}
 
-	adapters, err := adapter.Select(selectedIDs...)
+	specs, err := ecosystem.Select(selectedIDs...)
 	if err != nil {
 		return Selection{}, err
 	}
 
 	return Selection{
-		Adapters:      adapters,
-		AdapterIDs:    adapter.Names(adapters),
+		Specs:         specs,
+		SpecIDs:       ecosystem.Names(specs),
 		FixSelectors:  dedupePreserveOrder(fixSelectors),
 		RequestedMode: ModeFix,
 	}, nil

@@ -24,6 +24,27 @@ func TestValidateVersion(t *testing.T) {
 	}
 }
 
+func TestMajorMinor(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		version string
+		want    string
+	}{
+		{"1.26.1", "1.26"},
+		{"8.5.1", "8.5"},
+		{"1.26", "1.26"},
+		{"8", "8"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		if got := MajorMinor(tt.version); got != tt.want {
+			t.Errorf("MajorMinor(%q) = %q, want %q", tt.version, got, tt.want)
+		}
+	}
+}
+
 func TestMatchVersionConstraint(t *testing.T) {
 	t.Parallel()
 

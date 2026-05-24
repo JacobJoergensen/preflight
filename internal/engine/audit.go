@@ -3,87 +3,56 @@ package engine
 import (
 	"cmp"
 	"context"
-	"fmt"
-	"slices"
+	"strings"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/model"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
-type AuditProgress interface {
-	Plan(total int)
-	Start(scopeID, displayName string)
-	Finish(scopeID string, included bool)
-	Close()
-}
-
-type NoopAuditProgress struct{}
-
-func (NoopAuditProgress) Plan(int)             {}
-func (NoopAuditProgress) Start(string, string) {}
-func (NoopAuditProgress) Finish(string, bool)  {}
-func (NoopAuditProgress) Close()               {}
-
 func (r Runner) Audit(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	ignoredCVEs []string,
+	progress ScanProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
 ) (result.AuditReport, error) {
 	if progress == nil {
-		progress = NoopAuditProgress{}
+		progress = NoopScanProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.AuditReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
-
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.AuditReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.auditMonorepo(ctx, projects, scopes, selectors, minSeverity, progress)
-		}
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.AuditReport{}, err
 	}
 
-	return r.auditProject(ctx, r.WorkDir, "", scopes, selectors, minSeverity, progress)
+	if len(projects) > 0 {
+		return r.auditMonorepo(ctx, projects, only, minSeverity, ignoredCVEs, progress)
+	}
+
+	return r.auditProject(ctx, r.WorkDir, "", only, minSeverity, ignoredCVEs, progress)
 }
 
 func (r Runner) auditMonorepo(
 	ctx context.Context,
 	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	ignoredCVEs []string,
+	progress ScanProgress,
 ) (result.AuditReport, error) {
 	startedAt := time.Now()
 
-	var allItems []result.AuditItem
-
-	projectSummaries := make([]result.AuditProject, 0, len(projects))
-
-	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.AuditProject{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		})
-
-		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, scopes, selectors, minSeverity, progress)
-		if err != nil {
-			return result.AuditReport{}, err
-		}
-
-		allItems = append(allItems, projectReport.Items...)
+	allItems, projectSummaries, err := aggregateProjects(projects, func(project monorepo.Project) ([]result.AuditItem, error) {
+		projectReport, err := r.auditProject(ctx, project.AbsolutePath, project.RelativePath, only, minSeverity, ignoredCVEs, progress)
+		return projectReport.Items, err
+	})
+	if err != nil {
+		return result.AuditReport{}, err
 	}
 
 	return result.AuditReport{
@@ -99,30 +68,31 @@ func (r Runner) auditProject(
 	ctx context.Context,
 	workDir string,
 	projectPath string,
-	scopes []string,
-	selectors []string,
+	only []string,
 	minSeverity string,
-	progress AuditProgress,
+	ignoredCVEs []string,
+	progress ScanProgress,
 ) (result.AuditReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeAudit})
+	selection, err := Select(SelectInput{Only: only, Mode: ModeAudit})
 	if err != nil {
 		return result.AuditReport{}, err
 	}
 
-	deps := r.depsForDir(workDir)
+	rc := r.runContextForDir(workDir)
 
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+	if err := validateRequestedPackageManagers(only, rc); err != nil {
 		return result.AuditReport{}, err
 	}
 
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
+	specs := filterComposerUnlessExplicit(selection.Specs, rc, only)
 
-	if isImplicitFullSelection(scopes, selectors) {
-		adapters = withoutAdapter(adapters, "env")
+	if isImplicitFullSelection(only) {
+		specs = withoutSpec(specs, "env")
 	}
 
-	runners := filterAuditRunners(adapters)
-	report := runAudits(ctx, runners, deps, progress)
+	report := runAudits(ctx, specs, rc, progress)
+
+	report = filterAuditReportByIgnored(report, ignoredCVEs)
 
 	if minSeverity != "" {
 		report = filterAuditReportBySeverity(report, minSeverity)
@@ -137,150 +107,134 @@ func (r Runner) auditProject(
 	return report, nil
 }
 
-func filterAuditRunners(adapters []adapter.Adapter) []adapter.AuditRunner {
-	runners := make([]adapter.AuditRunner, 0, len(adapters))
+func runAudits(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunContext, progress ScanProgress) result.AuditReport {
+	run := runScopes(ctx, specs, rc, progress,
+		func(ctx context.Context, spec *ecosystem.Spec, detection ecosystem.Detection) (result.AuditItem, bool) {
+			startedAt := time.Now()
+			auditResult := spec.RunAudit(ctx, rc, detection)
+			endedAt := time.Now()
 
-	for _, adp := range adapters {
-		if runner, ok := adp.(adapter.AuditRunner); ok {
-			runners = append(runners, runner)
-		}
-	}
+			if auditResult.Skipped {
+				return result.AuditItem{}, false
+			}
 
-	return runners
-}
+			return result.FromAuditResult(spec.Name, spec.Title(), spec.Priority, auditResult, startedAt, endedAt), true
+		},
+		func(left, right result.AuditItem) int {
+			if diff := cmp.Compare(right.SeverityRank, left.SeverityRank); diff != 0 {
+				return diff
+			}
 
-func runAudits(ctx context.Context, runners []adapter.AuditRunner, deps adapter.Dependencies, progress AuditProgress) result.AuditReport {
-	startedAt := time.Now()
+			if diff := cmp.Compare(left.Priority, right.Priority); diff != 0 {
+				return diff
+			}
 
-	progress.Plan(len(runners))
-
-	items := runParallel(ctx, runners, func(ctx context.Context, runner adapter.AuditRunner) (result.AuditItem, bool) {
-		scopeID := runner.Name()
-
-		progress.Start(scopeID, adapter.DisplayName(runner))
-
-		var included bool
-		defer func() { progress.Finish(scopeID, included) }()
-
-		itemStartedAt := time.Now()
-		auditResult := runner.Audit(ctx, deps)
-		itemEndedAt := time.Now()
-
-		if auditResult.Skipped {
-			return result.AuditItem{}, false
-		}
-
-		included = true
-
-		return result.FromAdapterAudit(
-			runner.Name(),
-			adapter.DisplayName(runner),
-			adapter.GetPriority(runner.Name()),
-			auditResult,
-			itemStartedAt,
-			itemEndedAt,
-		), true
-	})
-
-	slices.SortFunc(items, func(left, right result.AuditItem) int {
-		if diff := cmp.Compare(right.SeverityRank, left.SeverityRank); diff != 0 {
-			return diff
-		}
-
-		if diff := cmp.Compare(left.Priority, right.Priority); diff != 0 {
-			return diff
-		}
-
-		return cmp.Compare(left.ScopeID, right.ScopeID)
-	})
+			return cmp.Compare(left.ScopeID, right.ScopeID)
+		},
+	)
 
 	return result.AuditReport{
-		StartedAt: startedAt,
-		EndedAt:   time.Now(),
-		Canceled:  ctx.Err() != nil,
-		Items:     items,
+		StartedAt: run.StartedAt,
+		EndedAt:   run.EndedAt,
+		Canceled:  run.Canceled,
+		Items:     run.Items,
 	}
 }
 
-func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
-	threshold := adapter.SeverityLevel(minSeverity)
-	filtered := make([]result.AuditItem, 0, len(report.Items))
+func filterAuditReportByIgnored(report result.AuditReport, ignored []string) result.AuditReport {
+	suppress := make(map[string]struct{}, len(ignored))
 
-	for _, item := range report.Items {
-		if item.ErrText != "" {
-			filtered = append(filtered, item)
+	for _, id := range ignored {
+		if normalized := normalizeAdvisoryID(id); normalized != "" {
+			suppress[normalized] = struct{}{}
+		}
+	}
+
+	if len(suppress) == 0 {
+		return report
+	}
+
+	for i := range report.Items {
+		item := &report.Items[i]
+
+		// Only items that actually produced findings are eligible: an item with no
+		// findings (a parse gap or a tool error) must keep its original status.
+		if item.ErrText != "" || len(item.Findings) == 0 {
 			continue
 		}
 
-		filteredCounts := filterCountsBySeverity(item.Counts, threshold)
-		hasIssues := len(filteredCounts) > 0
+		kept := make([]model.Finding, 0, len(item.Findings))
 
-		filtered = append(filtered, result.AuditItem{
-			Project:       item.Project,
-			ScopeID:       item.ScopeID,
-			ScopeDisplay:  item.ScopeDisplay,
-			Priority:      item.Priority,
-			CommandLine:   item.CommandLine,
-			ExitCode:      item.ExitCode,
-			OK:            !hasIssues,
-			SeverityRank:  recalculateSeverityRank(filteredCounts),
-			Counts:        filteredCounts,
-			Output:        item.Output,
-			ErrText:       item.ErrText,
-			StartedAt:     item.StartedAt,
-			EndedAt:       item.EndedAt,
-			ElapsedMillis: item.ElapsedMillis,
-		})
+		for _, finding := range item.Findings {
+			if !findingSuppressed(finding, suppress) {
+				kept = append(kept, finding)
+			}
+		}
+
+		if len(kept) == len(item.Findings) {
+			continue
+		}
+
+		item.Findings = kept
+		item.SeverityRank = ecosystem.SeverityRankFromFindings(kept)
+
+		// Every finding was an accepted advisory, so the audit passes.
+		if len(kept) == 0 {
+			item.OK = true
+		}
 	}
-
-	report.Items = filtered
 
 	return report
 }
 
-func filterCountsBySeverity(counts map[string]int, threshold int) map[string]int {
-	if len(counts) == 0 {
-		return counts
+func findingSuppressed(finding model.Finding, suppress map[string]struct{}) bool {
+	if _, ok := suppress[normalizeAdvisoryID(finding.ID)]; ok {
+		return true
 	}
 
-	filtered := make(map[string]int)
+	for _, alias := range finding.Aliases {
+		if _, ok := suppress[normalizeAdvisoryID(alias)]; ok {
+			return true
+		}
+	}
 
-	for name, count := range counts {
-		if count <= 0 {
+	return false
+}
+
+func normalizeAdvisoryID(id string) string {
+	return strings.ToUpper(strings.TrimSpace(id))
+}
+
+func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) result.AuditReport {
+	threshold := ecosystem.SeverityLevel(minSeverity)
+
+	for i := range report.Items {
+		item := &report.Items[i]
+
+		if item.ErrText != "" {
 			continue
 		}
 
-		if adapter.SeverityLevel(name) >= threshold {
-			filtered[name] = count
+		item.Findings = filterFindingsBySeverity(item.Findings, threshold)
+		item.SeverityRank = ecosystem.SeverityRankFromFindings(item.Findings)
+		item.OK = len(item.Findings) == 0
+	}
+
+	return report
+}
+
+func filterFindingsBySeverity(findings []model.Finding, threshold int) []model.Finding {
+	if len(findings) == 0 {
+		return findings
+	}
+
+	filtered := make([]model.Finding, 0, len(findings))
+
+	for _, finding := range findings {
+		if ecosystem.SeverityLevel(finding.Severity) >= threshold {
+			filtered = append(filtered, finding)
 		}
 	}
 
 	return filtered
-}
-
-func recalculateSeverityRank(counts map[string]int) int {
-	if len(counts) == 0 {
-		return 0
-	}
-
-	rank := 0
-
-	for name, count := range counts {
-		if count <= 0 {
-			continue
-		}
-
-		switch adapter.SeverityLevel(name) {
-		case 4:
-			rank += 1000 * count
-		case 3:
-			rank += 100 * count
-		case 2:
-			rank += 10 * count
-		case 1:
-			rank += count
-		}
-	}
-
-	return rank
 }

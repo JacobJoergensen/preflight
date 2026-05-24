@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/JacobJoergensen/preflight/internal/adapter"
+	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
-	"github.com/JacobJoergensen/preflight/internal/manifest"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 
@@ -53,16 +51,58 @@ func (NoopFixProgress) Plan([]FixCandidate)   {}
 func (NoopFixProgress) Start(FixCandidate)    {}
 func (NoopFixProgress) Finish(result.FixItem) {}
 
+type fixKey struct {
+	Project string
+	ScopeID string
+}
+
+func keyOf(candidate FixCandidate) fixKey {
+	return fixKey{Project: candidate.Project, ScopeID: candidate.ScopeID}
+}
+
+type projectFixPrep struct {
+	project           monorepo.Project
+	rc                ecosystem.RunContext
+	specs             []*ecosystem.Spec
+	selection         Selection
+	candidates        []FixCandidate
+	prepError         error
+	skippedOnPrepFail result.SkippedFix
+}
+
 func (r Runner) Fix(
 	ctx context.Context,
-	scopes []string,
-	selectors []string,
-	opts adapter.FixOptions,
+	only []string,
+	opts ecosystem.FixOptions,
 	diff bool,
 	approver FixApprover,
 	progress FixProgress,
 	disableMonorepo bool,
 	projectGlobs []string,
+) (result.FixReport, error) {
+	projects, err := discoverProjects(r.WorkDir, disableMonorepo, projectGlobs)
+	if err != nil {
+		return result.FixReport{}, err
+	}
+
+	monorepoMode := len(projects) > 0
+
+	if !monorepoMode {
+		projects = []monorepo.Project{{AbsolutePath: r.WorkDir, RelativePath: ""}}
+	}
+
+	return r.runFix(ctx, projects, monorepoMode, only, opts, diff, approver, progress)
+}
+
+func (r Runner) runFix(
+	ctx context.Context,
+	projects []monorepo.Project,
+	monorepoMode bool,
+	only []string,
+	opts ecosystem.FixOptions,
+	diff bool,
+	approver FixApprover,
+	progress FixProgress,
 ) (result.FixReport, error) {
 	if approver == nil {
 		approver = AutoFixApprover{}
@@ -72,60 +112,18 @@ func (r Runner) Fix(
 		progress = NoopFixProgress{}
 	}
 
-	if !disableMonorepo {
-		projects, err := monorepo.DiscoverProjects(r.WorkDir)
-		if err != nil {
-			return result.FixReport{}, fmt.Errorf("monorepo discovery failed: %w", err)
-		}
-
-		projects, err = monorepo.FilterByGlobs(projects, projectGlobs)
-		if err != nil {
-			return result.FixReport{}, fmt.Errorf("project filter failed: %w", err)
-		}
-
-		if len(projects) > 0 {
-			return r.fixMonorepo(ctx, projects, scopes, selectors, opts, diff, approver, progress)
-		}
-	}
-
-	return r.fixSingleProject(ctx, r.WorkDir, "", scopes, selectors, opts, diff, approver, progress)
-}
-
-type projectFixPrep struct {
-	project           monorepo.Project
-	deps              adapter.Dependencies
-	adapters          []adapter.Adapter
-	selection         Selection
-	candidates        []FixCandidate
-	prepError         error
-	skippedOnPrepFail result.SkippedFix
-}
-
-func (r Runner) fixMonorepo(
-	ctx context.Context,
-	projects []monorepo.Project,
-	scopes []string,
-	selectors []string,
-	opts adapter.FixOptions,
-	diff bool,
-	approver FixApprover,
-	progress FixProgress,
-) (result.FixReport, error) {
 	startedAt := time.Now()
 
-	projectSummaries := make([]result.FixProject, 0, len(projects))
-
-	for _, project := range projects {
-		projectSummaries = append(projectSummaries, result.FixProject{
-			RelativePath: project.RelativePath,
-			Name:         project.Name,
-		})
+	preps, err := r.prepareProjects(projects, only)
+	if err != nil {
+		return result.FixReport{}, err
 	}
 
-	preps, fatalErr := r.prepareMonorepoProjects(projects, scopes, selectors)
-
-	if fatalErr != nil {
-		return result.FixReport{}, fatalErr
+	// A single project fails fast on a prep error (e.g. an invalid selector for
+	// the project), while a monorepo records it as a per-project skip and lets
+	// the other projects proceed.
+	if !monorepoMode && preps[0].prepError != nil {
+		return result.FixReport{}, preps[0].prepError
 	}
 
 	var allCandidates []FixCandidate
@@ -134,55 +132,54 @@ func (r Runner) fixMonorepo(
 		allCandidates = append(allCandidates, prep.candidates...)
 	}
 
-	plannedFixes := plannedFixesFromCandidates(allCandidates)
 	plan, aborted, err := resolveFixPlan(allCandidates, approver)
 	if err != nil {
 		return result.FixReport{}, fmt.Errorf("approval failed: %w", err)
 	}
 
-	skipped := collectPrepSkips(preps)
-	skipped = append(skipped, plan.skipped...)
-
-	if aborted {
-		return result.FixReport{
-			StartedAt:    startedAt,
-			EndedAt:      time.Now(),
-			Aborted:      true,
-			DryRun:       opts.DryRun,
-			SkipBackup:   opts.SkipBackup,
-			Force:        opts.Force,
-			FixSelectors: firstNonEmptyFixSelectors(preps),
-			Plan:         plannedFixes,
-			Skipped:      skipped,
-			Diff:         diff,
-			Projects:     projectSummaries,
-		}, nil
+	report := result.FixReport{
+		StartedAt:    startedAt,
+		DryRun:       opts.DryRun,
+		SkipBackup:   opts.SkipBackup,
+		Force:        opts.Force,
+		FixSelectors: firstNonEmptyFixSelectors(preps),
+		Plan:         plannedFixesFromCandidates(allCandidates),
+		Skipped:      append(collectPrepSkips(preps), plan.skipped...),
+		Diff:         diff,
 	}
 
-	approvedSet := approvedIDSet(plan.approvedIDs)
+	if monorepoMode {
+		report.Projects = projectSummaries(projects)
+	}
 
-	var allItems []result.FixItem
-	var allDiffs []lockdiff.FileDiff
+	if aborted {
+		report.EndedAt = time.Now()
+		report.Aborted = true
+		return report, nil
+	}
+
+	progress.Plan(filterApprovedCandidates(allCandidates, plan.approved))
 
 	backupDirs := make(map[string]string)
-
-	progress.Plan(filterApprovedCandidates(allCandidates, approvedSet))
 
 	for _, prep := range preps {
 		if prep.prepError != nil {
 			continue
 		}
 
-		projectApprovedAdapters := filterAdaptersByProjectApprovals(prep.adapters, prep.candidates, approvedSet)
+		approvedSpecs := filterSpecsByProjectApprovals(prep.specs, prep.candidates, plan.approved)
 
-		if len(projectApprovedAdapters) == 0 {
+		if len(approvedSpecs) == 0 {
 			continue
 		}
 
-		backupDir, backupErr := tryBackupLockFiles(prep.deps, projectApprovedAdapters, prep.selection.FixSelectors, opts)
-
+		backupDir, backupErr := tryBackupLockFiles(prep.rc, approvedSpecs, opts)
 		if backupErr != nil {
-			allItems = append(allItems, backupFailureItem(prep.project.RelativePath, backupErr))
+			if !monorepoMode {
+				return result.FixReport{}, fmt.Errorf("failed to backup lock files: %w", backupErr)
+			}
+
+			report.Items = append(report.Items, backupFailureItem(prep.project.RelativePath, backupErr))
 			continue
 		}
 
@@ -190,60 +187,54 @@ func (r Runner) fixMonorepo(
 			backupDirs[prep.project.RelativePath] = backupDir
 		}
 
-		items := runApprovedFixers(ctx, projectApprovedAdapters, prep.candidates, prep.deps, prep.selection.FixSelectors, opts, progress)
+		items := runApprovedFixers(ctx, approvedSpecs, prep.candidates, prep.rc, opts, progress)
 
 		for i := range items {
 			items[i].Project = prep.project.RelativePath
 		}
 
-		allItems = append(allItems, items...)
+		report.Items = append(report.Items, items...)
 
 		if diff && !opts.DryRun && backupDir != "" {
-			projectDiffs := computeLockDiffs(prep.deps, backupDir)
+			projectDiffs := computeLockDiffs(prep.rc, backupDir)
 
 			for i := range projectDiffs {
 				projectDiffs[i].File = filepath.ToSlash(filepath.Join(prep.project.RelativePath, projectDiffs[i].File))
 			}
 
-			allDiffs = append(allDiffs, projectDiffs...)
+			report.LockDiffs = append(report.LockDiffs, projectDiffs...)
 		}
 	}
 
-	return result.FixReport{
-		StartedAt:    startedAt,
-		EndedAt:      time.Now(),
-		Canceled:     ctx.Err() != nil,
-		DryRun:       opts.DryRun,
-		SkipBackup:   opts.SkipBackup,
-		BackupDirs:   backupDirs,
-		Force:        opts.Force,
-		FixSelectors: firstNonEmptyFixSelectors(preps),
-		Plan:         plannedFixes,
-		Items:        allItems,
-		Skipped:      skipped,
-		Diff:         diff,
-		LockDiffs:    allDiffs,
-		Projects:     projectSummaries,
-	}, nil
+	report.EndedAt = time.Now()
+	report.Canceled = ctx.Err() != nil
+
+	if monorepoMode {
+		report.BackupDirs = backupDirs
+	} else {
+		report.BackupDir = backupDirs[""]
+	}
+
+	return report, nil
 }
 
-func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, selectors []string) ([]projectFixPrep, error) {
+func (r Runner) prepareProjects(projects []monorepo.Project, only []string) ([]projectFixPrep, error) {
 	preps := make([]projectFixPrep, 0, len(projects))
 
 	for _, project := range projects {
 		prep := projectFixPrep{project: project}
 
-		selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
+		selection, err := Select(SelectInput{Only: only, Mode: ModeFix})
 		if err != nil {
 			return nil, err
 		}
 
 		prep.selection = selection
 
-		deps := r.depsForDir(project.AbsolutePath)
-		prep.deps = deps
+		rc := r.runContextForDir(project.AbsolutePath)
+		prep.rc = rc
 
-		if err := validateRequestedPackageManagers(selectors, deps); err != nil {
+		if err := validateRequestedPackageManagers(only, rc); err != nil {
 			prep.prepError = err
 			prep.skippedOnPrepFail = result.SkippedFix{
 				Project: project.RelativePath,
@@ -253,10 +244,10 @@ func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, sel
 			continue
 		}
 
-		adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
-		prep.adapters = adapters
+		specs := filterComposerUnlessExplicit(selection.Specs, rc, only)
+		prep.specs = specs
 
-		candidates := buildFixCandidates(adapters, deps)
+		candidates := buildFixCandidates(specs, rc)
 
 		for i := range candidates {
 			candidates[i].Project = project.RelativePath
@@ -270,96 +261,17 @@ func (r Runner) prepareMonorepoProjects(projects []monorepo.Project, scopes, sel
 	return preps, nil
 }
 
-func (r Runner) fixSingleProject(
-	ctx context.Context,
-	workDir string,
-	projectPath string,
-	scopes []string,
-	selectors []string,
-	opts adapter.FixOptions,
-	diff bool,
-	approver FixApprover,
-	progress FixProgress,
-) (result.FixReport, error) {
-	selection, err := Select(SelectInput{Scopes: scopes, Selectors: selectors, Mode: ModeFix})
-	if err != nil {
-		return result.FixReport{}, err
+func projectSummaries(projects []monorepo.Project) []result.Project {
+	summaries := make([]result.Project, 0, len(projects))
+
+	for _, project := range projects {
+		summaries = append(summaries, result.Project{
+			RelativePath: project.RelativePath,
+			Name:         project.Name,
+		})
 	}
 
-	deps := r.depsForDir(workDir)
-
-	if err := validateRequestedPackageManagers(selectors, deps); err != nil {
-		return result.FixReport{}, err
-	}
-
-	adapters := filterComposerUnlessExplicit(selection.Adapters, deps, scopes, selectors)
-	startedAt := time.Now()
-
-	candidates := buildFixCandidates(adapters, deps)
-
-	for i := range candidates {
-		candidates[i].Project = projectPath
-	}
-
-	plannedFixes := plannedFixesFromCandidates(candidates)
-	plan, aborted, err := resolveFixPlan(candidates, approver)
-	if err != nil {
-		return result.FixReport{}, fmt.Errorf("approval failed: %w", err)
-	}
-
-	if aborted {
-		return result.FixReport{
-			StartedAt:    startedAt,
-			EndedAt:      time.Now(),
-			Aborted:      true,
-			DryRun:       opts.DryRun,
-			SkipBackup:   opts.SkipBackup,
-			Force:        opts.Force,
-			FixSelectors: selection.FixSelectors,
-			Plan:         plannedFixes,
-			Skipped:      plan.skipped,
-			Diff:         diff,
-		}, nil
-	}
-
-	approvedAdapters := filterAdaptersByIDs(adapters, plan.approvedIDs)
-
-	var backupDir string
-
-	if !opts.DryRun && !opts.SkipBackup && len(approvedAdapters) > 0 {
-		dir, err := backupSelectedLockFiles(deps, adapter.Names(approvedAdapters), selection.FixSelectors)
-		if err != nil {
-			return result.FixReport{}, fmt.Errorf("failed to backup lock files: %w", err)
-		}
-
-		backupDir = dir
-	}
-
-	progress.Plan(filterApprovedCandidates(candidates, approvedIDSet(plan.approvedIDs)))
-
-	items := runApprovedFixers(ctx, approvedAdapters, candidates, deps, selection.FixSelectors, opts, progress)
-
-	var diffs []lockdiff.FileDiff
-
-	if diff && !opts.DryRun && backupDir != "" {
-		diffs = computeLockDiffs(deps, backupDir)
-	}
-
-	return result.FixReport{
-		StartedAt:    startedAt,
-		EndedAt:      time.Now(),
-		Canceled:     ctx.Err() != nil,
-		DryRun:       opts.DryRun,
-		SkipBackup:   opts.SkipBackup,
-		BackupDir:    backupDir,
-		Force:        opts.Force,
-		FixSelectors: selection.FixSelectors,
-		Plan:         plannedFixes,
-		Items:        items,
-		Skipped:      plan.skipped,
-		Diff:         diff,
-		LockDiffs:    diffs,
-	}, nil
+	return summaries
 }
 
 func collectPrepSkips(preps []projectFixPrep) []result.SkippedFix {
@@ -384,12 +296,12 @@ func firstNonEmptyFixSelectors(preps []projectFixPrep) []string {
 	return nil
 }
 
-func tryBackupLockFiles(deps adapter.Dependencies, adapters []adapter.Adapter, selectors []string, opts adapter.FixOptions) (string, error) {
-	if opts.DryRun || opts.SkipBackup || len(adapters) == 0 {
+func tryBackupLockFiles(rc ecosystem.RunContext, specs []*ecosystem.Spec, opts ecosystem.FixOptions) (string, error) {
+	if opts.DryRun || opts.SkipBackup || len(specs) == 0 {
 		return "", nil
 	}
 
-	return backupSelectedLockFiles(deps, adapter.Names(adapters), selectors)
+	return backupSelectedLockFiles(rc, specs)
 }
 
 func backupFailureItem(projectPath string, err error) result.FixItem {
@@ -406,21 +318,11 @@ func backupFailureItem(projectPath string, err error) result.FixItem {
 	}
 }
 
-func approvedIDSet(approvedIDs []string) map[string]struct{} {
-	set := make(map[string]struct{}, len(approvedIDs))
-
-	for _, id := range approvedIDs {
-		set[id] = struct{}{}
-	}
-
-	return set
-}
-
-func filterApprovedCandidates(candidates []FixCandidate, approved map[string]struct{}) []FixCandidate {
+func filterApprovedCandidates(candidates []FixCandidate, approved map[fixKey]struct{}) []FixCandidate {
 	filtered := make([]FixCandidate, 0, len(candidates))
 
 	for _, candidate := range candidates {
-		if _, ok := approved[candidateApprovalKey(candidate)]; ok {
+		if _, ok := approved[keyOf(candidate)]; ok {
 			filtered = append(filtered, candidate)
 		}
 	}
@@ -428,28 +330,24 @@ func filterApprovedCandidates(candidates []FixCandidate, approved map[string]str
 	return filtered
 }
 
-func filterAdaptersByProjectApprovals(adapters []adapter.Adapter, candidates []FixCandidate, approved map[string]struct{}) []adapter.Adapter {
+func filterSpecsByProjectApprovals(specs []*ecosystem.Spec, candidates []FixCandidate, approved map[fixKey]struct{}) []*ecosystem.Spec {
 	projectScopeApproved := make(map[string]struct{}, len(candidates))
 
 	for _, candidate := range candidates {
-		if _, ok := approved[candidateApprovalKey(candidate)]; ok {
+		if _, ok := approved[keyOf(candidate)]; ok {
 			projectScopeApproved[candidate.ScopeID] = struct{}{}
 		}
 	}
 
-	filtered := make([]adapter.Adapter, 0, len(projectScopeApproved))
+	filtered := make([]*ecosystem.Spec, 0, len(projectScopeApproved))
 
-	for _, a := range adapters {
-		if _, ok := projectScopeApproved[a.Name()]; ok {
-			filtered = append(filtered, a)
+	for _, spec := range specs {
+		if _, ok := projectScopeApproved[spec.Name]; ok {
+			filtered = append(filtered, spec)
 		}
 	}
 
 	return filtered
-}
-
-func candidateApprovalKey(candidate FixCandidate) string {
-	return candidate.Project + "\x00" + candidate.ScopeID
 }
 
 func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
@@ -474,37 +372,36 @@ func plannedFixesFromCandidates(candidates []FixCandidate) []result.PlannedFix {
 
 func runApprovedFixers(
 	ctx context.Context,
-	adapters []adapter.Adapter,
+	specs []*ecosystem.Spec,
 	candidates []FixCandidate,
-	deps adapter.Dependencies,
-	fixSelectors []string,
-	opts adapter.FixOptions,
+	rc ecosystem.RunContext,
+	opts ecosystem.FixOptions,
 	progress FixProgress,
 ) []result.FixItem {
-	items := make([]result.FixItem, 0, len(adapters))
+	items := make([]result.FixItem, 0, len(specs))
 	candidateByID := candidatesByScopeID(candidates)
 
-	for _, a := range adapters {
-		candidate := candidateByID[a.Name()]
+	for _, spec := range specs {
+		candidate := candidateByID[spec.Name]
 		progress.Start(candidate)
 
 		startedAt := time.Now()
-		adapterItem, fixErr := a.(adapter.Fixer).Fix(ctx, deps, fixSelectors, opts)
+		fixItem, fixErr := fixSpec(ctx, spec, rc, opts)
 		endedAt := time.Now()
 
 		var item result.FixItem
 
 		if fixErr != nil {
 			item = result.FixItem{
-				ScopeID:     a.Name(),
-				ManagerName: adapter.DisplayName(a),
+				ScopeID:     spec.Name,
+				ManagerName: spec.Title(),
 				Success:     false,
 				Error:       fixErr.Error(),
 				StartedAt:   startedAt,
 				EndedAt:     endedAt,
 			}
 		} else {
-			item = result.FromAdapterFix(adapterItem, startedAt, endedAt)
+			item = result.FromFixItem(fixItem, startedAt, endedAt)
 		}
 
 		item.Project = candidate.Project
@@ -514,6 +411,16 @@ func runApprovedFixers(
 	}
 
 	return items
+}
+
+func fixSpec(ctx context.Context, spec *ecosystem.Spec, rc ecosystem.RunContext, opts ecosystem.FixOptions) (ecosystem.FixItem, error) {
+	detection, ok := spec.Resolve(rc)
+
+	if !ok {
+		return ecosystem.FixItem{ScopeID: spec.Name, Success: true}, nil
+	}
+
+	return spec.RunFix(ctx, rc, detection, opts)
 }
 
 func candidatesByScopeID(candidates []FixCandidate) map[string]FixCandidate {
@@ -527,12 +434,12 @@ func candidatesByScopeID(candidates []FixCandidate) map[string]FixCandidate {
 }
 
 type fixPlan struct {
-	approvedIDs []string
-	skipped     []result.SkippedFix
+	approved map[fixKey]struct{}
+	skipped  []result.SkippedFix
 }
 
 func resolveFixPlan(candidates []FixCandidate, approver FixApprover) (fixPlan, bool, error) {
-	plan := fixPlan{approvedIDs: make([]string, 0, len(candidates))}
+	plan := fixPlan{approved: make(map[fixKey]struct{}, len(candidates))}
 
 	for _, candidate := range candidates {
 		decision, err := approver.Approve(candidate)
@@ -542,7 +449,7 @@ func resolveFixPlan(candidates []FixCandidate, approver FixApprover) (fixPlan, b
 
 		switch decision {
 		case FixApply:
-			plan.approvedIDs = append(plan.approvedIDs, candidateApprovalKey(candidate))
+			plan.approved[keyOf(candidate)] = struct{}{}
 		case FixSkip:
 			plan.skipped = append(plan.skipped, skippedFrom(candidate, "declined by user"))
 		case FixAbort:
@@ -564,72 +471,47 @@ func skippedFrom(candidate FixCandidate, reason string) result.SkippedFix {
 	}
 }
 
-func filterAdaptersByIDs(adapters []adapter.Adapter, approvedIDs []string) []adapter.Adapter {
-	if len(approvedIDs) == 0 {
-		return nil
-	}
+func buildFixCandidates(specs []*ecosystem.Spec, rc ecosystem.RunContext) []FixCandidate {
+	candidates := make([]FixCandidate, 0, len(specs))
 
-	approvedScopes := make(map[string]struct{}, len(approvedIDs))
-
-	for _, id := range approvedIDs {
-		if _, after, ok := strings.Cut(id, "\x00"); ok {
-			approvedScopes[after] = struct{}{}
-		} else {
-			approvedScopes[id] = struct{}{}
-		}
-	}
-
-	filtered := make([]adapter.Adapter, 0, len(approvedScopes))
-
-	for _, a := range adapters {
-		if _, ok := approvedScopes[a.Name()]; ok {
-			filtered = append(filtered, a)
-		}
-	}
-
-	return filtered
-}
-
-func buildFixCandidates(adapters []adapter.Adapter, deps adapter.Dependencies) []FixCandidate {
-	candidates := make([]FixCandidate, 0, len(adapters))
-
-	for _, a := range adapters {
-		if _, ok := a.(adapter.Fixer); !ok {
+	for _, spec := range specs {
+		if !spec.CanFix() {
 			continue
 		}
 
-		packageManager, ok := deps.Loader.DetectPackageManager(a.Name())
+		detection, ok := spec.Resolve(rc)
 
-		if !ok || (!packageManager.ConfigFileExists && !packageManager.LockFileExists) {
+		if !ok {
 			continue
 		}
 
-		command := strings.TrimSpace(packageManager.Command() + " " + strings.Join(packageManager.Tool.InstallArgs, " "))
+		manager := detection.Active
+		command := strings.TrimSpace(manager.Command + " " + strings.Join(manager.InstallArgs, " "))
 
 		candidates = append(candidates, FixCandidate{
-			ScopeID:     a.Name(),
-			DisplayName: adapter.DisplayName(a),
+			ScopeID:     spec.Name,
+			DisplayName: spec.Title(),
 			Command:     command,
-			Summary:     candidateSummary(packageManager),
+			Summary:     candidateSummary(manager, rc),
 		})
 	}
 
 	return candidates
 }
 
-func candidateSummary(packageManager manifest.PackageManager) string {
-	if packageManager.LockFileExists && packageManager.LockFile() != "" {
-		return "sync " + packageManager.Tool.ConfigFile + " + " + packageManager.LockFile()
+func candidateSummary(manager ecosystem.Manager, rc ecosystem.RunContext) string {
+	if manager.LockFile != "" && rc.FileExists(manager.LockFile) {
+		return "sync " + manager.ConfigFile + " + " + manager.LockFile
 	}
 
-	return "install from " + packageManager.Tool.ConfigFile
+	return "install from " + manager.ConfigFile
 }
 
-func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.FileDiff {
+func computeLockDiffs(rc ecosystem.RunContext, backupDir string) []lockdiff.FileDiff {
 	var diffs []lockdiff.FileDiff
 
 	for _, filename := range lockdiff.RegisteredFilenames() {
-		backupBytes, err := deps.FS.ReadFile(filepath.Join(backupDir, filename))
+		backupBytes, err := rc.FS.ReadFile(filepath.Join(backupDir, filename))
 		if err != nil {
 			continue
 		}
@@ -647,7 +529,7 @@ func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.Fi
 
 		after := map[string]string{}
 
-		if currentBytes, err := deps.FS.ReadFile(filepath.Join(deps.Loader.WorkDir, filename)); err == nil {
+		if currentBytes, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, filename)); err == nil {
 			if parsed, parseErr := parser.Parse(currentBytes); parseErr == nil {
 				after = parsed
 			}
@@ -663,36 +545,30 @@ func computeLockDiffs(deps adapter.Dependencies, backupDir string) []lockdiff.Fi
 	return diffs
 }
 
-func backupSelectedLockFiles(deps adapter.Dependencies, adapterIDs []string, selectors []string) (string, error) {
-	want := make(map[string]struct{}, len(adapterIDs))
-
-	for _, id := range adapterIDs {
-		want[id] = struct{}{}
-	}
-
-	if len(want) == 0 {
+func backupSelectedLockFiles(rc ecosystem.RunContext, specs []*ecosystem.Spec) (string, error) {
+	if len(specs) == 0 {
 		return "", nil
 	}
 
-	backupDir := filepath.Join(deps.Loader.WorkDir, ".preflight", "backups", time.Now().Format("20060102-150405"))
+	backupDir := filepath.Join(rc.WorkDir, ".preflight", "backups", time.Now().Format("20060102-150405"))
 
-	if err := deps.FS.MkdirAll(backupDir, 0o750); err != nil {
+	if err := rc.FS.MkdirAll(backupDir, 0o750); err != nil {
 		return "", err
 	}
 
-	for _, lock := range collectLockFilesForBackup(deps, want, selectors) {
-		src, err := deps.FS.ReadFile(filepath.Join(deps.Loader.WorkDir, lock))
+	for _, lock := range collectLockFilesForBackup(rc, specs) {
+		src, err := rc.FS.ReadFile(filepath.Join(rc.WorkDir, lock))
 		if err != nil {
 			return "", err
 		}
 
 		dst := filepath.Join(backupDir, lock)
 
-		if err := deps.FS.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		if err := rc.FS.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 			return "", err
 		}
 
-		if err := deps.FS.WriteFile(dst, src, 0o600); err != nil {
+		if err := rc.FS.WriteFile(dst, src, 0o600); err != nil {
 			return "", err
 		}
 	}
@@ -700,39 +576,23 @@ func backupSelectedLockFiles(deps adapter.Dependencies, adapterIDs []string, sel
 	return backupDir, nil
 }
 
-func collectLockFilesForBackup(deps adapter.Dependencies, want map[string]struct{}, selectors []string) []string {
+func collectLockFilesForBackup(rc ecosystem.RunContext, specs []*ecosystem.Spec) []string {
 	var lockFiles []string
 
-	if _, ok := want["js"]; ok {
-		packageManager, ok := deps.Loader.DetectPackageManager(manifest.PackageTypeJS)
+	for _, spec := range specs {
+		detection, ok := spec.Resolve(rc)
 
-		if ok && packageManager.LockFileExists && packageManager.LockFile() != "" {
-			jsMismatch := manifest.AnyMatchesPackageType(selectors, manifest.PackageTypeJS) && !slices.Contains(selectors, packageManager.Command())
-
-			if !jsMismatch {
-				lockFiles = append(lockFiles, packageManager.LockFile())
-			}
-		}
-	}
-
-	for _, singleTool := range []string{"composer", "go", "ruby"} {
-		if _, ok := want[singleTool]; !ok {
+		if !ok {
 			continue
 		}
 
-		packageManager, ok := deps.Loader.DetectPackageManager(singleTool)
+		lock := detection.Active.LockFile
 
-		if ok && packageManager.LockFileExists && packageManager.LockFile() != "" {
-			lockFiles = append(lockFiles, packageManager.LockFile())
+		if lock == "" || !rc.FileExists(lock) {
+			continue
 		}
-	}
 
-	if _, ok := want["python"]; ok {
-		for _, name := range []string{"poetry.lock", "uv.lock", "Pipfile.lock", "pdm.lock"} {
-			if _, err := deps.FS.Stat(filepath.Join(deps.Loader.WorkDir, name)); err == nil {
-				lockFiles = append(lockFiles, name)
-			}
-		}
+		lockFiles = append(lockFiles, lock)
 	}
 
 	return lockFiles
