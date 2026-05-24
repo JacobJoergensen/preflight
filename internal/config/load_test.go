@@ -1,69 +1,11 @@
 package config
 
 import (
-	"io/fs"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/JacobJoergensen/preflight/internal/memfs"
 )
-
-type fakeFileInfo struct{}
-
-type fakeFS struct {
-	files map[string][]byte
-}
-
-func (fakeFileInfo) Name() string {
-	return ""
-}
-
-func (fakeFileInfo) Size() int64 {
-	return 0
-}
-
-func (fakeFileInfo) Mode() fs.FileMode {
-	return 0
-}
-
-func (fakeFileInfo) ModTime() time.Time {
-	return time.Time{}
-}
-
-func (fakeFileInfo) IsDir() bool {
-	return false
-}
-
-func (fakeFileInfo) Sys() any {
-	return nil
-}
-
-func (f fakeFS) ReadFile(name string) ([]byte, error) {
-	if data, ok := f.files[name]; ok {
-		return data, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f fakeFS) WriteFile(string, []byte, fs.FileMode) error {
-	return nil
-}
-
-func (f fakeFS) MkdirAll(string, fs.FileMode) error {
-	return nil
-}
-
-func (f fakeFS) Stat(name string) (fs.FileInfo, error) {
-	if _, ok := f.files[name]; ok {
-		return fakeFileInfo{}, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f fakeFS) ReadDir(string) ([]fs.DirEntry, error) {
-	return nil, nil
-}
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
@@ -133,8 +75,7 @@ profiles:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filesystem := fakeFS{files: tt.files}
-			config, err := Load("", filesystem)
+			config, err := Load("", memfs.New(tt.files))
 
 			if tt.wantError {
 				if err == nil {

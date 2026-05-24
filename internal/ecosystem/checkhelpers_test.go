@@ -1,10 +1,9 @@
 package ecosystem
 
 import (
-	"io/fs"
 	"testing"
-	"time"
 
+	"github.com/JacobJoergensen/preflight/internal/memfs"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -19,35 +18,35 @@ func TestMissingLockfileWarning(t *testing.T) {
 	tests := []struct {
 		name     string
 		manager  Manager
-		present  map[string]struct{}
+		present  map[string][]byte
 		hasDeps  bool
 		wantWarn bool
 	}{
 		{
 			name:     "manifest present and lockfile missing with dependencies warns",
 			manager:  composer,
-			present:  map[string]struct{}{"composer.json": {}},
+			present:  map[string][]byte{"composer.json": nil},
 			hasDeps:  true,
 			wantWarn: true,
 		},
 		{
 			name:     "present lockfile is silent",
 			manager:  composer,
-			present:  map[string]struct{}{"composer.json": {}, "composer.lock": {}},
+			present:  map[string][]byte{"composer.json": nil, "composer.lock": nil},
 			hasDeps:  true,
 			wantWarn: false,
 		},
 		{
 			name:     "no dependencies is silent",
 			manager:  composer,
-			present:  map[string]struct{}{"composer.json": {}},
+			present:  map[string][]byte{"composer.json": nil},
 			hasDeps:  false,
 			wantWarn: false,
 		},
 		{
 			name:     "manager without a lockfile is silent",
 			manager:  Manager{Command: "pip", ConfigFile: "requirements.txt"},
-			present:  map[string]struct{}{"requirements.txt": {}},
+			present:  map[string][]byte{"requirements.txt": nil},
 			hasDeps:  true,
 			wantWarn: false,
 		},
@@ -55,7 +54,7 @@ func TestMissingLockfileWarning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := RunContext{FS: statFS{present: tt.present}}
+			rc := RunContext{FS: memfs.New(tt.present)}
 			got := MissingLockfileWarning(rc, tt.manager, tt.hasDeps)
 
 			if tt.wantWarn {
@@ -72,29 +71,3 @@ func TestMissingLockfileWarning(t *testing.T) {
 		})
 	}
 }
-
-type statFS struct {
-	present map[string]struct{}
-}
-
-func (s statFS) Stat(name string) (fs.FileInfo, error) {
-	if _, ok := s.present[name]; ok {
-		return statFileInfo{}, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (statFS) ReadFile(string) ([]byte, error)             { return nil, fs.ErrNotExist }
-func (statFS) WriteFile(string, []byte, fs.FileMode) error { return nil }
-func (statFS) MkdirAll(string, fs.FileMode) error          { return nil }
-func (statFS) ReadDir(string) ([]fs.DirEntry, error)       { return nil, nil }
-
-type statFileInfo struct{}
-
-func (statFileInfo) Name() string       { return "" }
-func (statFileInfo) Size() int64        { return 0 }
-func (statFileInfo) Mode() fs.FileMode  { return 0 }
-func (statFileInfo) ModTime() time.Time { return time.Time{} }
-func (statFileInfo) IsDir() bool        { return false }
-func (statFileInfo) Sys() any           { return nil }

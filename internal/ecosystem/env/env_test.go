@@ -2,12 +2,11 @@ package env
 
 import (
 	"context"
-	"io/fs"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/memfs"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 
@@ -52,7 +51,7 @@ func TestCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := ecosystem.RunContext{FS: envTestFS{files: tt.files}}
+			rc := ecosystem.RunContext{FS: memfs.New(tt.files)}
 			messages := check(context.Background(), rc, ecosystem.Detection{})
 
 			got := make([]model.Severity, len(messages))
@@ -67,36 +66,3 @@ func TestCheck(t *testing.T) {
 		})
 	}
 }
-
-type envTestFS struct {
-	files map[string][]byte
-}
-
-func (f envTestFS) ReadFile(name string) ([]byte, error) {
-	if data, ok := f.files[name]; ok {
-		return data, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f envTestFS) Stat(name string) (fs.FileInfo, error) {
-	if _, ok := f.files[name]; ok {
-		return envTestFileInfo{}, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (envTestFS) WriteFile(string, []byte, fs.FileMode) error { return nil }
-func (envTestFS) MkdirAll(string, fs.FileMode) error          { return nil }
-func (envTestFS) ReadDir(string) ([]fs.DirEntry, error)       { return nil, nil }
-
-type envTestFileInfo struct{}
-
-func (envTestFileInfo) Name() string       { return "" }
-func (envTestFileInfo) Size() int64        { return 0 }
-func (envTestFileInfo) Mode() fs.FileMode  { return 0 }
-func (envTestFileInfo) ModTime() time.Time { return time.Time{} }
-func (envTestFileInfo) IsDir() bool        { return false }
-func (envTestFileInfo) Sys() any           { return nil }

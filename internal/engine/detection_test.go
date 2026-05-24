@@ -1,11 +1,10 @@
 package engine
 
 import (
-	"io/fs"
 	"testing"
-	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
+	"github.com/JacobJoergensen/preflight/internal/memfs"
 )
 
 func TestSpecResolveDetection(t *testing.T) {
@@ -68,7 +67,7 @@ func TestSpecResolveDetection(t *testing.T) {
 				t.Fatalf("no spec registered for scope %q", tt.scope)
 			}
 
-			rc := ecosystem.RunContext{FS: detectFS{files: tt.files}}
+			rc := ecosystem.RunContext{FS: memfs.New(tt.files)}
 			detection, present := spec.Resolve(rc)
 
 			if present != tt.wantPresent {
@@ -81,36 +80,3 @@ func TestSpecResolveDetection(t *testing.T) {
 		})
 	}
 }
-
-type detectFS struct {
-	files map[string][]byte
-}
-
-func (f detectFS) ReadFile(name string) ([]byte, error) {
-	if data, ok := f.files[name]; ok {
-		return data, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (f detectFS) Stat(name string) (fs.FileInfo, error) {
-	if _, ok := f.files[name]; ok {
-		return detectFileInfo{}, nil
-	}
-
-	return nil, fs.ErrNotExist
-}
-
-func (detectFS) WriteFile(string, []byte, fs.FileMode) error { return nil }
-func (detectFS) MkdirAll(string, fs.FileMode) error          { return nil }
-func (detectFS) ReadDir(string) ([]fs.DirEntry, error)       { return nil, nil }
-
-type detectFileInfo struct{}
-
-func (detectFileInfo) Name() string       { return "" }
-func (detectFileInfo) Size() int64        { return 0 }
-func (detectFileInfo) Mode() fs.FileMode  { return 0 }
-func (detectFileInfo) ModTime() time.Time { return time.Time{} }
-func (detectFileInfo) IsDir() bool        { return false }
-func (detectFileInfo) Sys() any           { return nil }
