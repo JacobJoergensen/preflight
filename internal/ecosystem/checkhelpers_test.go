@@ -3,7 +3,7 @@ package ecosystem
 import (
 	"testing"
 
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 	"github.com/JacobJoergensen/preflight/internal/model"
 )
 

@@ -64,7 +64,7 @@ preflight audit -o sarif > preflight.sarif`,
 
 					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
 					minSeverity := flagOrProfile(cmd, "min-severity", flags.minSeverity, minSeverityProfile)
-					ignored := mergeIgnoredCVEs(ignoredProfile, flags.ignoreCVEs)
+					ignored := mergeStringList(ignoredProfile, flags.ignoreCVEs)
 
 					progress := buildScanProgress(format != auditFormatText, "auditing…")
 					defer progress.Close()
@@ -119,7 +119,7 @@ func parseAuditFormat(format string) (string, error) {
 	}
 }
 
-func mergeIgnoredCVEs(profile *[]string, flag []string) []string {
+func mergeStringList(profile *[]string, flag []string) []string {
 	var merged []string
 
 	if profile != nil {

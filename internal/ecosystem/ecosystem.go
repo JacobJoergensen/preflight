@@ -55,6 +55,7 @@ type (
 	AuditParser    func(stdout string) []model.Finding
 	OutdatedParser func(rc RunContext, stdout string) ([]OutdatedPackage, error)
 	SignalFunc     func(rc RunContext) []string
+	LicenseFunc    func(ctx context.Context, rc RunContext, detection Detection) LicenseResult
 )
 
 type Marker struct {
@@ -77,6 +78,10 @@ type Spec struct {
 
 	// Check is required.
 	Check CheckFunc
+
+	// License lists installed packages and their declared licenses for the licenses
+	// command. Ecosystems without a license source leave it nil.
+	License LicenseFunc
 
 	// Detect lists the markers that make this ecosystem present, in priority order. When it is
 	// empty, the managers' lockfile-then-config files are used. AlwaysPresent overrides both
@@ -125,4 +130,17 @@ type AuditResult struct {
 	Manifest     string // lockfile or config file the audit ran against, for SARIF locations
 	Output       string
 	Err          error
+}
+
+type PackageLicense struct {
+	Name    string
+	Version string
+	License string // SPDX expression as reported by the ecosystem
+}
+
+type LicenseResult struct {
+	Skipped    bool
+	SkipReason string
+	Packages   []PackageLicense
+	Err        error
 }

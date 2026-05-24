@@ -20,10 +20,17 @@ type File struct {
 }
 
 type Profile struct {
-	Check *Command      `yaml:"check,omitempty"`
-	Fix   *Command      `yaml:"fix,omitempty"`
-	Audit *AuditCommand `yaml:"audit,omitempty"`
-	Run   *RunBlock     `yaml:"run,omitempty"`
+	Check    *Command         `yaml:"check,omitempty"`
+	Fix      *Command         `yaml:"fix,omitempty"`
+	Audit    *AuditCommand    `yaml:"audit,omitempty"`
+	Licenses *LicensesCommand `yaml:"licenses,omitempty"`
+	Run      *RunBlock        `yaml:"run,omitempty"`
+}
+
+type LicensesCommand struct {
+	Only  *[]string `yaml:"only,omitempty"`
+	Allow *[]string `yaml:"allow,omitempty"`
+	Deny  *[]string `yaml:"deny,omitempty"`
 }
 
 type AuditCommand struct {

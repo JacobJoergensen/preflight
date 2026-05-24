@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -58,8 +59,114 @@ func Spec() *ecosystem.Spec {
 		RuntimeCommands: []string{"node"},
 		Detect:          detectMarkers,
 		Check:           check,
+		License:         scanLicenses,
 		ExtraSignals:    projectSignals,
 	}
+}
+
+func scanLicenses(_ context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	root := filepath.Join(rc.WorkDir, "node_modules")
+
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return ecosystem.LicenseResult{Skipped: true, SkipReason: "node_modules not found (run install first)"}
+	}
+
+	return ecosystem.LicenseResult{Packages: nodeModuleLicenses(root)}
+}
+
+func nodeModuleLicenses(root string) []ecosystem.PackageLicense {
+	// #nosec G304 - root is the project's node_modules directory; only fixed
+	// "package.json" files beneath discovered package directories are read.
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+
+	var packages []ecosystem.PackageLicense
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		if strings.HasPrefix(name, "@") {
+			packages = append(packages, scopedModuleLicenses(root, name)...)
+			continue
+		}
+
+		if pkg, ok := readModuleLicense(filepath.Join(root, name)); ok {
+			packages = append(packages, pkg)
+		}
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
+}
+
+func scopedModuleLicenses(root, scope string) []ecosystem.PackageLicense {
+	entries, err := os.ReadDir(filepath.Join(root, scope))
+	if err != nil {
+		return nil
+	}
+
+	var packages []ecosystem.PackageLicense
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		if pkg, ok := readModuleLicense(filepath.Join(root, scope, entry.Name())); ok {
+			packages = append(packages, pkg)
+		}
+	}
+
+	return packages
+}
+
+func readModuleLicense(dir string) (ecosystem.PackageLicense, bool) {
+	// #nosec G304 - dir is a discovered package directory under node_modules.
+	raw, err := os.ReadFile(filepath.Join(dir, "package.json"))
+	if err != nil {
+		return ecosystem.PackageLicense{}, false
+	}
+
+	var manifest struct {
+		Name     string `json:"name"`
+		Version  string `json:"version"`
+		License  string `json:"license"`
+		Licenses []struct {
+			Type string `json:"type"`
+		} `json:"licenses"`
+	}
+
+	if err := json.Unmarshal(raw, &manifest); err != nil || manifest.Name == "" {
+		return ecosystem.PackageLicense{}, false
+	}
+
+	license := manifest.License
+
+	if license == "" && len(manifest.Licenses) > 0 {
+		types := make([]string, 0, len(manifest.Licenses))
+
+		for _, entry := range manifest.Licenses {
+			if entry.Type != "" {
+				types = append(types, entry.Type)
+			}
+		}
+
+		license = strings.Join(types, " OR ")
+	}
+
+	return ecosystem.PackageLicense{Name: manifest.Name, Version: manifest.Version, License: license}, true
 }
 
 func projectSignals(rc ecosystem.RunContext) []string {

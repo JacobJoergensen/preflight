@@ -6,7 +6,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/config"
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
 
 func TestResolveScript(t *testing.T) {

@@ -77,6 +77,7 @@ Configure with preflight.yml for profiles, scripts, and CI integration.`,
 	root.AddCommand(
 		newCheckCommand(),
 		newAuditCommand(),
+		newLicensesCommand(),
 		newFixCommand(),
 		newRunCommand(),
 		newHooksCommand(),

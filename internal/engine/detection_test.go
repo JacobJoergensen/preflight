@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
 
 func TestSpecResolveDetection(t *testing.T) {

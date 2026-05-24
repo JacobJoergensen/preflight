@@ -38,6 +38,26 @@ func TestParseGovulncheckFindings(t *testing.T) {
 	}
 }
 
+func TestParseGoLicenses(t *testing.T) {
+	output := "google.golang.org/grpc,https://github.com/grpc/grpc-go/blob/master/LICENSE,Apache-2.0\n" +
+		"github.com/x/y,https://github.com/x/y/blob/main/LICENSE,MIT\n"
+
+	packages := parseGoLicenses(output)
+
+	if len(packages) != 2 {
+		t.Fatalf("got %d packages, want 2", len(packages))
+	}
+
+	// Sorted by import path.
+	if packages[0].Name != "github.com/x/y" || packages[0].License != "MIT" {
+		t.Errorf("packages[0] = %+v", packages[0])
+	}
+
+	if packages[1].Name != "google.golang.org/grpc" || packages[1].License != "Apache-2.0" {
+		t.Errorf("packages[1] = %+v", packages[1])
+	}
+}
+
 func TestParseGoMod(t *testing.T) {
 	tests := []struct {
 		name        string

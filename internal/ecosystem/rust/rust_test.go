@@ -88,6 +88,20 @@ func TestParseCargoAuditFindings(t *testing.T) {
 	}
 }
 
+func TestParseCargoLicenses(t *testing.T) {
+	raw := `{"packages":[{"id":"root 1.0","name":"root","version":"1.0","license":"MIT"},{"id":"serde 1.0","name":"serde","version":"1.0","license":"MIT OR Apache-2.0"}],"workspace_members":["root 1.0"]}`
+
+	packages := parseCargoLicenses(raw)
+
+	if len(packages) != 1 {
+		t.Fatalf("got %d packages, want 1 (workspace member excluded)", len(packages))
+	}
+
+	if packages[0].Name != "serde" || packages[0].Version != "1.0" || packages[0].License != "MIT OR Apache-2.0" {
+		t.Errorf("packages[0] = %+v", packages[0])
+	}
+}
+
 func TestParseCargoToml(t *testing.T) {
 	config := parseCargoToml([]byte(`[package]
 rust-version = "1.75"

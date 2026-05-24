@@ -38,8 +38,49 @@ func Spec() *ecosystem.Spec {
 				Parse:           parseGovulncheckFindings,
 			},
 		}},
-		Check: check,
+		Check:   check,
+		License: scanLicenses,
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	return ecosystem.RunLicenseCommand(ctx, rc, "go-licenses", "go-licenses not found on PATH (install: go install github.com/google/go-licenses@latest)", parseGoLicenses, "csv", "./...")
+}
+
+func parseGoLicenses(output string) []ecosystem.PackageLicense {
+	var packages []ecosystem.PackageLicense
+
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(line)
+
+		if line == "" {
+			continue
+		}
+
+		// go-licenses csv emits: import-path, license-url, license-type. The URL
+		// never contains a comma, so the name is the first field and the license
+		// is the last.
+		fields := strings.Split(line, ",")
+
+		if len(fields) < 3 {
+			continue
+		}
+
+		name := strings.TrimSpace(fields[0])
+
+		if name == "" {
+			continue
+		}
+
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    name,
+			License: strings.TrimSpace(fields[len(fields)-1]),
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
 }
 
 func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) []model.Message {

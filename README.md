@@ -125,6 +125,37 @@ Export findings to GitHub/GitLab code scanning with SARIF:
 
 In SARIF mode, findings are reported to code scanning rather than failing the step, so the upload step always runs (a tool that fails to run still fails the step).
 
+### licenses
+
+Checks the declared license of each installed dependency against an allow/deny policy.
+
+```sh
+preflight licenses --deny GPL-3.0-only,AGPL-3.0-only
+preflight licenses --allow MIT,Apache-2.0,BSD-3-Clause
+preflight licenses -o json
+```
+
+| Scope | Source |
+|-------|--------|
+| composer | composer licenses |
+| rust | cargo metadata |
+| js | node_modules manifests |
+| go | go-licenses (optional tool) |
+| python | pip-licenses (optional tool) |
+| ruby | license_finder (optional tool) |
+
+| Flag | Description |
+|------|-------------|
+| `--allow` | Allowed SPDX license IDs (comma-separated); anything else is a violation |
+| `--deny` | Denied SPDX license IDs (comma-separated) |
+| `--only` | Limit to ecosystems or tools |
+| `--timeout`, `-t` | Timeout duration (default: 5m) |
+| `--no-monorepo` | Only check the current directory |
+| `--project` | Restrict to sub-projects matching path globs |
+| `--format`, `-o` | Output format: text or json (default: text) |
+
+A package violates when its license is denied, or (when an allowlist is set) is not on it. Set a durable policy in `preflight.yml` (`licenses.allow` / `licenses.deny`); `--allow`/`--deny` add to it. Go, Python, and Ruby use optional external tools and are skipped when those aren't installed. Python and Ruby report freeform license names rather than SPDX IDs, so matching there is best-effort.
+
 ### run
 
 Runs a named script from `preflight.yml`.
@@ -205,6 +236,8 @@ profiles:
     audit:
       minSeverity: high  # ignore info, low, moderate
       ignoredCves: [CVE-2023-1234]  # suppress reviewed, accepted advisories
+    licenses:
+      deny: [GPL-3.0-only, AGPL-3.0-only]
     run:
       scripts:
         test:

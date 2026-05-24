@@ -1,7 +1,3 @@
-// Package memfs provides a small in-memory fs.FS for tests, keyed by the exact
-// (OS-native) paths callers pass. The standard library's testing/fstest.MapFS
-// is read-only and rejects OS-native paths, so it cannot stand in for the
-// writable fs.FS used across this codebase.
 package memfs
 
 import (
@@ -15,8 +11,6 @@ type FS struct {
 	files map[string][]byte
 }
 
-// New returns an in-memory FS backed by files (path -> contents). A nil entry
-// is an existing empty file, which is enough for presence checks.
 func New(files map[string][]byte) FS {
 	if files == nil {
 		files = map[string][]byte{}

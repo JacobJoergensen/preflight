@@ -42,8 +42,58 @@ func Spec() *ecosystem.Spec {
 				Parse:           parseCargoAuditFindings,
 			},
 		}},
-		Check: check,
+		Check:   check,
+		License: scanLicenses,
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	return ecosystem.RunLicenseCommand(ctx, rc, "cargo", "cargo not found on PATH", parseCargoLicenses, "metadata", "--format-version", "1")
+}
+
+func parseCargoLicenses(jsonText string) []ecosystem.PackageLicense {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" {
+		return nil
+	}
+
+	var doc struct {
+		Packages []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			License string `json:"license"`
+		} `json:"packages"`
+		WorkspaceMembers []string `json:"workspace_members"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &doc); err != nil {
+		return nil
+	}
+
+	members := make(map[string]struct{}, len(doc.WorkspaceMembers))
+	for _, id := range doc.WorkspaceMembers {
+		members[id] = struct{}{}
+	}
+
+	var packages []ecosystem.PackageLicense
+
+	for _, pkg := range doc.Packages {
+		if _, isMember := members[pkg.ID]; isMember {
+			continue
+		}
+
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    pkg.Name,
+			Version: pkg.Version,
+			License: pkg.License,
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
 }
 
 type cargoConfig struct {

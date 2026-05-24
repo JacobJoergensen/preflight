@@ -36,8 +36,46 @@ func Spec() *ecosystem.Spec {
 				Parse: parseComposerAdvisoryFindings,
 			},
 		}},
-		Check: check,
+		Check:   check,
+		License: scanLicenses,
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	return ecosystem.RunLicenseCommand(ctx, rc, "composer", "composer not found on PATH", parseComposerLicenses, "licenses", "--format=json")
+}
+
+func parseComposerLicenses(jsonText string) []ecosystem.PackageLicense {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" || !strings.HasPrefix(jsonText, "{") {
+		return nil
+	}
+
+	var root struct {
+		Dependencies map[string]struct {
+			Version string   `json:"version"`
+			License []string `json:"license"`
+		} `json:"dependencies"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &root); err != nil {
+		return nil
+	}
+
+	packages := make([]ecosystem.PackageLicense, 0, len(root.Dependencies))
+
+	for name, dep := range root.Dependencies {
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    name,
+			Version: dep.Version,
+			License: strings.Join(dep.License, " OR "),
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
 }
 
 type depVersion struct {

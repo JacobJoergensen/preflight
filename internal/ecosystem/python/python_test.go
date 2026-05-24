@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
 
 func pyprojectContext(content string) ecosystem.RunContext {
@@ -38,6 +38,25 @@ func TestParsePipAuditFindings(t *testing.T) {
 
 	if !slices.Equal(got.Aliases, []string{"CVE-2023-2222"}) {
 		t.Errorf("aliases = %v, want [CVE-2023-2222]", got.Aliases)
+	}
+}
+
+func TestParsePipLicenses(t *testing.T) {
+	raw := `[{"Name":"requests","Version":"2.28.0","License":"Apache 2.0"},{"Name":"click","Version":"8.0.0","License":"BSD License"}]`
+
+	packages := parsePipLicenses(raw)
+
+	if len(packages) != 2 {
+		t.Fatalf("got %d packages, want 2", len(packages))
+	}
+
+	// Sorted by name.
+	if packages[0].Name != "click" || packages[0].License != "BSD License" {
+		t.Errorf("packages[0] = %+v", packages[0])
+	}
+
+	if packages[1].Name != "requests" || packages[1].Version != "2.28.0" {
+		t.Errorf("packages[1] = %+v", packages[1])
 	}
 }
 

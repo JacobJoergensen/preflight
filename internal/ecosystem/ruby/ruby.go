@@ -2,6 +2,7 @@ package ruby
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -48,9 +49,61 @@ func Spec() *ecosystem.Spec {
 		RuntimeCommands: []string{"ruby"},
 		Detect:          detectMarkers,
 		Check:           check,
+		License:         scanLicenses,
 		VersionPins:     []string{".ruby-version"},
 		EnvSignals:      []string{"RBENV_VERSION", "GEM_HOME", "RUBY_ROOT"},
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	return ecosystem.RunLicenseCommand(
+		ctx,
+		rc,
+		"license_finder",
+		"license_finder not found on PATH (install: gem install license_finder)",
+		parseLicenseFinderCSV,
+		"report",
+		"--format",
+		"csv",
+		"--columns",
+		"name",
+		"version",
+		"licenses",
+	)
+}
+
+func parseLicenseFinderCSV(output string) []ecosystem.PackageLicense {
+	reader := csv.NewReader(strings.NewReader(output))
+	reader.FieldsPerRecord = -1
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil
+	}
+
+	var packages []ecosystem.PackageLicense
+
+	for _, record := range records {
+		if len(record) < 3 {
+			continue
+		}
+
+		name := strings.TrimSpace(record[0])
+
+		if name == "" || strings.EqualFold(name, "name") {
+			continue
+		}
+
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    name,
+			Version: strings.TrimSpace(record[1]),
+			License: strings.TrimSpace(record[2]),
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
 }
 
 func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Detection) []model.Message {

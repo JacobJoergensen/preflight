@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 )
 
 func TestLoad(t *testing.T) {

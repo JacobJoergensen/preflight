@@ -86,9 +86,53 @@ func Spec() *ecosystem.Spec {
 		RuntimeCommands: []string{"python", "python3"},
 		Detect:          detectMarkers,
 		Check:           check,
+		License:         scanLicenses,
 		VersionPins:     []string{".python-version"},
 		EnvSignals:      []string{"VIRTUAL_ENV", "CONDA_PREFIX"},
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	return ecosystem.RunLicenseCommand(ctx, rc, "pip-licenses", "pip-licenses not found on PATH (install: pip install pip-licenses)", parsePipLicenses, "--format=json")
+}
+
+func parsePipLicenses(jsonText string) []ecosystem.PackageLicense {
+	jsonText = strings.TrimSpace(jsonText)
+
+	if jsonText == "" || !strings.HasPrefix(jsonText, "[") {
+		return nil
+	}
+
+	var entries []struct {
+		Name     string   `json:"Name"`
+		Version  string   `json:"Version"`
+		License  string   `json:"License"`
+		Licenses []string `json:"Licenses"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonText), &entries); err != nil {
+		return nil
+	}
+
+	packages := make([]ecosystem.PackageLicense, 0, len(entries))
+
+	for _, entry := range entries {
+		license := entry.License
+
+		if license == "" && len(entry.Licenses) > 0 {
+			license = strings.Join(entry.Licenses, " OR ")
+		}
+
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    entry.Name,
+			Version: entry.Version,
+			License: license,
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+
+	return packages
 }
 
 func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Detection) []model.Message {

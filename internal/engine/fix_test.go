@@ -7,7 +7,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/exec"
-	"github.com/JacobJoergensen/preflight/internal/memfs"
+	"github.com/JacobJoergensen/preflight/internal/fs/memfs"
 	"github.com/JacobJoergensen/preflight/internal/monorepo"
 )
 

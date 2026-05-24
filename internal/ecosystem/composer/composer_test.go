@@ -86,3 +86,22 @@ func TestParseComposerAdvisoryFindingsEmpty(t *testing.T) {
 		t.Errorf("got %v, want nil", findings)
 	}
 }
+
+func TestParseComposerLicenses(t *testing.T) {
+	raw := `{"name":"root","version":"1.0","license":["MIT"],"dependencies":{"vendor/b":{"version":"2.0","license":["GPL-3.0-only"]},"vendor/a":{"version":"1.0","license":["MIT"]}}}`
+
+	packages := parseComposerLicenses(raw)
+
+	if len(packages) != 2 {
+		t.Fatalf("got %d packages, want 2", len(packages))
+	}
+
+	// Sorted by name, so vendor/a comes first.
+	if packages[0].Name != "vendor/a" || packages[0].Version != "1.0" || packages[0].License != "MIT" {
+		t.Errorf("packages[0] = %+v", packages[0])
+	}
+
+	if packages[1].Name != "vendor/b" || packages[1].License != "GPL-3.0-only" {
+		t.Errorf("packages[1] = %+v", packages[1])
+	}
+}
