@@ -7,6 +7,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/lockdiff"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type MarkdownFixRenderer struct {
@@ -16,7 +17,7 @@ type MarkdownFixRenderer struct {
 func (r MarkdownFixRenderer) Render(report result.FixReport) error {
 	var doc strings.Builder
 
-	doc.WriteString("## 🔧 PreFlight Fix\n\n")
+	doc.WriteString("## PreFlight Fix\n\n")
 
 	if report.DryRun {
 		doc.WriteString("**Mode:** Dry run (no changes made)\n\n")
@@ -50,13 +51,13 @@ func (r MarkdownFixRenderer) Render(report result.FixReport) error {
 func markdownFixStatus(report result.FixReport) (symbol, text string) {
 	switch {
 	case report.Canceled:
-		return "⏸", "Fix canceled"
+		return terminal.PauseSign, "Fix canceled"
 	case report.Aborted:
-		return "⏸", "Fix aborted — no changes applied"
+		return terminal.PauseSign, "Fix aborted: no changes applied"
 	case report.DryRun && len(report.Plan) == 0:
-		return "⚠", "No package managers to fix"
+		return terminal.WarningSign, "No package managers to fix"
 	case report.DryRun:
-		return "✓", "Dry run completed, no changes made"
+		return terminal.CheckMark, "Dry run completed, no changes made"
 	}
 
 	if len(report.Projects) > 0 {
@@ -64,11 +65,11 @@ func markdownFixStatus(report result.FixReport) (symbol, text string) {
 	}
 
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
-		return "⚠", "Nothing applied — all ecosystems skipped"
+		return terminal.WarningSign, "Nothing applied: all ecosystems skipped"
 	}
 
 	if len(report.Items) == 0 {
-		return "⚠", "No package managers to fix"
+		return terminal.WarningSign, "No package managers to fix"
 	}
 
 	var failures int
@@ -80,19 +81,19 @@ func markdownFixStatus(report result.FixReport) (symbol, text string) {
 	}
 
 	if failures > 0 {
-		return "✗", fmt.Sprintf("Fix completed with %d failure%s", failures, pluralSuffix(failures))
+		return terminal.CrossMark, fmt.Sprintf("Fix completed with %d failure%s", failures, pluralSuffix(failures))
 	}
 
-	return "✓", "All dependencies fixed successfully"
+	return terminal.CheckMark, "All dependencies fixed"
 }
 
 func markdownMonorepoFixStatus(report result.FixReport) (symbol, text string) {
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
-		return "⚠", "Nothing applied — all ecosystems skipped"
+		return terminal.WarningSign, "Nothing applied: all ecosystems skipped"
 	}
 
 	if len(report.Items) == 0 {
-		return "⚠", "No package managers to fix"
+		return terminal.WarningSign, "No package managers to fix"
 	}
 
 	failedProjects := countProjects(report.Items, func(i result.FixItem) (string, bool) { return i.Project, !i.Success })
@@ -100,10 +101,10 @@ func markdownMonorepoFixStatus(report result.FixReport) (symbol, text string) {
 	totalProjects := len(report.Projects)
 
 	if failedProjects > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s reported failures", failedProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, fmt.Sprintf("%d of %d project%s reported failures", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	return "✓", fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))
+	return terminal.CheckMark, fmt.Sprintf("All %d project%s fixed", totalProjects, pluralSuffix(totalProjects))
 }
 
 func writeMarkdownFixPlanGrouped(doc *strings.Builder, report result.FixReport) {
@@ -142,7 +143,7 @@ func writeMarkdownFixPlanTable(doc *strings.Builder, plan []result.PlannedFix) {
 	doc.WriteString("|-----------|---------|---------|\n")
 
 	for _, planned := range plan {
-		command := "—"
+		command := "-"
 
 		if planned.Command != "" {
 			command = "`" + planned.Command + "`"
@@ -151,7 +152,7 @@ func writeMarkdownFixPlanTable(doc *strings.Builder, plan []result.PlannedFix) {
 		summary := escapeMarkdownCell(planned.Summary)
 
 		if summary == "" {
-			summary = "—"
+			summary = "-"
 		}
 
 		fmt.Fprintf(doc, "| %s | %s | %s |\n",
@@ -200,10 +201,10 @@ func writeMarkdownFixResultsTable(doc *strings.Builder, items []result.FixItem) 
 	doc.WriteString("|-----------|--------|---------|---------|\n")
 
 	for _, item := range items {
-		symbol := "✓"
+		symbol := terminal.CheckMark
 
 		if !item.Success {
-			symbol = "✗"
+			symbol = terminal.CrossMark
 		}
 
 		command := buildFullCommand(item.ManagerCommand, item.Args)
@@ -217,7 +218,7 @@ func writeMarkdownFixResultsTable(doc *strings.Builder, items []result.FixItem) 
 		elapsed := formatFixElapsed(item.EndedAt.Sub(item.StartedAt))
 
 		if elapsed == "" {
-			elapsed = "—"
+			elapsed = "-"
 		}
 
 		fmt.Fprintf(doc, "| %s | %s | %s | %s |\n",
@@ -247,7 +248,7 @@ func writeMarkdownFixSkipped(doc *strings.Builder, skipped []result.SkippedFix) 
 			label = entry.Project
 		}
 
-		fmt.Fprintf(doc, "- **%s** — %s\n",
+		fmt.Fprintf(doc, "- **%s**: %s\n",
 			escapeMarkdownCell(label),
 			escapeMarkdownCell(entry.Reason),
 		)

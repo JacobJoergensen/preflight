@@ -26,17 +26,17 @@ func TestStatusFromReport(t *testing.T) {
 		{
 			name:   "errors require resolution",
 			report: result.CheckReport{Items: []result.CheckItem{{Messages: []model.Message{{Severity: model.SeverityError}}}}},
-			want:   "Check completed, please resolve.",
+			want:   "Errors found.",
 		},
 		{
 			name:   "warnings only",
 			report: result.CheckReport{Items: []result.CheckItem{{Messages: []model.Message{{Severity: model.SeverityWarning}}}}},
-			want:   "Check completed with warnings, please review.",
+			want:   "Warnings found.",
 		},
 		{
 			name:   "all healthy",
 			report: result.CheckReport{Items: []result.CheckItem{{Messages: []model.Message{{Severity: model.SeveritySuccess}}}}},
-			want:   "Check completed successfully!",
+			want:   "All checks passed.",
 		},
 		{
 			name:   "canceled",
@@ -85,10 +85,10 @@ func TestFixStatusFromReport(t *testing.T) {
 		report result.FixReport
 		want   string
 	}{
-		{"aborted", result.FixReport{Aborted: true}, "Fix aborted — no changes applied"},
+		{"aborted", result.FixReport{Aborted: true}, "Fix aborted: no changes applied"},
 		{"dry run with plan", result.FixReport{DryRun: true, Plan: []result.PlannedFix{{ScopeID: "js"}}}, "Dry run completed, no changes made"},
 		{"one failure", result.FixReport{Items: []result.FixItem{{Success: false}}}, "Fix completed with 1 failure"},
-		{"all success", result.FixReport{Items: []result.FixItem{{Success: true}}}, "All dependencies fixed successfully"},
+		{"all success", result.FixReport{Items: []result.FixItem{{Success: true}}}, "All dependencies fixed"},
 	}
 
 	for _, tt := range tests {

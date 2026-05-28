@@ -125,7 +125,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 
 		if pinCore != "" && !semver.MatchVersionConstraint(pinCore, config.RequiresRubyFromGemfile) {
 			messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: fmt.Sprintf(
-				".ruby-version pins %s but Gemfile specifies %s — align these for consistent installs.",
+				".ruby-version pins %s but Gemfile specifies %s. Align these for consistent installs.",
 				strings.TrimSpace(config.RubyVersionPin), strings.TrimSpace(config.RequiresRubyFromGemfile),
 			)})
 		}

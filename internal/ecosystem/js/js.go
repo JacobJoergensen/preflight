@@ -188,7 +188,7 @@ func projectSignals(rc ecosystem.RunContext) []string {
 	}
 
 	if len(tools) > 1 {
-		lines = append(lines, "Note: lockfiles from more than one JS package manager — pick one tool and remove stray lockfiles when you can.")
+		lines = append(lines, "Note: lockfiles from more than one JS package manager. Pick one tool and remove stray lockfiles when you can.")
 	}
 
 	return lines

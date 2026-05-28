@@ -209,7 +209,7 @@ func renderFixPlan(ow *terminal.OutputWriter, report result.FixReport) {
 		return
 	}
 
-	header := fmt.Sprintf("Plan — %d ecosystem%s", len(report.Plan), pluralSuffix(len(report.Plan)))
+	header := fmt.Sprintf("Plan: %d ecosystem%s", len(report.Plan), pluralSuffix(len(report.Plan)))
 	ow.Println(terminal.Bold + header + terminal.Reset)
 	ow.Println(terminal.Gray + strings.Repeat("─", checkCardRuleWidth) + terminal.Reset)
 
@@ -349,7 +349,7 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 	}
 
 	if report.Aborted {
-		return terminal.WarningSign, terminal.Yellow, "Fix aborted — no changes applied"
+		return terminal.WarningSign, terminal.Yellow, "Fix aborted: no changes applied"
 	}
 
 	if report.DryRun {
@@ -365,7 +365,7 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 	}
 
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
-		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped"
+		return terminal.WarningSign, terminal.Yellow, "Nothing applied: all ecosystems skipped"
 	}
 
 	if len(report.Items) == 0 {
@@ -384,12 +384,12 @@ func fixStatusFromReport(report result.FixReport) (icon string, color string, te
 		return terminal.CrossMark, terminal.Red, "Fix completed with " + fixFailPhrase(failCount)
 	}
 
-	return terminal.CheckMark, terminal.Green, "All dependencies fixed successfully"
+	return terminal.CheckMark, terminal.Green, "All dependencies fixed"
 }
 
 func monorepoFixStatusFromReport(report result.FixReport) (icon string, color string, text string) {
 	if len(report.Items) == 0 && len(report.Skipped) > 0 {
-		return terminal.WarningSign, terminal.Yellow, "Nothing applied — all ecosystems skipped"
+		return terminal.WarningSign, terminal.Yellow, "Nothing applied: all ecosystems skipped"
 	}
 
 	if len(report.Items) == 0 {
@@ -404,7 +404,7 @@ func monorepoFixStatusFromReport(report result.FixReport) (icon string, color st
 		return terminal.CrossMark, terminal.Red, projectStatusLine(failedProjects, totalProjects, "reported failures")
 	}
 
-	return terminal.CheckMark, terminal.Green, fmt.Sprintf("All %d project%s fixed successfully", totalProjects, pluralSuffix(totalProjects))
+	return terminal.CheckMark, terminal.Green, fmt.Sprintf("All %d project%s fixed", totalProjects, pluralSuffix(totalProjects))
 }
 
 func fixFailPhrase(count int) string {

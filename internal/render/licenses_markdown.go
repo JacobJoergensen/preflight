@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type MarkdownLicenseRenderer struct {
@@ -16,7 +17,7 @@ type MarkdownLicenseRenderer struct {
 func (r MarkdownLicenseRenderer) Render(report result.LicenseReport) error {
 	var doc strings.Builder
 
-	doc.WriteString("## 📜 License Compliance\n\n")
+	doc.WriteString("## PreFlight Licenses\n\n")
 
 	symbol, text := markdownLicenseStatus(report, r.PolicyConfigured)
 	fmt.Fprintf(&doc, "**Status:** %s %s\n\n", symbol, text)
@@ -63,11 +64,11 @@ func writeMarkdownLicenseProjectSections(doc *strings.Builder, report result.Lic
 
 func markdownLicenseStatus(report result.LicenseReport, policyConfigured bool) (symbol, text string) {
 	if report.Canceled {
-		return "⏸", "License check canceled"
+		return terminal.PauseSign, "License check canceled"
 	}
 
 	if len(report.Items) == 0 {
-		return "⚠", "No license data (no matching scopes or tools)"
+		return terminal.WarningSign, "No license data (no matching scopes or tools)"
 	}
 
 	if len(report.Projects) > 0 {
@@ -88,14 +89,14 @@ func markdownLicenseStatus(report result.LicenseReport, policyConfigured bool) (
 
 	switch {
 	case hasErr:
-		return "✗", "License check completed with errors"
+		return terminal.CrossMark, "License check completed with errors"
 	case hasViolations:
-		return "✗", "License policy violations found"
+		return terminal.CrossMark, "License policy violations found"
 	case !policyConfigured:
-		return "⚠", noLicensePolicyText
+		return terminal.WarningSign, noLicensePolicyText
 	}
 
-	return "✓", "All licenses comply with policy"
+	return terminal.CheckMark, "All licenses comply with policy"
 }
 
 func markdownMonorepoLicenseStatus(report result.LicenseReport, policyConfigured bool) (symbol, text string) {
@@ -105,18 +106,18 @@ func markdownMonorepoLicenseStatus(report result.LicenseReport, policyConfigured
 	totalProjects := len(report.Projects)
 
 	if failedProjects > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s failed the license check", failedProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, fmt.Sprintf("%d of %d project%s failed the license check", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	if violationProjects > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s have license violations", violationProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, fmt.Sprintf("%d of %d project%s have license violations", violationProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	if !policyConfigured {
-		return "⚠", noLicensePolicyText
+		return terminal.WarningSign, noLicensePolicyText
 	}
 
-	return "✓", fmt.Sprintf("%d project%s checked, all licenses comply", totalProjects, pluralSuffix(totalProjects))
+	return terminal.CheckMark, fmt.Sprintf("%d project%s checked, all licenses comply", totalProjects, pluralSuffix(totalProjects))
 }
 
 func writeMarkdownLicenseTable(doc *strings.Builder, items []result.LicenseItem) {

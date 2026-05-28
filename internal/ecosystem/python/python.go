@@ -154,7 +154,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 
 		if !semver.MatchVersionConstraint(pin, config.RequiresPythonConstraint) {
 			messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: fmt.Sprintf(
-				".python-version pins %s but requires-python is %s — align these for consistent installs.",
+				".python-version pins %s but requires-python is %s. Align these for consistent installs.",
 				strings.TrimSpace(config.PythonVersionPin), config.RequiresPythonConstraint,
 			)})
 		}

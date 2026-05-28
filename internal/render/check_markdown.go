@@ -8,6 +8,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
 	"github.com/JacobJoergensen/preflight/internal/model"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 type MarkdownCheckRenderer struct {
@@ -17,7 +18,7 @@ type MarkdownCheckRenderer struct {
 func (r MarkdownCheckRenderer) Render(report result.CheckReport) error {
 	var doc strings.Builder
 
-	doc.WriteString("## 🚀 PreFlight Check\n\n")
+	doc.WriteString("## PreFlight Check\n\n")
 
 	symbol, text := markdownCheckStatus(report)
 	fmt.Fprintf(&doc, "**Status:** %s %s\n\n", symbol, text)
@@ -66,7 +67,7 @@ func writeMarkdownCheckProjectSections(doc *strings.Builder, report result.Check
 
 func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 	if report.Canceled {
-		return "⏸", "Checks canceled"
+		return terminal.PauseSign, "Checks canceled"
 	}
 
 	if len(report.Projects) > 0 {
@@ -82,12 +83,12 @@ func markdownCheckStatus(report result.CheckReport) (symbol, text string) {
 
 	switch {
 	case totalErrors > 0:
-		return "✗", "Check completed, please resolve"
+		return terminal.CrossMark, "Errors found"
 	case totalWarnings > 0:
-		return "⚠", "Check completed with warnings, please review"
+		return terminal.WarningSign, "Warnings found"
 	}
 
-	return "✓", "Check completed successfully"
+	return terminal.CheckMark, "All checks passed"
 }
 
 func markdownMonorepoCheckStatus(report result.CheckReport) (symbol, text string) {
@@ -97,14 +98,14 @@ func markdownMonorepoCheckStatus(report result.CheckReport) (symbol, text string
 	totalProjects := len(report.Projects)
 
 	if errorProjects > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s reported errors", errorProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, fmt.Sprintf("%d of %d project%s reported errors", errorProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	if warningProjects > 0 {
-		return "⚠", fmt.Sprintf("%d of %d project%s reported warnings", warningProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.WarningSign, fmt.Sprintf("%d of %d project%s reported warnings", warningProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	return "✓", fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))
+	return terminal.CheckMark, fmt.Sprintf("%d project%s checked, all healthy", totalProjects, pluralSuffix(totalProjects))
 }
 
 func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
@@ -162,8 +163,8 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 
 		fmt.Fprintf(doc, "**%s**\n\n", escapeMarkdownCell(item.ScopeDisplay))
 
-		writeMarkdownMessageList(doc, item.Errors(), "✗")
-		writeMarkdownMessageList(doc, item.Warnings(), "⚠")
+		writeMarkdownMessageList(doc, item.Errors(), terminal.CrossMark)
+		writeMarkdownMessageList(doc, item.Warnings(), terminal.WarningSign)
 
 		doc.WriteString("\n")
 	}

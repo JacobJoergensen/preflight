@@ -39,19 +39,9 @@ func renderLicenseItemsGroupedByProject(ow *terminal.OutputWriter, report result
 	renderByProject(ow, report.Projects, report.Items,
 		func(p result.Project) string { return p.RelativePath },
 		func(i result.LicenseItem) string { return i.Project },
-		renderLicenseProjectHeader,
+		renderProjectHeader,
 		renderLicenseCardTTY,
 	)
-}
-
-func renderLicenseProjectHeader(ow *terminal.OutputWriter, project result.Project) {
-	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
-
-	if project.Name != "" {
-		line += "  " + terminal.Dim + project.Name + terminal.Reset
-	}
-
-	ow.Println(line)
 }
 
 func renderLicenseCardTTY(ow *terminal.OutputWriter, item result.LicenseItem) {
@@ -90,7 +80,7 @@ func renderLicenseCardTTY(ow *terminal.OutputWriter, item result.LicenseItem) {
 			pkg += "@" + violation.Version
 		}
 
-		ow.Println("    " + terminal.Red + violation.License + terminal.Reset + "  " + terminal.Dim + pkg + " — " + violation.Reason + terminal.Reset)
+		ow.Println("    " + terminal.Red + violation.License + terminal.Reset + "  " + terminal.Dim + pkg + ": " + violation.Reason + terminal.Reset)
 	}
 
 	ow.Println("")

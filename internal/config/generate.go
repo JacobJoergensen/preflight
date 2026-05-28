@@ -10,7 +10,7 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/fs"
 )
 
-const headerComment = `# PreFlight — https://github.com/JacobJoergensen/preflight
+const headerComment = `# PreFlight: https://github.com/JacobJoergensen/preflight
 # CLI flags override values from this file. Profile resolution:
 #   --profile > $PREFLIGHT_PROFILE > profile: below > "default"
 #

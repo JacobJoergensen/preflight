@@ -39,7 +39,7 @@ func checkNode(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detecti
 
 	if pin, label := readNodeVersionPinSource(rc); pin != "" && label != "" && !nodeEngineSatisfiedByRuntime(pin, config.NodeVersion) {
 		messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: fmt.Sprintf(
-			"%s pins %s but engines.node is %s — align these for CI vs local.",
+			"%s pins %s but engines.node is %s. Align these for CI vs local.",
 			label, strings.TrimSpace(pin), strings.TrimSpace(config.NodeVersion),
 		)})
 	}

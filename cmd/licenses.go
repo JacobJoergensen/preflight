@@ -29,9 +29,9 @@ func newLicensesCommand() *cobra.Command {
 		Long: `Lists the declared license of each installed dependency and flags any that violate your policy.
 
 License sources by scope:
-  • composer — composer licenses --format=json
-  • rust — cargo metadata
-  • js — node_modules package manifests
+  • composer: composer licenses --format=json
+  • rust: cargo metadata
+  • js: node_modules package manifests
 
 Define the policy in preflight.yml (licenses.allow / licenses.deny) or with --allow/--deny. A package violates when its license is denied, or (when an allowlist is set) is not on it.`,
 		Example: `preflight licenses --deny GPL-3.0-only,AGPL-3.0-only

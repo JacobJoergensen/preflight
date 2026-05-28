@@ -41,19 +41,9 @@ func renderAuditItemsGroupedByProject(ow *terminal.OutputWriter, report result.A
 	renderByProject(ow, report.Projects, report.Items,
 		func(p result.Project) string { return p.RelativePath },
 		func(i result.AuditItem) string { return i.Project },
-		renderAuditProjectHeader,
+		renderProjectHeader,
 		renderAuditCardTTY,
 	)
-}
-
-func renderAuditProjectHeader(ow *terminal.OutputWriter, project result.Project) {
-	line := "  " + terminal.Bold + terminal.Cyan + project.RelativePath + terminal.Reset
-
-	if project.Name != "" {
-		line += "  " + terminal.Dim + project.Name + terminal.Reset
-	}
-
-	ow.Println(line)
 }
 
 func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {

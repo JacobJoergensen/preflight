@@ -1,8 +1,8 @@
 package config
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
@@ -140,43 +140,39 @@ func (r RunBlock) validate(profileName string) error {
 }
 
 func (s ScriptTarget) Validate() error {
-	count := 0
-
-	if s.JS != "" {
-		count++
+	targets := []struct {
+		name  string
+		value string
+	}{
+		{"js", s.JS},
+		{"composer", s.Composer},
+		{"go", s.Go},
+		{"ruby", s.Ruby},
+		{"python", s.Python},
+		{"rust", s.Rust},
+		{"dotnet", s.Dotnet},
 	}
 
-	if s.Composer != "" {
-		count++
+	names := make([]string, 0, len(targets))
+	setCount := 0
+
+	for _, target := range targets {
+		names = append(names, target.name)
+
+		if target.value != "" {
+			setCount++
+		}
 	}
 
-	if s.Go != "" {
-		count++
-	}
+	list := strings.Join(names, ", ")
 
-	if s.Ruby != "" {
-		count++
-	}
-
-	if s.Python != "" {
-		count++
-	}
-
-	if s.Rust != "" {
-		count++
-	}
-
-	if s.Dotnet != "" {
-		count++
-	}
-
-	switch count {
+	switch setCount {
 	case 0:
-		return errors.New("set exactly one of js, composer, go, ruby, python, rust, dotnet")
+		return fmt.Errorf("set exactly one of %s", list)
 	case 1:
 		return nil
 	default:
-		return errors.New("set only one of js, composer, go, ruby, python, rust, dotnet per script")
+		return fmt.Errorf("set only one of %s per script", list)
 	}
 }
 

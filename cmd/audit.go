@@ -31,11 +31,11 @@ func newAuditCommand() *cobra.Command {
 		Long: `Runs each ecosystem's native vulnerability scanner for the selected scopes. Filter with --min-severity; runs per sub-project in monorepos.
 
 Tools used by scope:
-  • js — npm/pnpm/yarn/bun audit --json
-  • composer — composer audit --format=json
-  • go — govulncheck -json ./... (install separately if missing)
-  • python — pip-audit --format json (optional tool)
-  • ruby — bundle-audit check (bundler-audit gem)
+  • js: npm/pnpm/yarn/bun audit --json
+  • composer: composer audit --format=json
+  • go: govulncheck -json ./... (install separately if missing)
+  • python: pip-audit --format json (optional tool)
+  • ruby: bundle-audit check (bundler-audit gem)
 
 This does not replace dedicated security pipelines, it unifies invocation and reporting.`,
 		Example: `preflight audit

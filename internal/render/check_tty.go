@@ -414,14 +414,14 @@ func statusFromReport(report result.CheckReport) (icon string, color string, tex
 	}
 
 	if totalErrors > 0 {
-		return terminal.CrossMark, terminal.Red, "Check completed, please resolve."
+		return terminal.CrossMark, terminal.Red, "Errors found."
 	}
 
 	if totalWarnings > 0 {
-		return terminal.WarningSign, terminal.Yellow, "Check completed with warnings, please review."
+		return terminal.WarningSign, terminal.Yellow, "Warnings found."
 	}
 
-	return terminal.CheckMark, terminal.Green, "Check completed successfully!"
+	return terminal.CheckMark, terminal.Green, "All checks passed."
 }
 
 func monorepoStatusFromReport(report result.CheckReport) (icon string, color string, text string) {

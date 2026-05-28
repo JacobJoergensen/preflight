@@ -8,6 +8,7 @@ import (
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/engine/result"
+	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
 var auditSeverityColumns = []string{"critical", "high", "moderate", "low", "info"}
@@ -19,7 +20,7 @@ type MarkdownAuditRenderer struct {
 func (r MarkdownAuditRenderer) Render(report result.AuditReport) error {
 	var doc strings.Builder
 
-	doc.WriteString("## 🛡️ Security Audit\n\n")
+	doc.WriteString("## PreFlight Audit\n\n")
 
 	symbol, text := markdownAuditStatus(report)
 	fmt.Fprintf(&doc, "**Status:** %s %s\n\n", symbol, text)
@@ -66,11 +67,11 @@ func writeMarkdownAuditProjectSections(doc *strings.Builder, report result.Audit
 
 func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
 	if report.Canceled {
-		return "⏸", "Audit canceled"
+		return terminal.PauseSign, "Audit canceled"
 	}
 
 	if len(report.Items) == 0 {
-		return "⚠", "No audits ran (no matching scopes or tools)"
+		return terminal.WarningSign, "No audits ran (no matching scopes or tools)"
 	}
 
 	if len(report.Projects) > 0 {
@@ -91,12 +92,12 @@ func markdownAuditStatus(report result.AuditReport) (symbol, text string) {
 
 	switch {
 	case hasErr:
-		return "✗", "Audit completed with errors (tool missing or failed to run)"
+		return terminal.CrossMark, "Audit completed with errors (tool missing or failed to run)"
 	case hasIssues:
-		return "⚠", "Vulnerabilities or policy findings reported"
+		return terminal.WarningSign, "Vulnerabilities or policy findings reported"
 	}
 
-	return "✓", "No blocking audit issues"
+	return terminal.CheckMark, "No blocking audit issues"
 }
 
 func markdownMonorepoAuditStatus(report result.AuditReport) (symbol, text string) {
@@ -106,14 +107,14 @@ func markdownMonorepoAuditStatus(report result.AuditReport) (symbol, text string
 	totalProjects := len(report.Projects)
 
 	if failedProjects > 0 {
-		return "✗", fmt.Sprintf("%d of %d project%s failed to audit", failedProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.CrossMark, fmt.Sprintf("%d of %d project%s failed to audit", failedProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
 	if issueProjects > 0 {
-		return "⚠", fmt.Sprintf("%d of %d project%s reported vulnerabilities", issueProjects, totalProjects, pluralSuffix(totalProjects))
+		return terminal.WarningSign, fmt.Sprintf("%d of %d project%s reported vulnerabilities", issueProjects, totalProjects, pluralSuffix(totalProjects))
 	}
 
-	return "✓", fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))
+	return terminal.CheckMark, fmt.Sprintf("%d project%s audited, no blocking issues", totalProjects, pluralSuffix(totalProjects))
 }
 
 func writeMarkdownAuditTable(doc *strings.Builder, items []result.AuditItem) {
@@ -155,7 +156,7 @@ func writeMarkdownAuditRow(doc *strings.Builder, item result.AuditItem) {
 	tool := item.CommandLine
 
 	if tool == "" {
-		tool = "—"
+		tool = "-"
 	} else {
 		tool = "`" + tool + "`"
 	}

@@ -15,6 +15,7 @@ var (
 	CheckMark   = "✓"
 	CrossMark   = "✗"
 	WarningSign = "⚠"
+	PauseSign   = "⏸"
 	Lightning   = "⚡"
 	Bullet      = "•"
 )
