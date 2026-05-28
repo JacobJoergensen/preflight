@@ -43,7 +43,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	if err != nil {
 		return []model.Message{
 			{Severity: model.SeverityWarning, Text: "`.env` not found, copy from `" + exampleFile + "` and fill in values."},
-			{Severity: model.SeverityError, Text: "Missing environment variables (expected by `" + exampleFile + "`): " + strings.Join(exampleKeys, ", ")},
+			{Severity: model.SeverityError, Text: "Missing environment variables (expected by `" + exampleFile + "`):\n" + strings.Join(exampleKeys, "\n")},
 		}
 	}
 
@@ -62,7 +62,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	}
 
 	if len(missing) > 0 {
-		return []model.Message{{Severity: model.SeverityError, Text: "Missing environment variables in `.env` (expected by `" + exampleFile + "`): " + strings.Join(missing, ", ")}}
+		return []model.Message{{Severity: model.SeverityError, Text: "Missing environment variables in `.env` (expected by `" + exampleFile + "`):\n" + strings.Join(missing, "\n")}}
 	}
 
 	return []model.Message{{Severity: model.SeveritySuccess, Text: "All " + strconv.Itoa(len(exampleKeys)) + " keys from `" + exampleFile + "` are present in `.env`."}}

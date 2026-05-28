@@ -16,6 +16,7 @@ var (
 	CrossMark   = "✗"
 	WarningSign = "⚠"
 	Lightning   = "⚡"
+	Bullet      = "•"
 )
 
 func disableColor() {

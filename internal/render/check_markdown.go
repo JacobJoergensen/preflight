@@ -171,7 +171,12 @@ func writeMarkdownCheckIssues(doc *strings.Builder, items []result.CheckItem) {
 
 func writeMarkdownMessageList(doc *strings.Builder, messages []model.Message, symbol string) {
 	for _, msg := range messages {
-		fmt.Fprintf(doc, "- %s %s\n", symbol, escapeMarkdownCell(msg.Text))
+		lines := strings.Split(msg.Text, "\n")
+		fmt.Fprintf(doc, "- %s %s\n", symbol, escapeMarkdownCell(lines[0]))
+
+		for _, line := range lines[1:] {
+			fmt.Fprintf(doc, "  - %s\n", escapeMarkdownCell(line))
+		}
 	}
 }
 

@@ -91,7 +91,7 @@ func printToolchainLinesTTY(ow *terminal.OutputWriter, lines []string) {
 	for _, line := range shown {
 		spaces := ttyProjectBodySpaces
 
-		if strings.HasPrefix(strings.TrimSpace(line), "•") {
+		if strings.HasPrefix(strings.TrimSpace(line), terminal.Bullet) {
 			spaces = ttyProjectBodySpaces + toolchainBulletExtraSpaces
 		}
 

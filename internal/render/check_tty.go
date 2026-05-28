@@ -254,7 +254,14 @@ func printMessages(ow *terminal.OutputWriter, messages []model.Message, color st
 			indent = ttyProjectBodySpaces + 2
 		}
 
-		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", indent), symbol, msg.Text)
+		lines := strings.Split(msg.Text, "\n")
+		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", indent), symbol, lines[0])
+
+		continuationPad := strings.Repeat(" ", indent+2)
+
+		for _, line := range lines[1:] {
+			ow.Printf("%s%s%s %s\n", color, continuationPad, terminal.Bullet, line)
+		}
 	}
 }
 
