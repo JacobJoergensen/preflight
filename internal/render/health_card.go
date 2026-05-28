@@ -133,14 +133,14 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 		return ""
 	}
 
-	depErr := len(card.DepErrors) + len(card.DepDevErrors)
-	depWarn := len(card.DepWarnings) + len(card.DepDevWarnings) + len(card.DepOptionalWarnings)
-	flatErr := len(card.FlatErrors)
-	flatWarn := len(card.FlatWarnings)
+	depErr := CountMessageItems(card.DepErrors) + CountMessageItems(card.DepDevErrors)
+	depWarn := CountMessageItems(card.DepWarnings) + CountMessageItems(card.DepDevWarnings) + CountMessageItems(card.DepOptionalWarnings)
+	flatErr := CountMessageItems(card.FlatErrors)
+	flatWarn := CountMessageItems(card.FlatWarnings)
 
 	if card.Status == HealthWarn {
 		if depWarn > 0 && depErr == 0 && flatErr == 0 {
-			return fmt.Sprintf("%d dependency warning(s) — review before continuing.", depWarn)
+			return fmt.Sprintf("Found %d dependency warning%s.", depWarn, pluralSuffix(depWarn))
 		}
 
 		if flatWarn > 0 && depErr == 0 && depWarn == 0 {
@@ -148,10 +148,11 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 				return "Toolchain or engine version does not match project requirements."
 			}
 
-			return fmt.Sprintf("%d warning(s) — review before continuing.", flatWarn)
+			return fmt.Sprintf("Found %d warning%s.", flatWarn, pluralSuffix(flatWarn))
 		}
 
-		return fmt.Sprintf("%d warning(s) — review before continuing.", flatWarn+depWarn)
+		totalWarn := flatWarn + depWarn
+		return fmt.Sprintf("Found %d warning%s.", totalWarn, pluralSuffix(totalWarn))
 	}
 
 	// fail
@@ -162,14 +163,31 @@ func buildSummary(item result.CheckItem, card *HealthCard) string {
 	}
 
 	if flatErr > 0 {
-		parts = append(parts, fmt.Sprintf("%d configuration or environment error%s", flatErr, pluralSuffix(flatErr)))
+		parts = append(parts, fmt.Sprintf("%d error%s", flatErr, pluralSuffix(flatErr)))
 	}
 
 	if len(parts) == 0 {
 		return "Check failed."
 	}
 
-	return strings.Join(parts, "; ") + "."
+	return "Found " + strings.Join(parts, " and ") + "."
+}
+
+// CountMessageItems treats a multi-line Message (header + \n-joined items)
+// as one item per continuation line, matching how the user reads the
+// bulleted output. Single-line messages count as one.
+func CountMessageItems(messages []model.Message) int {
+	total := 0
+
+	for _, msg := range messages {
+		if continuations := strings.Count(msg.Text, "\n"); continuations > 0 {
+			total += continuations
+		} else {
+			total++
+		}
+	}
+
+	return total
 }
 
 func dependencySummaryPhrase(count int) string {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 - `check` now lists each missing environment variable on its own line instead of a single comma-separated line, so long lists stay readable
+- `check` card summary line now counts every issue (including each missing item in a grouped list) and reads as a sentence, e.g. `Found 4 errors.` instead of `1 configuration or environment error.`
 
 ## Version 2.0.0-beta.1 (2026-05-24)
 - Added .NET (NuGet) ecosystem support: `check`, `audit`, `--outdated`, and `fix` for projects detected via `*.csproj`/`*.fsproj`/`*.vbproj`/`*.sln`, using the native `dotnet` CLI

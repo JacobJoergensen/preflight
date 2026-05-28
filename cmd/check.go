@@ -121,7 +121,7 @@ func checkErrorCount(report result.CheckReport) int {
 	count := 0
 
 	for _, item := range report.Items {
-		count += len(item.Errors())
+		count += render.CountMessageItems(item.Errors())
 	}
 
 	return count

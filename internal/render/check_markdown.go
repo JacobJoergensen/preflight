@@ -119,8 +119,8 @@ func writeMarkdownCheckTable(doc *strings.Builder, items []result.CheckItem) {
 		fmt.Fprintf(doc, "| %s | %s | %d | %d | %d |\n",
 			escapeMarkdownCell(item.ScopeDisplay),
 			checkItemStatus(item),
-			len(item.Errors()),
-			len(item.Warnings()),
+			CountMessageItems(item.Errors()),
+			CountMessageItems(item.Warnings()),
 			len(item.Outdated),
 		)
 	}
