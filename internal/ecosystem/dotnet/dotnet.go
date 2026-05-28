@@ -39,8 +39,75 @@ func Spec() *ecosystem.Spec {
 			{Glob: "*.vbproj", Manager: "dotnet"},
 			{Glob: "*.sln", Manager: "dotnet"},
 		},
-		Check: check,
+		Check:   check,
+		License: scanLicenses,
 	}
+}
+
+func scanLicenses(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) ecosystem.LicenseResult {
+	input := findNuGetInput(rc)
+	if input == "" {
+		return ecosystem.LicenseResult{Skipped: true, SkipReason: "no .sln, .csproj, .fsproj, or .vbproj found in project"}
+	}
+
+	return ecosystem.RunLicenseCommand(
+		ctx, rc,
+		"nuget-license",
+		"nuget-license not found on PATH (install: dotnet tool install --global nuget-license)",
+		parseNuGetLicenses,
+		"-i", input, "-t", "-o", "Json",
+	)
+}
+
+func findNuGetInput(rc ecosystem.RunContext) string {
+	entries, err := rc.FS.ReadDir(rc.WorkDir)
+	if err != nil {
+		return ""
+	}
+
+	for _, extension := range []string{".sln", ".csproj", ".fsproj", ".vbproj"} {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			if strings.HasSuffix(strings.ToLower(entry.Name()), extension) {
+				return entry.Name()
+			}
+		}
+	}
+
+	return ""
+}
+
+func parseNuGetLicenses(stdout string) []ecosystem.PackageLicense {
+	stdout = strings.TrimSpace(stdout)
+	if stdout == "" {
+		return nil
+	}
+
+	var entries []struct {
+		PackageId      string `json:"PackageId"`
+		PackageVersion string `json:"PackageVersion"`
+		License        string `json:"License"`
+	}
+
+	if err := json.Unmarshal([]byte(stdout), &entries); err != nil {
+		return nil
+	}
+
+	packages := make([]ecosystem.PackageLicense, 0, len(entries))
+
+	for _, entry := range entries {
+		packages = append(packages, ecosystem.PackageLicense{
+			Name:    entry.PackageId,
+			Version: entry.PackageVersion,
+			License: entry.License,
+		})
+	}
+
+	ecosystem.SortPackageLicenses(packages)
+	return packages
 }
 
 func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Detection) []model.Message {

@@ -50,7 +50,7 @@ preflight check --with-env
 
 | Flag | Description |
 |------|-------------|
-| `--only` | Limit to ecosystems or tools (js, npm, php, composer, node, go, rust, python, ruby, env) |
+| `--only` | Limit to ecosystems or tools (js, npm, yarn, pnpm, bun, composer, go, rust, cargo, python, pip, poetry, uv, pdm, pipenv, ruby, bundle, dotnet, php, node, env) |
 | `--with-env` | Also validate `.env` against `.env.example` |
 | `--outdated` | Also check for outdated packages |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
@@ -71,7 +71,7 @@ preflight fix --yes --no-diff
 
 | Flag | Description |
 |------|-------------|
-| `--only` | Limit to ecosystems or tools |
+| `--only` | Limit to ecosystems or tools (js, npm, yarn, pnpm, bun, composer, go, rust, cargo, python, pip, poetry, uv, pdm, pipenv, ruby, bundle, dotnet, php, node, env) |
 | `--force`, `-f` | Force reinstall |
 | `--dry-run` | Show what would run without executing |
 | `--yes`, `-y` | Apply every ecosystem without prompting |
@@ -105,7 +105,7 @@ preflight audit -o sarif > preflight.sarif
 
 | Flag | Description |
 |------|-------------|
-| `--only` | Limit to ecosystems or tools |
+| `--only` | Limit to ecosystems or tools (js, npm, yarn, pnpm, bun, composer, go, rust, cargo, python, pip, poetry, uv, pdm, pipenv, ruby, bundle, dotnet, php, node, env) |
 | `--min-severity` | Minimum severity to report (info, low, moderate, high, critical) |
 | `--ignore-cve` | Advisory ID (CVE/GHSA) to suppress; repeatable, merged with `ignoredCves` |
 | `--timeout`, `-t` | Timeout duration (default: 30m) |
@@ -144,18 +144,19 @@ preflight licenses -o json
 | go | go-licenses (optional tool) |
 | python | pip-licenses (optional tool) |
 | ruby | license_finder (optional tool) |
+| dotnet | nuget-license (optional tool) |
 
 | Flag | Description |
 |------|-------------|
 | `--allow` | Allowed SPDX license IDs (comma-separated); anything else is a violation |
 | `--deny` | Denied SPDX license IDs (comma-separated) |
-| `--only` | Limit to ecosystems or tools |
+| `--only` | Limit to ecosystems or tools (js, npm, yarn, pnpm, bun, composer, go, rust, cargo, python, pip, poetry, uv, pdm, pipenv, ruby, bundle, dotnet, php, node, env) |
 | `--timeout`, `-t` | Timeout duration (default: 5m) |
 | `--no-monorepo` | Only check the current directory |
 | `--project` | Restrict to sub-projects matching path globs |
 | `--format`, `-o` | Output format: text or json (default: text) |
 
-A package violates when its license is denied, or (when an allowlist is set) is not on it. Set a durable policy in `preflight.yml` (`licenses.allow` / `licenses.deny`); `--allow`/`--deny` add to it. Go, Python, and Ruby use optional external tools and are skipped when those aren't installed. Python and Ruby report freeform license names rather than SPDX IDs, so matching there is best-effort.
+A package violates when its license is denied, or (when an allowlist is set) is not on it. Set a durable policy in `preflight.yml` (`licenses.allow` / `licenses.deny`); `--allow`/`--deny` add to it. Go, Python, Ruby, and .NET use optional external tools and are skipped when those aren't installed. Python and Ruby report freeform license names rather than SPDX IDs, so matching there is best-effort.
 
 ### run
 
@@ -280,6 +281,8 @@ run:
       python: "pytest"         # runs: poetry run pytest (or pip)
     test-rust:
       rust: "test --all"       # runs: cargo test --all
+    format:
+      dotnet: "format"         # runs: dotnet format
 ```
 
 ## Selecting ecosystems and tools

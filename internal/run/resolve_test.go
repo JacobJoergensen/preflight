@@ -96,6 +96,23 @@ func TestResolveScript(t *testing.T) {
 			target:    config.ScriptTarget{Python: "   "},
 			wantError: true,
 		},
+		{
+			name:     "dotnet without prefix returns dotnet with args",
+			target:   config.ScriptTarget{Dotnet: "test"},
+			wantBin:  "dotnet",
+			wantArgs: []string{"test"},
+		},
+		{
+			name:     "dotnet with prefix strips dotnet from args",
+			target:   config.ScriptTarget{Dotnet: "dotnet build -c Release"},
+			wantBin:  "dotnet",
+			wantArgs: []string{"build", "-c", "Release"},
+		},
+		{
+			name:      "dotnet with empty value fails",
+			target:    config.ScriptTarget{Dotnet: "   "},
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {

@@ -102,6 +102,19 @@ func ResolveScript(rc ecosystem.RunContext, target config.ScriptTarget) (bin str
 		}
 
 		return "cargo", parts, nil
+
+	case target.Dotnet != "":
+		parts := strings.Fields(target.Dotnet)
+
+		if len(parts) == 0 {
+			return "", nil, errors.New("dotnet script value is empty")
+		}
+
+		if parts[0] == "dotnet" {
+			return "dotnet", parts[1:], nil
+		}
+
+		return "dotnet", parts, nil
 	}
 
 	return "", nil, errors.New("internal: script target did not resolve")
