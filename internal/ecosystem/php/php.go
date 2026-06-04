@@ -66,7 +66,8 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	var messages []model.Message
 
 	if requiredVersion != "" {
-		messages = append(messages, validatePhpVersion(phpVersion, requiredVersion)...)
+		satisfied, _ := semver.ValidateVersion(phpVersion, requiredVersion)
+		messages = append(messages, ecosystem.VersionFeedback("php", "PHP", phpVersion, requiredVersion, semver.MajorMinor(phpVersion), satisfied)...)
 	}
 
 	installedExtensions, err := phpExtensions(ctx, rc)
@@ -134,31 +135,6 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	}
 
 	return messages
-}
-
-func validatePhpVersion(phpVersion, requiredVersion string) []model.Message {
-	feedback := fmt.Sprintf("Installed %sPHP (%s ⟶ required %s)", terminal.Reset, phpVersion, requiredVersion)
-	versionPrefix := semver.MajorMinor(phpVersion)
-	satisfied, _ := semver.ValidateVersion(phpVersion, requiredVersion)
-
-	if ecosystem.IsEOL("php", versionPrefix) {
-		messages := []model.Message{{
-			Severity: model.SeverityWarning,
-			Text:     fmt.Sprintf("Installed %sPHP (%s ⟶ End-of-Life), Consider upgrading!", terminal.Reset, phpVersion),
-		}}
-
-		if satisfied {
-			messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: feedback})
-		}
-
-		return messages
-	}
-
-	if !satisfied {
-		return []model.Message{{Severity: model.SeverityError, Text: feedback}}
-	}
-
-	return []model.Message{{Severity: model.SeveritySuccess, Text: feedback}}
 }
 
 func extensionFeedback(extInfo extensionInfo) model.Message {

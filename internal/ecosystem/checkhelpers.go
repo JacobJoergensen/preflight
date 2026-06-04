@@ -21,8 +21,8 @@ var eolVersions = map[string]map[string]bool{
 		"8.0": true, "8.1": true,
 	},
 	"node": {
-		"10": true, "11": true, "12": true, "13": true, "14": true, "15": true,
-		"16": true, "17": true, "18": true, "19": true, "21": true, "23": true,
+		"10": true, "11": true, "12": true, "13": true, "14": true, "15": true, "16": true,
+		"17": true, "18": true, "19": true, "20": true, "21": true, "23": true, "25": true,
 	},
 	"go": {
 		"1.12": true, "1.13": true, "1.14": true, "1.15": true,

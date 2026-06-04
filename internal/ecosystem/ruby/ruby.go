@@ -140,9 +140,9 @@ func check(ctx context.Context, rc ecosystem.RunContext, detection ecosystem.Det
 
 		if ok, msg := semver.ValidateVersion(rubyVersion, config.RequiresRuby); !ok {
 			if msg != "" {
-				messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: msg})
+				messages = append(messages, model.Message{Severity: model.SeverityError, Text: msg})
 			} else {
-				messages = append(messages, model.Message{Severity: model.SeverityWarning, Text: fmt.Sprintf("Ruby version %s does not satisfy %s", rubyVersion, config.RequiresRuby)})
+				messages = append(messages, model.Message{Severity: model.SeverityError, Text: fmt.Sprintf("Ruby version %s does not satisfy %s", rubyVersion, config.RequiresRuby)})
 			}
 		}
 	}
