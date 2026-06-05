@@ -225,13 +225,17 @@ func phpRuntimeVersion(ctx context.Context, rc ecosystem.RunContext) (string, er
 		return "", fmt.Errorf("failed to run php --version: %w", err)
 	}
 
-	for line := range strings.SplitSeq(result.Stdout, "\n") {
-		if matches := phpVersionRegex.FindStringSubmatch(line); len(matches) >= 2 {
-			return matches[1], nil
+	// A failed extension load prints a startup warning that can displace the
+	// version banner from stdout to stderr, so scan both streams.
+	for _, stream := range []string{result.Stdout, result.Stderr} {
+		for line := range strings.SplitSeq(stream, "\n") {
+			if matches := phpVersionRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				return matches[1], nil
+			}
 		}
 	}
 
-	return "", fmt.Errorf("could not parse PHP version from: %s", result.Stdout)
+	return "", fmt.Errorf("could not parse PHP version from: %s", strings.TrimSpace(result.Stdout+"\n"+result.Stderr))
 }
 
 func phpExtensions(ctx context.Context, rc ecosystem.RunContext) (map[string]struct{}, error) {
@@ -242,14 +246,16 @@ func phpExtensions(ctx context.Context, rc ecosystem.RunContext) (map[string]str
 
 	extensions := make(map[string]struct{})
 
-	for line := range strings.SplitSeq(result.Stdout, "\n") {
-		name := strings.TrimSpace(line)
+	for _, stream := range []string{result.Stdout, result.Stderr} {
+		for line := range strings.SplitSeq(stream, "\n") {
+			name := strings.TrimSpace(line)
 
-		if name == "" || !moduleNameRegex.MatchString(name) {
-			continue
+			if name == "" || !moduleNameRegex.MatchString(name) {
+				continue
+			}
+
+			extensions[name] = struct{}{}
 		}
-
-		extensions[name] = struct{}{}
 	}
 
 	return extensions, nil

@@ -11,10 +11,11 @@ import (
 
 type fakeRunner struct {
 	stdout string
+	stderr string
 }
 
 func (f fakeRunner) Run(context.Context, string, ...string) (exec.Result, error) {
-	return exec.Result{Stdout: f.stdout}, nil
+	return exec.Result{Stdout: f.stdout, Stderr: f.stderr}, nil
 }
 
 func TestFindPdoAlternative(t *testing.T) {
@@ -59,6 +60,23 @@ func TestPhpRuntimeVersionSkipsStartupWarnings(t *testing.T) {
 		"Copyright (c) The PHP Group"
 
 	rc := ecosystem.RunContext{Runner: fakeRunner{stdout: stdout}}
+
+	version, err := phpRuntimeVersion(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if version != "8.5.1" {
+		t.Errorf("version: got %q, want %q", version, "8.5.1")
+	}
+}
+
+func TestPhpRuntimeVersionFindsBannerOnStderr(t *testing.T) {
+	stdout := "Warning: PHP Startup: Unable to load dynamic library 'curl' (tried: C:\\php\\ext\\php_curl.dll (Access is denied)) in Unknown on line 0"
+	stderr := "PHP 8.5.1 (cli) (built: Dec 16 2025 16:25:44) (ZTS Visual C++ 2022 x64)\n" +
+		"Copyright (c) The PHP Group"
+
+	rc := ecosystem.RunContext{Runner: fakeRunner{stdout: stdout, stderr: stderr}}
 
 	version, err := phpRuntimeVersion(context.Background(), rc)
 	if err != nil {

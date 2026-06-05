@@ -13,6 +13,7 @@ import (
 const (
 	checkCardRuleWidth   = 64
 	ttyProjectBodySpaces = 4
+	messageWrapWidth     = 80
 )
 
 type TTYCheckRenderer struct {
@@ -254,13 +255,26 @@ func printMessages(ow *terminal.OutputWriter, messages []model.Message, color st
 			indent = ttyProjectBodySpaces + 2
 		}
 
-		lines := strings.Split(msg.Text, "\n")
-		ow.Printf("%s%s%s %s\n", color, strings.Repeat(" ", indent), symbol, lines[0])
-
+		itemPad := strings.Repeat(" ", indent)
 		continuationPad := strings.Repeat(" ", indent+2)
 
-		for _, line := range lines[1:] {
-			ow.Printf("%s%s%s %s\n", color, continuationPad, terminal.Bullet, line)
+		for segmentIndex, segment := range strings.Split(msg.Text, "\n") {
+			marker := symbol
+			linePad := itemPad
+
+			if segmentIndex > 0 {
+				marker = terminal.Bullet
+				linePad = continuationPad
+			}
+
+			wrapped := wrapVisible(segment, messageWrapWidth-len(linePad)-2)
+			ow.Printf("%s%s%s %s\n", color, linePad, marker, wrapped[0])
+
+			softWrapPad := strings.Repeat(" ", len(linePad)+2)
+
+			for _, line := range wrapped[1:] {
+				ow.Printf("%s%s%s\n", color, softWrapPad, line)
+			}
 		}
 	}
 }

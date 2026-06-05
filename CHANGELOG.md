@@ -7,6 +7,8 @@
 - `check` card summary line now counts every issue (including each missing item in a grouped list) and reads as a sentence, e.g. `Found 4 errors.` instead of `1 configuration or environment error.`
 - `check` now flags an installed Ruby that does not satisfy the required version as an error instead of a warning, matching the other ecosystems
 - `check` now reports Node.js 20 and 25 as End-of-Life
+- `check` no longer misreports PHP as not installed when a failed extension load prints a startup warning, by reading the version from both output streams
+- `check` now wraps long error and warning lines so they stay readable instead of running off the terminal
 
 ## Version 2.0.0-beta.1 (2026-05-24)
 - Added .NET (NuGet) ecosystem support: `check`, `audit`, `--outdated`, and `fix` for projects detected via `*.csproj`/`*.fsproj`/`*.vbproj`/`*.sln`, using the native `dotnet` CLI
