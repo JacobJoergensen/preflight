@@ -60,7 +60,7 @@ type (
 
 type Marker struct {
 	File     string
-	Glob     string // matches when any entry in WorkDir matches this glob (e.g. "*.csproj")
+	Glob     string
 	Contains string
 	Manager  string
 }
@@ -123,6 +123,7 @@ type FixItem struct {
 type AuditResult struct {
 	Skipped      bool
 	SkipReason   string
+	Unsupported  bool // the active manager has no audit capability; drop it from the report entirely
 	CommandLine  string
 	ExitCode     int
 	OK           bool

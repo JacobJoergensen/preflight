@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a bug in PreFlight.
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. You can help solve it by filling out the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How to reproduce the bug?
+      description: The exact command you ran and the smallest project setup that triggers it (the relevant manifest and lock files), plus the output you got.
+    validations:
+      required: true
+  - type: input
+    id: preflight-version
+    attributes:
+      label: PreFlight version
+      description: Output of `preflight --version`.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: command
+    attributes:
+      label: Which command?
+      options:
+        - check
+        - fix
+        - audit
+        - licenses
+        - run
+        - hooks
+        - Other / not command-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: ecosystem
+    attributes:
+      label: Which ecosystem?
+      description: The package manager or runtime involved, if any.
+      options:
+        - Go
+        - Rust
+        - Composer
+        - PHP
+        - JavaScript (npm/pnpm/yarn/bun)
+        - Node.js
+        - Python (pip/poetry/uv/pdm/pipenv)
+        - Ruby
+        - .NET
+        - env (dotenv)
+        - Not ecosystem-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else worth knowing. Related issues, or things you have already ruled out.
+    validations:
+      required: false

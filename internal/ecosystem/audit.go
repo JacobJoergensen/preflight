@@ -3,6 +3,7 @@ package ecosystem
 import (
 	"cmp"
 	"context"
+	"fmt"
 	goexec "os/exec"
 	"slices"
 	"strings"
@@ -12,22 +13,28 @@ import (
 )
 
 func (s *Spec) RunAudit(ctx context.Context, rc RunContext, detection Detection) AuditResult {
-	probe := detection.Active.Audit
+	manager := detection.Active
+	probe := manager.Audit
 
 	if probe == nil {
-		return AuditResult{Skipped: true, SkipReason: "audit not supported"}
+		return AuditResult{Unsupported: true}
 	}
 
 	tool := probe.Tool
 
 	if tool == "" {
-		tool = detection.Active.Command
+		tool = manager.Command
 	}
 
 	if probe.ToolMissingHint != "" {
 		if _, err := goexec.LookPath(tool); err != nil {
 			return AuditResult{Skipped: true, SkipReason: probe.ToolMissingHint}
 		}
+	}
+
+	if manager.LockFile != "" && !rc.FileExists(manager.LockFile) {
+		install := strings.TrimSpace(manager.Command + " " + strings.Join(manager.InstallArgs, " "))
+		return AuditResult{Skipped: true, SkipReason: fmt.Sprintf("%s not found, run `%s` first", manager.LockFile, install)}
 	}
 
 	commandLine := strings.TrimSpace(tool + " " + strings.Join(probe.Args, " "))
@@ -43,9 +50,18 @@ func (s *Spec) RunAudit(ctx context.Context, rc RunContext, detection Detection)
 
 	findings := probe.Parse(result.Stdout)
 
-	manifest := detection.Active.LockFile
+	if result.ExitCode != 0 && len(findings) == 0 {
+		return AuditResult{
+			CommandLine: commandLine,
+			ExitCode:    result.ExitCode,
+			Err:         fmt.Errorf("audit could not complete (exit %d)", result.ExitCode),
+			Output:      mergeOutput(result.Stdout, result.Stderr),
+		}
+	}
+
+	manifest := manager.LockFile
 	if manifest == "" {
-		manifest = detection.Active.ConfigFile
+		manifest = manager.ConfigFile
 	}
 
 	return AuditResult{

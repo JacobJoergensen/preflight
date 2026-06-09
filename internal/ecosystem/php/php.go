@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/JacobJoergensen/preflight/internal/ecosystem"
 	"github.com/JacobJoergensen/preflight/internal/model"
@@ -17,8 +18,9 @@ import (
 )
 
 var (
-	phpVersionRegex = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
-	moduleNameRegex = regexp.MustCompile(`^[A-Za-z0-9_ ]+$`)
+	phpVersionRegex   = regexp.MustCompile(`PHP (\d+\.\d+\.\d+)`)
+	moduleNameRegex   = regexp.MustCompile(`^[A-Za-z0-9_ ]+$`)
+	pieExtensionRegex = regexp.MustCompile(`^([A-Za-z0-9_]+):\S+.*\(from `)
 
 	deprecatedExtensions = map[string]struct{}{
 		"imap": {}, "mysql": {}, "recode": {}, "statistics": {}, "wddx": {}, "xml-rpc": {},
@@ -85,7 +87,7 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 	pie := loadPieConfig(ctx, rc)
 	pieExtensions := make(map[string]struct{})
 
-	if semver.MatchVersionConstraint(phpVersion, ">=8.4") && pie.IsInstalled {
+	if pie.IsInstalled {
 		for _, ext := range pie.Extensions {
 			pieExtensions[ext] = struct{}{}
 			extensionSources[ext] = "pie"
@@ -123,7 +125,11 @@ func check(ctx context.Context, rc ecosystem.RunContext, _ ecosystem.Detection) 
 			}
 		}
 
-		messages = append(messages, model.Message{Severity: model.SeverityError, Text: fmt.Sprintf("Missing extension %s%s, Please enable it!", terminal.Reset, ext)})
+		if pie.IsInstalled {
+			messages = append(messages, model.Message{Severity: model.SeverityError, Text: fmt.Sprintf("Missing extension %s%s, Run `pie install-extensions-for-project`", terminal.Reset, ext)})
+		} else {
+			messages = append(messages, model.Message{Severity: model.SeverityError, Text: fmt.Sprintf("Missing extension %s%s", terminal.Reset, ext)})
+		}
 	}
 
 	slices.SortFunc(extensionsToShow, func(a, b extensionInfo) int {
@@ -261,6 +267,8 @@ func phpExtensions(ctx context.Context, rc ecosystem.RunContext) (map[string]str
 	return extensions, nil
 }
 
+const pieShowTimeout = 2 * time.Second
+
 type pieConfig struct {
 	IsInstalled bool
 	Extensions  []string
@@ -276,7 +284,10 @@ func loadPieConfig(ctx context.Context, rc ecosystem.RunContext) pieConfig {
 	name := invocation[0]
 	args := append(invocation[1:], "show")
 
-	result, err := rc.Runner.Run(ctx, name, args...)
+	showCtx, cancel := context.WithTimeout(ctx, pieShowTimeout)
+	defer cancel()
+
+	result, err := rc.Runner.Run(showCtx, name, args...)
 	if err != nil {
 		return pieConfig{IsInstalled: true}
 	}
@@ -303,21 +314,13 @@ func parsePieShowOutput(output string) []string {
 	var extensions []string
 
 	for line := range strings.SplitSeq(output, "\n") {
-		line = strings.TrimSpace(line)
+		matches := pieExtensionRegex.FindStringSubmatch(strings.TrimSpace(line))
 
-		if line == "" || !strings.Contains(line, "(from ") {
+		if matches == nil {
 			continue
 		}
 
-		name, _, ok := strings.Cut(line, ":")
-
-		if !ok {
-			continue
-		}
-
-		if name = strings.TrimSpace(name); name != "" {
-			extensions = append(extensions, name)
-		}
+		extensions = append(extensions, matches[1])
 	}
 
 	return extensions

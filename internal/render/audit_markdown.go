@@ -176,6 +176,8 @@ func auditItemTitle(item result.AuditItem) string {
 
 func auditItemMarkdownStatus(item result.AuditItem) string {
 	switch {
+	case item.Skipped:
+		return "⊘ SKIPPED"
 	case item.ErrText != "":
 		return "✗ ERROR"
 	case !item.OK:
@@ -187,6 +189,14 @@ func auditItemMarkdownStatus(item result.AuditItem) string {
 
 func writeMarkdownAuditDetails(doc *strings.Builder, items []result.AuditItem) {
 	for _, item := range items {
+		if item.Skipped {
+			if item.SkipReason != "" {
+				fmt.Fprintf(doc, "_%s skipped: %s_\n\n", escapeMarkdownCell(auditItemTitle(item)), escapeMarkdownCell(item.SkipReason))
+			}
+
+			continue
+		}
+
 		body := strings.TrimSpace(item.Output)
 
 		if body == "" && item.ErrText != "" {

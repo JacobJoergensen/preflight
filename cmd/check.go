@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -36,8 +37,6 @@ func newCheckCommand() *cobra.Command {
 				return err
 			}
 
-			var resolvedOnly []string
-
 			return runScan(cmd, scanCommand[result.CheckReport]{
 				failMsg: "check failed",
 				timeout: flags.timeout,
@@ -51,7 +50,6 @@ func newCheckCommand() *cobra.Command {
 					}
 
 					only := flagOrProfile(cmd, "only", flags.only, onlyProfile)
-					resolvedOnly = only
 					withEnv := flagOrProfile(cmd, "with-env", flags.withEnv, withEnvProfile)
 
 					progress := buildScanProgress(jsonOut, "checking…")
@@ -69,7 +67,7 @@ func newCheckCommand() *cobra.Command {
 					})
 				},
 				afterRender: func(report result.CheckReport) (bool, error) {
-					return offerFix(cmd, report, jsonOut, resolvedOnly, flags.noMonorepo, flags.projectGlobs)
+					return offerFix(cmd, report, jsonOut, flags.noMonorepo, flags.projectGlobs)
 				},
 			})
 		},
@@ -90,26 +88,31 @@ func renderCheck(report result.CheckReport, jsonOutput bool) error {
 	return render.TTYCheckRenderer{}.Render(report)
 }
 
-func offerFix(cmd *cobra.Command, report result.CheckReport, jsonOutput bool, only []string, noMonorepo bool, projectGlobs []string) (bool, error) {
+func offerFix(cmd *cobra.Command, report result.CheckReport, jsonOutput bool, noMonorepo bool, projectGlobs []string) (bool, error) {
 	if jsonOutput || terminal.Quiet || !terminal.IsInteractive() {
 		return false, nil
 	}
 
-	count := checkErrorCount(report)
-	if count == 0 {
+	specs := fixableFailingSpecs(report)
+	if len(specs) == 0 {
 		return false, nil
 	}
 
-	noun := "issue"
-	if count != 1 {
-		noun = "issues"
+	only := make([]string, len(specs))
+	titles := make([]string, len(specs))
+
+	for i, spec := range specs {
+		only[i] = spec.Name
+		titles[i] = spec.Title()
 	}
 
 	if _, err := fmt.Fprintln(os.Stdout); err != nil {
 		return false, err
 	}
 
-	run, err := terminal.Ask(os.Stdin, os.Stdout, fmt.Sprintf("Run preflight fix to resolve %d %s?", count, noun))
+	prompt := fmt.Sprintf("Run preflight fix for %s?", strings.Join(titles, ", "))
+
+	run, err := terminal.Ask(os.Stdin, os.Stdout, prompt)
 	if err != nil || !run {
 		return false, err
 	}
@@ -117,14 +120,29 @@ func offerFix(cmd *cobra.Command, report result.CheckReport, jsonOutput bool, on
 	return runFixFromCheck(cmd, only, noMonorepo, projectGlobs)
 }
 
-func checkErrorCount(report result.CheckReport) int {
-	count := 0
+func fixableFailingSpecs(report result.CheckReport) []*ecosystem.Spec {
+	var specs []*ecosystem.Spec
+	seen := make(map[string]struct{})
 
 	for _, item := range report.Items {
-		count += render.CountMessageItems(item.Errors())
+		if len(item.Errors()) == 0 {
+			continue
+		}
+
+		if _, ok := seen[item.ScopeID]; ok {
+			continue
+		}
+
+		spec, ok := ecosystem.Lookup(item.ScopeID)
+		if !ok || !spec.CanFix() {
+			continue
+		}
+
+		seen[item.ScopeID] = struct{}{}
+		specs = append(specs, spec)
 	}
 
-	return count
+	return specs
 }
 
 func runFixFromCheck(cmd *cobra.Command, only []string, noMonorepo bool, projectGlobs []string) (bool, error) {

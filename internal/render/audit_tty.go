@@ -10,8 +10,6 @@ import (
 	"github.com/JacobJoergensen/preflight/internal/terminal"
 )
 
-const auditOutputMaxRunes = 8000
-
 type TTYAuditRenderer struct {
 	Out *terminal.OutputWriter
 }
@@ -57,6 +55,9 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 	status := "PASS"
 
 	switch {
+	case item.Skipped:
+		color = terminal.Yellow
+		status = "SKIPPED"
 	case item.ErrText != "":
 		color = terminal.Red
 		status = "ERROR"
@@ -73,6 +74,12 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 
 	ow.Println(header)
 
+	if item.Skipped {
+		ow.Println(terminal.Dim + "    " + item.SkipReason + terminal.Reset)
+		ow.Println("")
+		return
+	}
+
 	if item.ErrText != "" {
 		ow.Println(terminal.Red + "    " + item.ErrText + terminal.Reset)
 	}
@@ -85,14 +92,6 @@ func renderAuditCardTTY(ow *terminal.OutputWriter, item result.AuditItem) {
 
 	for _, finding := range item.Findings {
 		ow.Println(formatFinding(finding))
-	}
-
-	if len(item.Findings) == 0 && item.Output != "" {
-		body := truncateRunes(strings.TrimSpace(item.Output), auditOutputMaxRunes)
-
-		for line := range strings.SplitSeq(body, "\n") {
-			ow.Println(terminal.Gray + "    " + line + terminal.Reset)
-		}
 	}
 
 	ow.Println("")
@@ -152,16 +151,6 @@ func severityColor(severity string) string {
 	}
 }
 
-func truncateRunes(s string, limit int) string {
-	runes := []rune(s)
-
-	if len(runes) <= limit {
-		return s
-	}
-
-	return string(runes[:limit]) + "\n… (truncated)"
-}
-
 func auditStatusFromReport(report result.AuditReport) (icon, color, text string) {
 	if len(report.Items) == 0 {
 		return terminal.WarningSign, terminal.Yellow, "No audits ran (no matching scopes or tools)"
@@ -173,8 +162,15 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 
 	hasErr := false
 	hasIssues := false
+	audited := false
 
 	for _, item := range report.Items {
+		if item.Skipped {
+			continue
+		}
+
+		audited = true
+
 		if item.ErrText != "" {
 			hasErr = true
 		}
@@ -189,14 +185,16 @@ func auditStatusFromReport(report result.AuditReport) (icon, color, text string)
 		return terminal.CrossMark, terminal.Red, "Audit completed with errors (tool missing or failed to run)"
 	case hasIssues:
 		return terminal.WarningSign, terminal.Yellow, "Vulnerabilities or policy findings reported"
-	default:
+	case audited:
 		return terminal.CheckMark, terminal.Green, "No blocking audit issues"
+	default:
+		return terminal.WarningSign, terminal.Yellow, "No audits ran (prerequisites not met)"
 	}
 }
 
 func monorepoAuditStatusFromReport(report result.AuditReport) (icon, color, text string) {
 	failedProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, i.ErrText != "" })
-	issueProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, !i.OK })
+	issueProjects := countProjects(report.Items, func(i result.AuditItem) (string, bool) { return i.Project, !i.OK && !i.Skipped })
 
 	totalProjects := len(report.Projects)
 

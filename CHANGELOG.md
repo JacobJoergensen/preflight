@@ -8,7 +8,13 @@
 - `check` now flags an installed Ruby that does not satisfy the required version as an error instead of a warning, matching the other ecosystems
 - `check` now reports Node.js 20 and 25 as End-of-Life
 - `check` no longer misreports PHP as not installed when a failed extension load prints a startup warning, by reading the version from both output streams
+- `check` no longer lists `Target PHP installation` as an installed PHP extension when PIE is installed
+- `check` now offers to fix only the ecosystems that failed
+- `check` no longer hangs for seconds on the PHP extension listing when PIE is installed
+- `check` now points to `pie install-extensions-for-project` for a missing PHP extension when PIE is available
 - `check` now wraps long error and warning lines so they stay readable instead of running off the terminal
+- `audit` now reports a clear skipped status with an install hint when a lockfile is missing, instead of dumping the raw tool error as a vulnerability
+- `audit` no longer prints raw tool output in the results card
 
 ## Version 2.0.0-beta.1 (2026-05-24)
 - Added .NET (NuGet) ecosystem support: `check`, `audit`, `--outdated`, and `fix` for projects detected via `*.csproj`/`*.fsproj`/`*.vbproj`/`*.sln`, using the native `dotnet` CLI

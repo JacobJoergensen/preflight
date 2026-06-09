@@ -114,7 +114,7 @@ func runAudits(ctx context.Context, specs []*ecosystem.Spec, rc ecosystem.RunCon
 			auditResult := spec.RunAudit(ctx, rc, detection)
 			endedAt := time.Now()
 
-			if auditResult.Skipped {
+			if auditResult.Unsupported {
 				return result.AuditItem{}, false
 			}
 
@@ -211,7 +211,7 @@ func filterAuditReportBySeverity(report result.AuditReport, minSeverity string) 
 	for i := range report.Items {
 		item := &report.Items[i]
 
-		if item.ErrText != "" {
+		if item.ErrText != "" || item.Skipped {
 			continue
 		}
 

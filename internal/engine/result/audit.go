@@ -22,6 +22,8 @@ type AuditItem struct {
 	Manifest      string
 	Output        string
 	ErrText       string
+	Skipped       bool
+	SkipReason    string
 	StartedAt     time.Time
 	EndedAt       time.Time
 	ElapsedMillis int64
@@ -39,6 +41,8 @@ func FromAuditResult(scopeID, scopeDisplay string, priority int, ar ecosystem.Au
 		Findings:      ar.Findings,
 		Manifest:      ar.Manifest,
 		Output:        ar.Output,
+		Skipped:       ar.Skipped,
+		SkipReason:    ar.SkipReason,
 		StartedAt:     startedAt,
 		EndedAt:       endedAt,
 		ElapsedMillis: endedAt.Sub(startedAt).Milliseconds(),

@@ -1,8 +1,15 @@
 # PreFlight
 
+[![Tests](https://github.com/JacobJoergensen/preflight/actions/workflows/tests.yml/badge.svg)](https://github.com/JacobJoergensen/preflight/actions)
+[![License](https://img.shields.io/github/license/JacobJoergensen/preflight)](LICENSE)
+
 A CLI tool that validates your project dependencies before you run into problems. Checks if everything is installed, fixes what's missing, and runs security audits across package managers.
 
-## Install
+## Why PreFlight?
+
+One command instead of one per package manager. PreFlight checks what's installed, installs what's missing, and audits what's risky, so you catch problems before your build does.
+
+## Installation
 
 Go Install:
 
@@ -10,7 +17,7 @@ Go Install:
 go install github.com/JacobJoergensen/preflight@latest
 ```
 
-Npm / pnpm Install:
+npm / pnpm Install:
 
 ```sh
 # npm
@@ -22,7 +29,7 @@ pnpm add -g @jacobjoergensen/preflight
 
 Or download it from [releases](https://github.com/JacobJoergensen/preflight/releases).
 
-## Get Started
+## Usage
 
 ```sh
 # Check if dependencies are installed
@@ -216,7 +223,7 @@ Color also turns off automatically when output is not a terminal (piped or redir
 
 ## Monorepo
 
-`check`, `audit`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, preflight scans for directories with project manifests.
+`check`, `audit`, and `fix` detect `pnpm-workspace.yaml`, npm/yarn workspaces, and `go.work`, then run per sub-project with aggregated results. If no workspace config is present, PreFlight scans for directories with project manifests.
 
 Disable with `--no-monorepo`. Narrow the scope with `--project packages/*`.
 
@@ -287,7 +294,7 @@ run:
 
 ## Selecting ecosystems and tools
 
-By default preflight auto-detects every ecosystem present in the project. Use `--only` to narrow to specific ones. Each value is either an ecosystem or a specific tool; naming a tool also asserts the project uses it.
+By default PreFlight auto-detects every ecosystem present in the project. Use `--only` to narrow to specific ones. Each value is either an ecosystem or a specific tool; naming a tool also asserts the project uses it.
 
 | Value | Selects |
 |-------|---------|
@@ -316,4 +323,4 @@ By default preflight auto-detects every ecosystem present in the project. Use `-
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+Released under the MIT License. See [LICENSE](LICENSE).

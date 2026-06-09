@@ -79,6 +79,10 @@ preflight audit -o sarif > preflight.sarif`,
 					// In SARIF mode findings are reported to code scanning, not via the
 					// exit code, so the upload step still runs; tool errors still fail.
 					failed := func(item result.AuditItem) bool {
+						if item.Skipped {
+							return false
+						}
+
 						if format == auditFormatSARIF {
 							return item.ErrText != ""
 						}

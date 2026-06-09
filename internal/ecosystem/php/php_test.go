@@ -2,6 +2,7 @@ package php
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -51,6 +52,21 @@ func TestFindPdoAlternative(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParsePieShowOutputSkipsTargetHeader(t *testing.T) {
+	output := "Target PHP installation: 8.4.3 nts, on Windows OS, with Visual C++ x64 (from C:\\php\\php.exe)\n" +
+		"\n" +
+		"The following extensions are installed for this PHP installation:\n" +
+		"  xdebug:3.4.0 (from C:\\php\\ext\\php_xdebug.dll)\n" +
+		"  pdo_mysql:8.4.3, enabled (from C:\\php\\ext\\php_pdo_mysql.dll)\n"
+
+	got := parsePieShowOutput(output)
+
+	want := []string{"xdebug", "pdo_mysql"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
