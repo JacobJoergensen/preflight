@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## Version 2.0.0-beta.2 (2026.06.09)
 - Added a `dotnet:` script target so `preflight run` scripts can target .NET commands
 - Added `licenses` support for .NET via the optional `nuget-license` tool
 - `check` now lists each missing environment variable on its own line instead of a single comma-separated line, so long lists stay readable
