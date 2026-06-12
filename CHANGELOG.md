@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## Version 2.0.0 (2026.06.12)
+- Initial v2 release
+
 ## Version 2.0.0-beta.2 (2026.06.09)
 - Added a `dotnet:` script target so `preflight run` scripts can target .NET commands
 - Added `licenses` support for .NET via the optional `nuget-license` tool
