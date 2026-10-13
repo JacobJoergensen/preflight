@@ -1,5 +1,16 @@
 # PreFlight
 
+> [!WARNING]
+> **This project is archived and no longer maintained.**
+> Version 2.0.0 is the final release. Existing installs keep working, but I don't expect to ship any further updates.
+>
+> These tools now cover what PreFlight did:
+> - **Outdated dependencies:** [Renovate](https://github.com/renovatebot/renovate) or [Dependabot](https://github.com/dependabot)
+> - **Consistent dev setup:** [Dev Containers](https://containers.dev) or [mise](https://mise.jdx.dev)
+> - **Security audits:** [OSV-Scanner](https://github.com/google/osv-scanner)
+>
+> Thanks to everyone who used it.
+
 [![Tests](https://github.com/JacobJoergensen/preflight/actions/workflows/tests.yml/badge.svg)](https://github.com/JacobJoergensen/preflight/actions)
 [![License](https://img.shields.io/github/license/JacobJoergensen/preflight)](LICENSE)
 
